@@ -1215,12 +1215,25 @@ const OnboardingTab = ({
         
         try {
           // Skip if essential fields are missing
-          if (!employeeData.name || !employeeData.email || !employeeData.aadharNumber) {
+          if (!employeeData.name || !employeeData.aadharNumber) {
             failedImports.push({
               name: employeeData.name || 'Unknown',
-              error: 'Missing required fields (Name, Email, or Aadhar)'
+              error: 'Missing required fields (Name or Aadhar)'
             });
             continue;
+          }
+
+          // Generate email if not provided
+          let finalEmail = employeeData.email || '';
+          if (!finalEmail && employeeData.name) {
+            const nameParts = employeeData.name.toLowerCase().split(' ');
+            const firstName = nameParts[0]?.replace(/[^a-z]/g, '') || 'employee';
+            const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].replace(/[^a-z]/g, '') : '';
+            const randomNum = Math.floor(100 + Math.random() * 900);
+            finalEmail = `${firstName}${lastName ? '.' + lastName : ''}${randomNum}@skenterprises.com`.toLowerCase();
+          } else if (!finalEmail) {
+            const randomNum = Math.floor(100 + Math.random() * 900);
+            finalEmail = `employee${randomNum}@skenterprises.com`.toLowerCase();
           }
 
           // Create FormData for each employee
@@ -1229,7 +1242,7 @@ const OnboardingTab = ({
           // Add employee data
           const employeeDataToSend = {
             name: employeeData.name,
-            email: employeeData.email,
+            email: finalEmail,
             phone: employeeData.phone || '',
             aadharNumber: employeeData.aadharNumber,
             panNumber: employeeData.panNumber || '',
@@ -1632,10 +1645,9 @@ useEffect(() => {
 
   // Handle add employee
   const handleAddEmployee = async () => {
-    // Validate required fields
+    // Validate required fields (email is optional but we'll generate if empty for backend)
     const requiredFields = [
       { field: newEmployee.name, name: 'Name' },
-      { field: newEmployee.email, name: 'Email' },
       { field: newEmployee.aadharNumber, name: 'Aadhar Number' },
       { field: newEmployee.position, name: 'Position' },
       { field: newEmployee.department, name: 'Department' },
@@ -1652,14 +1664,27 @@ useEffect(() => {
       return;
     }
 
+    // Generate email if not provided (to satisfy backend requirement)
+    let finalEmail = newEmployee.email?.trim() || '';
+    if (!finalEmail && newEmployee.name) {
+      const nameParts = newEmployee.name.toLowerCase().split(' ');
+      const firstName = nameParts[0]?.replace(/[^a-z]/g, '') || 'employee';
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].replace(/[^a-z]/g, '') : '';
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      finalEmail = `${firstName}${lastName ? '.' + lastName : ''}${randomNum}@skenterprises.com`.toLowerCase();
+    } else if (!finalEmail) {
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      finalEmail = `employee${randomNum}@skenterprises.com`.toLowerCase();
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmployee.email)) {
+    if (!emailRegex.test(finalEmail)) {
       toast.error("Please enter a valid email address");
       return;
     }
 
-    // Validate phone number
+    // Validate phone number - optional
     if (newEmployee.phone && !/^\d{10}$/.test(newEmployee.phone)) {
       toast.error("Please enter a valid 10-digit phone number");
       return;
@@ -1722,7 +1747,7 @@ useEffect(() => {
       // Clean and prepare data for sending
       const employeeDataToSend = {
         name: newEmployee.name.trim(),
-        email: newEmployee.email.toLowerCase().trim(),
+        email: finalEmail, // Use generated email if not provided
         phone: newEmployee.phone?.trim() || '',
         aadharNumber: newEmployee.aadharNumber.replace(/\s/g, ''),
         panNumber: newEmployee.panNumber?.toUpperCase().replace(/\s/g, '') || '',
@@ -2676,7 +2701,7 @@ useEffect(() => {
                 <div>
                   <span className="font-medium">Required Fields:</span>
                   <div className="text-xs text-muted-foreground">
-                    Name, Email, Aadhar, Position, Department
+                    Name, Aadhar, Position, Department
                   </div>
                 </div>
                 <div>
@@ -2816,178 +2841,176 @@ useEffect(() => {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <FormField label="Site Name" id="siteName" required>
-                      <SiteDropdown />
-                      {loadingSites && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
-                          Loading sites...
-                        </div>
-                      )}
-                      {!loadingSites && sites.length === 0 && (
-                        <div className="text-xs text-amber-600 mt-1">
-                          No sites found. Please create sites first.
-                        </div>
-                      )}
-                    </FormField>
-                    
-                    <FormField label="Name" id="name" required>
-                      <Input
-                        id="name"
-                        value={newEmployee.name}
-                        onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-                        placeholder="Enter full name"
-                        required
-                      />
-                    </FormField>
-                    
-                    <FormField label="Date of Birth" id="dateOfBirth">
-                      <Input
-                        id="dateOfBirth"
-                        type="date"
-                        value={newEmployee.dateOfBirth}
-                        onChange={(e) => setNewEmployee({...newEmployee, dateOfBirth: e.target.value})}
-                      />
-                    </FormField>
-                    
-                    <FormField label="Date of Joining" id="dateOfJoining">
-                      <Input
-                        id="dateOfJoining"
-                        type="date"
-                        value={newEmployee.dateOfJoining}
-                        onChange={(e) => setNewEmployee({...newEmployee, dateOfJoining: e.target.value})}
-                      />
-                    </FormField>
-                    
-                    <FormField label="Date of Exit" id="dateOfExit">
-                      <Input
-                        id="dateOfExit"
-                        type="date"
-                        value={newEmployee.dateOfExit}
-                        onChange={(e) => setNewEmployee({...newEmployee, dateOfExit: e.target.value})}
-                      />
-                    </FormField>
-                    
-                    <FormField label="Contact No." id="phone" required>
-                      <Input
-                        id="phone"
-                        value={newEmployee.phone}
-                        onChange={(e) => setNewEmployee({...newEmployee, phone: e.target.value})}
-                        placeholder="Enter 10-digit phone number"
-                        required
-                        pattern="[0-9]{10}"
-                        maxLength={10}
-                      />
-                    </FormField>
-        
-                    <FormField label="Blood Group" id="bloodGroup">
-                      <Select 
-                        value={newEmployee.bloodGroup || ""} 
-                        onValueChange={(value) => setNewEmployee({...newEmployee, bloodGroup: value === "" ? null : value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select blood group (optional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="A+">A +ve</SelectItem>
-                          <SelectItem value="A-">A -ve</SelectItem>
-                          <SelectItem value="B+">B +ve</SelectItem>
-                          <SelectItem value="B-">B -ve</SelectItem>
-                          <SelectItem value="O+">O +ve</SelectItem>
-                          <SelectItem value="O-">O -ve</SelectItem>
-                          <SelectItem value="AB+">AB +ve</SelectItem>
-                          <SelectItem value="AB-">AB -ve</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                    
-                    <FormField label="Email" id="email" required>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={newEmployee.email}
-                        onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
-                        placeholder="Enter email address"
-                        required
-                      />
-                    </FormField>
-                    
-                    <FormField label="Aadhar Number" id="aadharNumber" required>
-                      <Input
-                        id="aadharNumber"
-                        value={newEmployee.aadharNumber}
-                        onChange={(e) => setNewEmployee({...newEmployee, aadharNumber: e.target.value})}
-                        placeholder="Enter 12-digit Aadhar number"
-                        required
-                        pattern="[0-9]{12}"
-                        maxLength={12}
-                      />
-                    </FormField>
-                    
-                    <FormField label="PAN Number" id="panNumber">
-                      <Input
-                        id="panNumber"
-                        value={newEmployee.panNumber}
-                        onChange={(e) => setNewEmployee({ ...newEmployee, panNumber: e.target.value.toUpperCase() })}
-                        placeholder="Enter PAN number (Optional)"
-                        maxLength={10}
-                        className="uppercase"
-                      />
-                    </FormField>
-                    
-                    <FormField label="ESIC Number" id="esicNumber">
-                      <Input
-                        id="esicNumber"
-                        value={newEmployee.esicNumber}
-                        onChange={(e) => setNewEmployee({...newEmployee, esicNumber: e.target.value})}
-                        placeholder="Enter ESIC number"
-                      />
-                    </FormField>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                  <FormField label="Site Name" id="siteName" required>
+                    <SiteDropdown />
+                    {loadingSites && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
+                        Loading sites...
+                      </div>
+                    )}
+                    {!loadingSites && sites.length === 0 && (
+                      <div className="text-xs text-amber-600 mt-1">
+                        No sites found. Please create sites first.
+                      </div>
+                    )}
+                  </FormField>
+                  
+                  <FormField label="Name" id="name" required>
+                    <Input
+                      id="name"
+                      value={newEmployee.name}
+                      onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
+                      placeholder="Enter full name"
+                      required
+                    />
+                  </FormField>
+                  
+                  <FormField label="Date of Birth" id="dateOfBirth">
+                    <Input
+                      id="dateOfBirth"
+                      type="date"
+                      value={newEmployee.dateOfBirth}
+                      onChange={(e) => setNewEmployee({...newEmployee, dateOfBirth: e.target.value})}
+                    />
+                  </FormField>
+                  
+                  <FormField label="Date of Joining" id="dateOfJoining">
+                    <Input
+                      id="dateOfJoining"
+                      type="date"
+                      value={newEmployee.dateOfJoining}
+                      onChange={(e) => setNewEmployee({...newEmployee, dateOfJoining: e.target.value})}
+                    />
+                  </FormField>
+                  
+                  <FormField label="Date of Exit" id="dateOfExit">
+                    <Input
+                      id="dateOfExit"
+                      type="date"
+                      value={newEmployee.dateOfExit}
+                      onChange={(e) => setNewEmployee({...newEmployee, dateOfExit: e.target.value})}
+                    />
+                  </FormField>
+                  
+                  <FormField label="Contact No." id="phone">
+                    <Input
+                      id="phone"
+                      value={newEmployee.phone}
+                      onChange={(e) => setNewEmployee({...newEmployee, phone: e.target.value})}
+                      placeholder="Enter 10-digit phone number (optional)"
+                      pattern="[0-9]{10}"
+                      maxLength={10}
+                    />
+                  </FormField>
 
-                    <FormField label="PF Number / UAN" id="uanNumber">
-                      <Input
-                        id="uanNumber"
-                        value={newEmployee.uanNumber}
-                        onChange={(e) => setNewEmployee({...newEmployee, uanNumber: e.target.value})}
-                        placeholder="Enter PF number or UAN"
-                      />
-                    </FormField>
+                  <FormField label="Blood Group" id="bloodGroup">
+                    <Select 
+                      value={newEmployee.bloodGroup || ""} 
+                      onValueChange={(value) => setNewEmployee({...newEmployee, bloodGroup: value === "" ? null : value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select blood group (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A+">A +ve</SelectItem>
+                        <SelectItem value="A-">A -ve</SelectItem>
+                        <SelectItem value="B+">B +ve</SelectItem>
+                        <SelectItem value="B-">B -ve</SelectItem>
+                        <SelectItem value="O+">O +ve</SelectItem>
+                        <SelectItem value="O-">O -ve</SelectItem>
+                        <SelectItem value="AB+">AB +ve</SelectItem>
+                        <SelectItem value="AB-">AB -ve</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  
+                  <FormField label="Email" id="email">
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newEmployee.email}
+                      onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
+                      placeholder="Enter email address (optional)"
+                    />
+                  </FormField>
+                  
+                  <FormField label="Aadhar Number" id="aadharNumber" required>
+                    <Input
+                      id="aadharNumber"
+                      value={newEmployee.aadharNumber}
+                      onChange={(e) => setNewEmployee({...newEmployee, aadharNumber: e.target.value})}
+                      placeholder="Enter 12-digit Aadhar number"
+                      required
+                      pattern="[0-9]{12}"
+                      maxLength={12}
+                    />
+                  </FormField>
+                  
+                  <FormField label="PAN Number" id="panNumber">
+                    <Input
+                      id="panNumber"
+                      value={newEmployee.panNumber}
+                      onChange={(e) => setNewEmployee({ ...newEmployee, panNumber: e.target.value.toUpperCase() })}
+                      placeholder="Enter PAN number (Optional)"
+                      maxLength={10}
+                      className="uppercase"
+                    />
+                  </FormField>
+                  
+                  <FormField label="ESIC Number" id="esicNumber">
+                    <Input
+                      id="esicNumber"
+                      value={newEmployee.esicNumber}
+                      onChange={(e) => setNewEmployee({...newEmployee, esicNumber: e.target.value})}
+                      placeholder="Enter ESIC number"
+                    />
+                  </FormField>
 
-                    <FormField label="Gender" id="gender">
-                      <Select 
-                        value={newEmployee.gender} 
-                        onValueChange={(value) => setNewEmployee({...newEmployee, gender: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
-                          <SelectItem value="Transgender">Transgender</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormField>
+                  <FormField label="PF Number / UAN" id="uanNumber">
+                    <Input
+                      id="uanNumber"
+                      value={newEmployee.uanNumber}
+                      onChange={(e) => setNewEmployee({...newEmployee, uanNumber: e.target.value})}
+                      placeholder="Enter PF number or UAN"
+                    />
+                  </FormField>
 
-                    <FormField label="Marital Status" id="maritalStatus">
-                      <Select 
-                        value={newEmployee.maritalStatus} 
-                        onValueChange={(value) => setNewEmployee({...newEmployee, maritalStatus: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select marital status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Single">Single</SelectItem>
-                          <SelectItem value="Married">Married</SelectItem>
-                          <SelectItem value="Widow">Widow</SelectItem>
-                          <SelectItem value="Widower">Widower</SelectItem>
-                          <SelectItem value="Divorcee">Divorcee</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                  </div>
+                  <FormField label="Gender" id="gender">
+                    <Select 
+                      value={newEmployee.gender} 
+                      onValueChange={(value) => setNewEmployee({...newEmployee, gender: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Transgender">Transgender</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="Marital Status" id="maritalStatus">
+                    <Select 
+                      value={newEmployee.maritalStatus} 
+                      onValueChange={(value) => setNewEmployee({...newEmployee, maritalStatus: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select marital status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single">Single</SelectItem>
+                        <SelectItem value="Married">Married</SelectItem>
+                        <SelectItem value="Widow">Widow</SelectItem>
+                        <SelectItem value="Widower">Widower</SelectItem>
+                        <SelectItem value="Divorcee">Divorcee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </div>
                   
                   <FormField label="Permanent Address" id="permanentAddress">
                     <Textarea
@@ -3497,7 +3520,7 @@ useEffect(() => {
 
                 <div className="text-xs text-muted-foreground mt-2">
                   <strong>Excel Import:</strong> Use the template above or your existing Excel file with the same column headers.
-                  Required fields: Name, Email, Aadhar Number, Position, Department, Monthly Salary
+                  Required fields: Name, Aadhar Number, Position, Department, Monthly Salary
                 </div>
               </div>
             </CardContent>
@@ -3658,7 +3681,7 @@ useEffect(() => {
                           type="email"
                           value={epfFormData.email}
                           onChange={(e) => handleEPFFormChange('email', e.target.value)}
-                          placeholder="Enter email address"
+                          placeholder="Enter email address (optional)"
                           className="bg-gray-50"
                         />
                         <div className="absolute right-2 top-2">
@@ -4124,7 +4147,7 @@ useEffect(() => {
                     <div className="section-title">DECLARATION BY PRESENT EMPLOYER</div>
                     
                     <div className="space-y-2">
-                      <Label>A. The member Mr./Ms./Mrs. {epfFormData.memberName} has joined on {epfFormData.enrolledDate} and has been allotted PF Number {createdEmployeeData?.uanNumber || createdEmployeeData?.uan || "Pending"}</Label>
+                      <Label>A. The member Mr./Ms./Mrs. {epfFormData.memberName} has joined on {epfFormData.enrolledDate} and has been allotted PF Number ${createdEmployeeData?.uanNumber || createdEmployeeData?.uan || "Pending"}</Label>
                     </div>
 
                     <div className="space-y-2">

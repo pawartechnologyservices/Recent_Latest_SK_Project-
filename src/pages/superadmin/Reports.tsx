@@ -923,24 +923,36 @@ const Reports = () => {
   };
 
   // Fetch all employees from database
-  const fetchAllEmployees = async () => {
-    try {
-      const response = await fetch(`${API_URL}/leaves/test/employees`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch employees');
-      }
-      const data = await response.json();
-      
-      if (data.success && data.sampleEmployees) {
-        setAllEmployees(data.sampleEmployees);
-        const uniqueDepts = Array.from(new Set(data.sampleEmployees.map((emp: EmployeeData) => emp.department)));
-        setDepartments(["All Departments", ...uniqueDepts]);
-      }
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-      toast.error("Failed to load employees data");
+ const fetchAllEmployees = async () => {
+  try {
+    const response = await fetch(`${API_URL}/leaves/test/employees`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch employees');
     }
-  };
+    const data = await response.json();
+    console.log('Employees data response:', data); // Debug log
+    
+    let employeesArray: EmployeeData[] = [];
+    
+    if (data.success && Array.isArray(data.sampleEmployees)) {
+      employeesArray = data.sampleEmployees;
+    } else if (Array.isArray(data)) {
+      employeesArray = data;
+    } else if (data && data.employees && Array.isArray(data.employees)) {
+      employeesArray = data.employees;
+    } else {
+      employeesArray = [];
+    }
+    
+    setAllEmployees(employeesArray);
+    const uniqueDepts = Array.from(new Set(employeesArray.map((emp: EmployeeData) => emp.department)));
+    setDepartments(["All Departments", ...uniqueDepts]);
+  } catch (error) {
+    console.error("Error fetching employees:", error);
+    toast.error("Failed to load employees data");
+    setAllEmployees([]);
+  }
+};
 
   // Fetch attendance records from API
   const fetchAttendanceRecords = async () => {
@@ -1049,268 +1061,303 @@ const Reports = () => {
   };
 
   // Fetch leave data for attendance calculation
-  const fetchLeaveData = async () => {
-    try {
-      const response = await fetch(`${API_URL}/leaves?status=approved`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch leave data');
-      }
-      
-      const data = await response.json();
-      setLeaveData(data);
-    } catch (error) {
-      console.error("Error fetching leave data:", error);
+const fetchLeaveData = async () => {
+  try {
+    const response = await fetch(`${API_URL}/leaves?status=approved`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch leave data');
     }
-  };
+    
+    const data = await response.json();
+    console.log('Leave data response:', data); // Debug log
+    
+    // Fix: Ensure leaveData is always an array
+    if (data && data.success && Array.isArray(data.data)) {
+      setLeaveData(data.data);
+    } else if (Array.isArray(data)) {
+      setLeaveData(data);
+    } else if (data && data.leaves && Array.isArray(data.leaves)) {
+      setLeaveData(data.leaves);
+    } else {
+      // If no valid array found, set empty array
+      console.warn('Unexpected leave data format:', data);
+      setLeaveData([]);
+    }
+  } catch (error) {
+    console.error("Error fetching leave data:", error);
+    setLeaveData([]); // Set empty array on error
+  }
+};
 
   // Fetch all tasks
-  const fetchAllTasks = async () => {
-    try {
-      setIsLoading(true);
-      const tasksData = await taskService.getAllTasks();
-      setTasks(tasksData || []);
-      
-      const uniqueSites = Array.from(new Set(tasksData
-        .filter(task => task.siteName && task.siteName !== "Unspecified Site")
-        .map(task => task.siteName)
-      ));
-      setSites(["All Sites", ...uniqueSites]);
-      
-    } catch (error: any) {
-      console.error("Error fetching tasks:", error);
-      toast.error(error.message || "Failed to load tasks");
-      setTasks([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const fetchAllTasks = async () => {
+  try {
+    setIsLoading(true);
+    const tasksData = await taskService.getAllTasks();
+    const tasksArray = Array.isArray(tasksData) ? tasksData : [];
+    setTasks(tasksArray);
+    
+    const uniqueSites = Array.from(new Set(tasksArray
+      .filter(task => task.siteName && task.siteName !== "Unspecified Site")
+      .map(task => task.siteName)
+    ));
+    setSites(["All Sites", ...uniqueSites]);
+    
+  } catch (error: any) {
+    console.error("Error fetching tasks:", error);
+    toast.error(error.message || "Failed to load tasks");
+    setTasks([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Fetch all expenses from backend
-  const fetchAllExpenses = async () => {
-    try {
-      setExpenseLoading(true);
-      const response = await fetch(`${API_URL}/expenses?limit=1000`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch expenses');
-      }
-      
-      const data = await response.json();
-      if (data.success) {
-        setExpenses(data.data || []);
-        setFilteredExpenses(data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching expenses:", error);
-      toast.error("Failed to load expenses data");
-      setExpenses([]);
-      setFilteredExpenses([]);
-    } finally {
-      setExpenseLoading(false);
+ const fetchAllExpenses = async () => {
+  try {
+    setExpenseLoading(true);
+    const response = await fetch(`${API_URL}/expenses?limit=1000`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch expenses');
     }
-  };
+    
+    const data = await response.json();
+    console.log('Expenses data response:', data); // Debug log
+    
+    let expensesArray: ExpenseData[] = [];
+    
+    if (data.success && Array.isArray(data.data)) {
+      expensesArray = data.data;
+    } else if (Array.isArray(data)) {
+      expensesArray = data;
+    } else if (data && data.expenses && Array.isArray(data.expenses)) {
+      expensesArray = data.expenses;
+    } else {
+      expensesArray = [];
+    }
+    
+    setExpenses(expensesArray);
+    setFilteredExpenses(expensesArray);
+  } catch (error) {
+    console.error("Error fetching expenses:", error);
+    toast.error("Failed to load expenses data");
+    setExpenses([]);
+    setFilteredExpenses([]);
+  } finally {
+    setExpenseLoading(false);
+  }
+};
 
   // Generate attendance report summary (same as before)
-  const generateAttendanceReport = useMemo(() => {
-    if (attendanceRecords.length === 0 && allEmployees.length === 0) {
-      return [];
-    }
+ const generateAttendanceReport = useMemo(() => {
+  // Ensure attendanceRecords is an array
+  const records = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+  const employeesList = Array.isArray(allEmployees) ? allEmployees : [];
+  const leavesList = Array.isArray(leaveData) ? leaveData : [];
+  
+  if (records.length === 0 && employeesList.length === 0) {
+    return [];
+  }
 
-    const report: AttendanceReportSummary[] = [];
+  const report: AttendanceReportSummary[] = [];
+  
+  const startDate = dateFrom ? new Date(dateFrom) : new Date();
+  const endDate = dateTo ? new Date(dateTo) : new Date();
+  const totalWorkingDays = calculateWorkingDays(startDate, endDate);
+  
+  const employeeAttendance = new Map<string, {
+    employeeId: string;
+    employeeName: string;
+    department: string;
+    present: number;
+    absent: number;
+    late: number;
+    halfDay: number;
+    leave: number;
+    totalHours: number;
+    overtimeHours: number;
+    records: AttendanceRecord[];
+  }>();
+  
+  records.forEach(record => {
+    const key = record.employeeId;
+    if (!employeeAttendance.has(key)) {
+      employeeAttendance.set(key, {
+        employeeId: record.employeeId,
+        employeeName: record.employeeName,
+        department: record.department,
+        present: 0,
+        absent: 0,
+        late: 0,
+        halfDay: 0,
+        leave: 0,
+        totalHours: 0,
+        overtimeHours: 0,
+        records: []
+      });
+    }
     
-    const startDate = dateFrom ? new Date(dateFrom) : new Date();
-    const endDate = dateTo ? new Date(dateTo) : new Date();
-    const totalWorkingDays = calculateWorkingDays(startDate, endDate);
+    const stats = employeeAttendance.get(key)!;
+    stats.records.push(record);
     
-    const employeeAttendance = new Map<string, {
-      employeeId: string;
-      employeeName: string;
-      department: string;
-      present: number;
-      absent: number;
-      late: number;
-      halfDay: number;
-      leave: number;
-      totalHours: number;
-      overtimeHours: number;
-      records: AttendanceRecord[];
-    }>();
+    switch (record.status) {
+      case 'present':
+        stats.present++;
+        break;
+      case 'absent':
+        stats.absent++;
+        break;
+      case 'late':
+        stats.late++;
+        stats.present++;
+        break;
+      case 'half-day':
+        stats.halfDay++;
+        stats.present++;
+        break;
+      case 'leave':
+        stats.leave++;
+        break;
+    }
     
-    attendanceRecords.forEach(record => {
-      const key = record.employeeId;
-      if (!employeeAttendance.has(key)) {
-        employeeAttendance.set(key, {
-          employeeId: record.employeeId,
-          employeeName: record.employeeName,
-          department: record.department,
-          present: 0,
-          absent: 0,
-          late: 0,
-          halfDay: 0,
-          leave: 0,
-          totalHours: 0,
-          overtimeHours: 0,
-          records: []
-        });
-      }
-      
-      const stats = employeeAttendance.get(key)!;
-      stats.records.push(record);
-      
-      switch (record.status) {
-        case 'present':
-          stats.present++;
-          break;
-        case 'absent':
-          stats.absent++;
-          break;
-        case 'late':
-          stats.late++;
-          stats.present++;
-          break;
-        case 'half-day':
-          stats.halfDay++;
-          stats.present++;
-          break;
-        case 'leave':
-          stats.leave++;
-          break;
-      }
-      
-      stats.totalHours += record.hoursWorked;
-      stats.overtimeHours += record.overtime || 0;
+    stats.totalHours += record.hoursWorked;
+    stats.overtimeHours += record.overtime || 0;
+  });
+  
+  const employeeLeaves = new Map<string, number>();
+  leavesList.forEach(leave => {
+    if (leave.status === 'approved') {
+      const key = leave.employeeId;
+      employeeLeaves.set(key, (employeeLeaves.get(key) || 0) + leave.totalDays);
+    }
+  });
+  
+  let id = 1;
+  employeeAttendance.forEach((stats, employeeId) => {
+    const leaveDays = employeeLeaves.get(employeeId) || 0;
+    const totalPresent = stats.present + stats.halfDay;
+    const totalAbsent = totalWorkingDays - totalPresent - leaveDays;
+    const attendancePercentage = totalWorkingDays > 0 
+      ? ((totalPresent / totalWorkingDays) * 100).toFixed(1) + '%'
+      : '0%';
+    const averageHours = stats.present > 0 
+      ? (stats.totalHours / stats.present).toFixed(1) + ' hrs'
+      : '0 hrs';
+    
+    report.push({
+      id: id++,
+      employee: stats.employeeName,
+      employeeId: stats.employeeId,
+      department: stats.department,
+      present: totalPresent,
+      absent: Math.max(0, totalAbsent),
+      leaves: leaveDays,
+      totalDays: totalWorkingDays,
+      percentage: attendancePercentage,
+      lateArrivals: stats.late,
+      earlyDepartures: 0,
+      averageHours,
+      overtimeHours: stats.overtimeHours
     });
-    
-    const employeeLeaves = new Map<string, number>();
-    leaveData.forEach(leave => {
-      if (leave.status === 'approved') {
-        const key = leave.employeeId;
-        employeeLeaves.set(key, (employeeLeaves.get(key) || 0) + leave.totalDays);
-      }
-    });
-    
-    let id = 1;
-    employeeAttendance.forEach((stats, employeeId) => {
-      const leaveDays = employeeLeaves.get(employeeId) || 0;
-      const totalPresent = stats.present + stats.halfDay;
-      const totalAbsent = totalWorkingDays - totalPresent - leaveDays;
-      const attendancePercentage = totalWorkingDays > 0 
-        ? ((totalPresent / totalWorkingDays) * 100).toFixed(1) + '%'
-        : '0%';
-      const averageHours = stats.present > 0 
-        ? (stats.totalHours / stats.present).toFixed(1) + ' hrs'
-        : '0 hrs';
+  });
+  
+  employeesList.forEach(emp => {
+    if (!employeeAttendance.has(emp.employeeId)) {
+      const leaveDays = employeeLeaves.get(emp.employeeId) || 0;
+      const totalAbsent = totalWorkingDays - leaveDays;
       
       report.push({
         id: id++,
-        employee: stats.employeeName,
-        employeeId: stats.employeeId,
-        department: stats.department,
-        present: totalPresent,
+        employee: emp.name,
+        employeeId: emp.employeeId,
+        department: emp.department,
+        present: 0,
         absent: Math.max(0, totalAbsent),
         leaves: leaveDays,
         totalDays: totalWorkingDays,
-        percentage: attendancePercentage,
-        lateArrivals: stats.late,
+        percentage: '0%',
+        lateArrivals: 0,
         earlyDepartures: 0,
-        averageHours,
-        overtimeHours: stats.overtimeHours
+        averageHours: '0 hrs',
+        overtimeHours: 0
       });
-    });
-    
-    allEmployees.forEach(emp => {
-      if (!employeeAttendance.has(emp.employeeId)) {
-        const leaveDays = employeeLeaves.get(emp.employeeId) || 0;
-        const totalAbsent = totalWorkingDays - leaveDays;
-        
-        report.push({
-          id: id++,
-          employee: emp.name,
-          employeeId: emp.employeeId,
-          department: emp.department,
-          present: 0,
-          absent: Math.max(0, totalAbsent),
-          leaves: leaveDays,
-          totalDays: totalWorkingDays,
-          percentage: '0%',
-          lateArrivals: 0,
-          earlyDepartures: 0,
-          averageHours: '0 hrs',
-          overtimeHours: 0
-        });
-      }
-    });
-    
-    return report;
-  }, [attendanceRecords, leaveData, allEmployees, dateFrom, dateTo]);
+    }
+  });
+  
+  return report;
+}, [attendanceRecords, leaveData, allEmployees, dateFrom, dateTo]);
 
   // Filter attendance report by department
-  const getFilteredAttendanceReport = useMemo(() => {
-    if (selectedDepartment === "all") {
-      return generateAttendanceReport;
-    }
-    return generateAttendanceReport.filter(record => record.department === selectedDepartment);
-  }, [generateAttendanceReport, selectedDepartment]);
+const getFilteredAttendanceReport = useMemo(() => {
+  const reportArray = Array.isArray(generateAttendanceReport) ? generateAttendanceReport : [];
+  if (selectedDepartment === "all") {
+    return reportArray;
+  }
+  return reportArray.filter(record => record.department === selectedDepartment);
+}, [generateAttendanceReport, selectedDepartment]);
 
   // Prepare attendance data for charts
-  const getAttendanceChartData = useMemo(() => {
-    const departmentStats = new Map();
+const getAttendanceChartData = useMemo(() => {
+  const reportArray = Array.isArray(generateAttendanceReport) ? generateAttendanceReport : [];
+  const departmentStats = new Map();
+  
+  reportArray.forEach(record => {
+    if (!departmentStats.has(record.department)) {
+      departmentStats.set(record.department, {
+        department: record.department,
+        totalEmployees: 0,
+        totalPresent: 0,
+        totalAbsent: 0,
+        totalLeaves: 0,
+        totalLate: 0
+      });
+    }
     
-    generateAttendanceReport.forEach(record => {
-      if (!departmentStats.has(record.department)) {
-        departmentStats.set(record.department, {
-          department: record.department,
-          totalEmployees: 0,
-          totalPresent: 0,
-          totalAbsent: 0,
-          totalLeaves: 0,
-          totalLate: 0
-        });
-      }
-      
-      const stats = departmentStats.get(record.department);
-      stats.totalEmployees++;
-      stats.totalPresent += record.present;
-      stats.totalAbsent += record.absent;
-      stats.totalLeaves += record.leaves;
-      stats.totalLate += record.lateArrivals;
-    });
-    
-    return Array.from(departmentStats.values()).map(stats => ({
-      department: stats.department,
-      present: Math.round(stats.totalPresent / stats.totalEmployees),
-      absent: Math.round(stats.totalAbsent / stats.totalEmployees),
-      leaves: Math.round(stats.totalLeaves / stats.totalEmployees),
-      late: Math.round(stats.totalLate / stats.totalEmployees)
-    }));
-  }, [generateAttendanceReport]);
+    const stats = departmentStats.get(record.department);
+    stats.totalEmployees++;
+    stats.totalPresent += record.present;
+    stats.totalAbsent += record.absent;
+    stats.totalLeaves += record.leaves;
+    stats.totalLate += record.lateArrivals;
+  });
+  
+  return Array.from(departmentStats.values()).map(stats => ({
+    department: stats.department,
+    present: Math.round(stats.totalPresent / stats.totalEmployees),
+    absent: Math.round(stats.totalAbsent / stats.totalEmployees),
+    leaves: Math.round(stats.totalLeaves / stats.totalEmployees),
+    late: Math.round(stats.totalLate / stats.totalEmployees)
+  }));
+}, [generateAttendanceReport]);
 
   // Prepare daily attendance trend data
-  const getDailyAttendanceData = useMemo(() => {
-    const dailyStats = new Map<string, { date: string; present: number; absent: number; late: number }>();
+const getDailyAttendanceData = useMemo(() => {
+  const recordsArray = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+  const dailyStats = new Map<string, { date: string; present: number; absent: number; late: number }>();
+  
+  recordsArray.forEach(record => {
+    const date = record.date.split('T')[0];
+    if (!dailyStats.has(date)) {
+      dailyStats.set(date, { date, present: 0, absent: 0, late: 0 });
+    }
     
-    attendanceRecords.forEach(record => {
-      const date = record.date.split('T')[0];
-      if (!dailyStats.has(date)) {
-        dailyStats.set(date, { date, present: 0, absent: 0, late: 0 });
+    const stats = dailyStats.get(date)!;
+    if (record.status === 'present' || record.status === 'late' || record.status === 'half-day') {
+      stats.present++;
+      if (record.status === 'late') {
+        stats.late++;
       }
-      
-      const stats = dailyStats.get(date)!;
-      if (record.status === 'present' || record.status === 'late' || record.status === 'half-day') {
-        stats.present++;
-        if (record.status === 'late') {
-          stats.late++;
-        }
-      } else if (record.status === 'absent') {
-        stats.absent++;
-      }
-    });
-    
-    return Array.from(dailyStats.values())
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-15);
-  }, [attendanceRecords]);
+    } else if (record.status === 'absent') {
+      stats.absent++;
+    }
+  });
+  
+  return Array.from(dailyStats.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-15);
+}, [attendanceRecords]);
 
   // Filter expenses based on filters
   useEffect(() => {
@@ -1379,92 +1426,96 @@ const Reports = () => {
   }, [tasks, taskSearchQuery, taskFilterStatus, taskFilterPriority, taskFilterSite]);
 
   // Prepare task report data
-  const taskReportData: TaskReportData[] = useMemo(() => {
-    return getFilteredTasks.map(task => ({
-      id: task._id,
-      title: task.title,
-      description: task.description,
-      assignedToName: task.assignedToName,
-      siteName: task.siteName,
-      clientName: task.clientName,
-      priority: task.priority,
-      status: task.status,
-      deadline: new Date(task.deadline).toLocaleDateString(),
-      dueDateTime: task.dueDateTime ? new Date(task.dueDateTime).toLocaleString() : "N/A",
-      taskType: task.taskType || "routine",
-      hourlyUpdatesCount: task.hourlyUpdates?.length || 0,
-      attachmentsCount: task.attachments?.length || 0,
-      createdAt: new Date(task.createdAt).toLocaleString()
-    }));
-  }, [getFilteredTasks]);
+ const taskReportData: TaskReportData[] = useMemo(() => {
+  const filteredTasks = Array.isArray(getFilteredTasks) ? getFilteredTasks : [];
+  return filteredTasks.map(task => ({
+    id: task._id,
+    title: task.title,
+    description: task.description,
+    assignedToName: task.assignedToName,
+    siteName: task.siteName,
+    clientName: task.clientName,
+    priority: task.priority,
+    status: task.status,
+    deadline: new Date(task.deadline).toLocaleDateString(),
+    dueDateTime: task.dueDateTime ? new Date(task.dueDateTime).toLocaleString() : "N/A",
+    taskType: task.taskType || "routine",
+    hourlyUpdatesCount: task.hourlyUpdates?.length || 0,
+    attachmentsCount: task.attachments?.length || 0,
+    createdAt: new Date(task.createdAt).toLocaleString()
+  }));
+}, [getFilteredTasks]);
+
 
   // Task statistics for charts
-  const taskStats = useMemo(() => {
-    const stats = {
-      total: tasks.length,
-      completed: tasks.filter(t => t.status === 'completed').length,
-      inProgress: tasks.filter(t => t.status === 'in-progress').length,
-      pending: tasks.filter(t => t.status === 'pending').length,
-      cancelled: tasks.filter(t => t.status === 'cancelled').length,
-      highPriority: tasks.filter(t => t.priority === 'high').length,
-      mediumPriority: tasks.filter(t => t.priority === 'medium').length,
-      lowPriority: tasks.filter(t => t.priority === 'low').length
-    };
-    
-    return stats;
-  }, [tasks]);
+ const taskStats = useMemo(() => {
+  const tasksArray = Array.isArray(tasks) ? tasks : [];
+  const stats = {
+    total: tasksArray.length,
+    completed: tasksArray.filter(t => t.status === 'completed').length,
+    inProgress: tasksArray.filter(t => t.status === 'in-progress').length,
+    pending: tasksArray.filter(t => t.status === 'pending').length,
+    cancelled: tasksArray.filter(t => t.status === 'cancelled').length,
+    highPriority: tasksArray.filter(t => t.priority === 'high').length,
+    mediumPriority: tasksArray.filter(t => t.priority === 'medium').length,
+    lowPriority: tasksArray.filter(t => t.priority === 'low').length
+  };
+  
+  return stats;
+}, [tasks]);
 
   // Expense statistics
-  const expenseStats = useMemo(() => {
-    const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const approvedExpenses = filteredExpenses.filter(e => e.status === 'approved');
-    const pendingExpenses = filteredExpenses.filter(e => e.status === 'pending');
-    const rejectedExpenses = filteredExpenses.filter(e => e.status === 'rejected');
-    
-    const operationalExpenses = filteredExpenses.filter(e => e.expenseType === 'operational')
-      .reduce((sum, expense) => sum + expense.amount, 0);
-    const officeExpenses = filteredExpenses.filter(e => e.expenseType === 'office')
-      .reduce((sum, expense) => sum + expense.amount, 0);
-    const otherExpenses = filteredExpenses.filter(e => e.expenseType === 'other')
-      .reduce((sum, expense) => sum + expense.amount, 0);
-    
-    const categoryStats = filteredExpenses.reduce((acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    const monthlyStats = filteredExpenses.reduce((acc, expense) => {
-      const date = new Date(expense.date);
-      const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      acc[monthYear] = (acc[monthYear] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    const monthlyData = Object.entries(monthlyStats)
-      .map(([month, amount]) => ({
-        month: month,
-        amount: amount
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-    
-    const topCategories = Object.entries(categoryStats)
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 10);
-    
-    return {
-      totalExpenses,
-      approvedExpenses: approvedExpenses.length,
-      pendingExpenses: pendingExpenses.length,
-      rejectedExpenses: rejectedExpenses.length,
-      operationalExpenses,
-      officeExpenses,
-      otherExpenses,
-      categoryData: topCategories,
-      monthlyData,
-      totalTransactions: filteredExpenses.length
-    };
-  }, [filteredExpenses]);
+const expenseStats = useMemo(() => {
+  const expensesArray = Array.isArray(filteredExpenses) ? filteredExpenses : [];
+  const totalExpenses = expensesArray.reduce((sum, expense) => sum + expense.amount, 0);
+  const approvedExpenses = expensesArray.filter(e => e.status === 'approved');
+  const pendingExpenses = expensesArray.filter(e => e.status === 'pending');
+  const rejectedExpenses = expensesArray.filter(e => e.status === 'rejected');
+  
+  const operationalExpenses = expensesArray.filter(e => e.expenseType === 'operational')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const officeExpenses = expensesArray.filter(e => e.expenseType === 'office')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const otherExpenses = expensesArray.filter(e => e.expenseType === 'other')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  
+  const categoryStats = expensesArray.reduce((acc, expense) => {
+    acc[expense.category] = (acc[expense.category] || 0) + expense.amount;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const monthlyStats = expensesArray.reduce((acc, expense) => {
+    const date = new Date(expense.date);
+    const monthYear = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+    acc[monthYear] = (acc[monthYear] || 0) + expense.amount;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const monthlyData = Object.entries(monthlyStats)
+    .map(([month, amount]) => ({
+      month: month,
+      amount: amount
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  
+  const topCategories = Object.entries(categoryStats)
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 10);
+  
+  return {
+    totalExpenses,
+    approvedExpenses: approvedExpenses.length,
+    pendingExpenses: pendingExpenses.length,
+    rejectedExpenses: rejectedExpenses.length,
+    operationalExpenses,
+    officeExpenses,
+    otherExpenses,
+    categoryData: topCategories,
+    monthlyData,
+    totalTransactions: expensesArray.length
+  };
+}, [filteredExpenses]);
 
   // Task completion data for pie chart
   const taskCompletionData: TaskCompletionData[] = useMemo(() => [
