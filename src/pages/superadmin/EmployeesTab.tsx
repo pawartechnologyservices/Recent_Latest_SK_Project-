@@ -574,12 +574,6 @@ const EmployeesTab = ({
     
     let history = employee.siteHistory || [];
     
-    console.log("=== Site History Update ===");
-    console.log("Employee:", employee.name);
-    console.log("Current site:", employee.siteName);
-    console.log("New site:", newSiteName);
-    console.log("Current history before update:", JSON.stringify(history, null, 2));
-    
     if (employee.siteName && employee.siteName !== newSiteName && employee.siteName !== "") {
       const lastEntryIndex = history.findIndex(entry => !entry.leftDate);
       
@@ -602,8 +596,6 @@ const EmployeesTab = ({
           }
           return entry;
         });
-        
-        console.log("Updated previous entry:", updatedEntry);
       } else {
         const newEntry = {
           siteName: employee.siteName,
@@ -612,7 +604,6 @@ const EmployeesTab = ({
           daysWorked: differenceInDays(new Date(today), new Date(employee.joinDate || today))
         };
         history.push(newEntry);
-        console.log("Created new previous entry:", newEntry);
       }
     }
     
@@ -621,8 +612,6 @@ const EmployeesTab = ({
       assignedDate: today
     };
     history.push(newSiteEntry);
-    console.log("Added new site entry:", newSiteEntry);
-    console.log("Final history:", JSON.stringify(history, null, 2));
     
     return {
       ...employee,
@@ -868,21 +857,16 @@ const EmployeesTab = ({
     }
   };
 
- // Handle View History - FIXED to always get latest data
-const handleViewHistory = (employee: ExtendedEmployee) => {
-  // Get the most up-to-date employee from the current employees array
-  const currentEmployee = employees.find(emp => emp.id === employee.id || emp._id === employee._id);
-  
-  if (currentEmployee) {
-    console.log("Opening history for:", currentEmployee.name);
-    console.log("Site history data:", JSON.stringify(currentEmployee.siteHistory, null, 2));
-    setSelectedEmployeeForHistory(currentEmployee as ExtendedEmployee);
-  } else {
-    // Fallback to the passed employee if not found in current list
-    setSelectedEmployeeForHistory(employee);
-  }
-  setHistoryDialogOpen(true);
-};
+  const handleViewHistory = (employee: ExtendedEmployee) => {
+    const currentEmployee = employees.find(emp => emp.id === employee.id || emp._id === employee._id);
+    
+    if (currentEmployee) {
+      setSelectedEmployeeForHistory(currentEmployee as ExtendedEmployee);
+    } else {
+      setSelectedEmployeeForHistory(employee);
+    }
+    setHistoryDialogOpen(true);
+  };
 
   const handleOpenDocumentUpload = (employee: Employee) => {
     setSelectedEmployeeForDocumentUpload(employee);
@@ -895,107 +879,101 @@ const handleViewHistory = (employee: ExtendedEmployee) => {
     toast.success('Documents refreshed');
   };
 
-  const handleBulkSiteAssignment = async () => {
-    if (!selectedSiteForBulk) {
-      toast.error("Please select a site");
-      return;
-    }
+ const handleBulkSiteAssignment = async () => {
+  if (!selectedSiteForBulk) {
+    toast.error("Please select a site");
+    return;
+  }
 
-    if (selectedEmployees.length === 0) {
-      toast.error("Please select at least one employee");
-      return;
-    }
+  if (selectedEmployees.length === 0) {
+    toast.error("Please select at least one employee");
+    return;
+  }
 
-    const employeesToAssign = employees.filter(emp => selectedEmployees.includes(emp.id || emp._id || ''));
+  const employeesToAssign = employees.filter(emp => selectedEmployees.includes(emp.id || emp._id || ''));
+  
+  const capacityCheck = canAssignToSite(selectedSiteForBulk, employeesToAssign);
+  
+  if (!capacityCheck.allowed) {
+    toast.error(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-red-500" />
+          <span className="font-medium">Site Capacity Exceeded</span>
+        </div>
+        <div className="text-sm text-red-600 max-h-40 overflow-y-auto">
+          {capacityCheck.violations.map((violation, index) => (
+            <div key={index} className="mb-1">
+              • {violation.employee.name}: {violation.reason}
+            </div>
+          ))}
+        </div>
+        <div className="text-xs text-muted-foreground mt-2">
+          Please select different employees or adjust site requirements.
+        </div>
+      </div>,
+      { duration: 8000 }
+    );
+    return;
+  }
+
+  try {
+    setIsBulkUpdating(true);
     
-    const capacityCheck = canAssignToSite(selectedSiteForBulk, employeesToAssign);
+    // Get the employee IDs in the format expected by the backend
+    const employeeIds = employeesToAssign.map(emp => emp._id || emp.id);
     
-    if (!capacityCheck.allowed) {
-      toast.error(
+    console.log('Sending bulk site update:', { employeeIds, siteName: selectedSiteForBulk });
+    
+    const response = await axios.patch(`${API_URL}/employees/bulk/site`, {
+      employeeIds: employeeIds,
+      siteName: selectedSiteForBulk
+    });
+
+    if (response.data.success) {
+      const managersCount = employeesToAssign.filter(emp => emp.isManager).length;
+      const supervisorsCount = employeesToAssign.filter(emp => emp.isSupervisor).length;
+      const staffCount = employeesToAssign.filter(emp => !emp.isManager && !emp.isSupervisor).length;
+      
+      toast.success(
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <span className="font-medium">Site Capacity Exceeded</span>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <span className="font-medium">Site Assignment Successful</span>
           </div>
-          <div className="text-sm text-red-600 max-h-40 overflow-y-auto">
-            {capacityCheck.violations.map((violation, index) => (
-              <div key={index} className="mb-1">
-                • {violation.employee.name}: {violation.reason}
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            Please select different employees or adjust site requirements.
+          <div className="text-sm">
+            Assigned {selectedEmployees.length} employees to {selectedSiteForBulk}:
+            <div className="mt-1 text-xs">
+              {managersCount > 0 && <div>• Managers: {managersCount}</div>}
+              {supervisorsCount > 0 && <div>• Supervisors: {supervisorsCount}</div>}
+              {staffCount > 0 && <div>• Staff: {staffCount}</div>}
+            </div>
           </div>
         </div>,
         { duration: 8000 }
       );
-      return;
-    }
-
-    try {
-      setIsBulkUpdating(true);
       
-      const response = await axios.patch(`${API_URL}/employees/bulk/site`, {
-        employeeIds: selectedEmployees,
-        siteName: selectedSiteForBulk
-      });
-
-      if (response.data.success) {
-        const managersCount = employeesToAssign.filter(emp => emp.isManager).length;
-        const supervisorsCount = employeesToAssign.filter(emp => emp.isSupervisor).length;
-        const staffCount = employeesToAssign.filter(emp => !emp.isManager && !emp.isSupervisor).length;
-        
-        toast.success(
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="font-medium">Site Assignment Successful</span>
-            </div>
-            <div className="text-sm">
-              Assigned {selectedEmployees.length} employees to {selectedSiteForBulk}:
-              <div className="mt-1 text-xs">
-                {managersCount > 0 && <div>• Managers: {managersCount}</div>}
-                {supervisorsCount > 0 && <div>• Supervisors: {supervisorsCount}</div>}
-                {staffCount > 0 && <div>• Staff: {staffCount}</div>}
-              </div>
-            </div>
-          </div>,
-          { duration: 8000 }
-        );
-        
-        setEmployees(prev => prev.map(emp => {
-          if (selectedEmployees.includes(emp.id || emp._id || '')) {
-            const updatedEmployee = updateSiteHistory(emp as ExtendedEmployee, selectedSiteForBulk);
-            return updatedEmployee;
-          }
-          return emp;
-        }));
-        
-        if (onEmployeesBulkUpdate) {
-          const updatedEmployees = employees
-            .filter(emp => selectedEmployees.includes(emp.id || emp._id || ''))
-            .map(emp => updateSiteHistory(emp as ExtendedEmployee, selectedSiteForBulk));
-          onEmployeesBulkUpdate(updatedEmployees);
-        }
-        
-        setBulkSiteDialogOpen(false);
-        setSelectedEmployees([]);
-        setSelectAll(false);
-        setSelectedSiteForBulk("");
-        
-        calculateSiteDeploymentStatus();
-        fetchEmployees();
-      } else {
-        toast.error(response.data.message || "Failed to assign site");
-      }
-    } catch (err: any) {
-      console.error("Error assigning site:", err);
-      toast.error(err.response?.data?.message || "Error assigning site");
-    } finally {
-      setIsBulkUpdating(false);
+      // Refresh all data to show updated site assignments
+      await fetchEmployees();
+      await fetchSites();
+      calculateSiteDeploymentStatus();
+      
+      // Close dialog and clear selections
+      setBulkSiteDialogOpen(false);
+      setSelectedEmployees([]);
+      setSelectAll(false);
+      setSelectedSiteForBulk("");
+    } else {
+      toast.error(response.data.message || "Failed to assign site");
     }
-  };
+  } catch (err: any) {
+    console.error("Error assigning site:", err);
+    const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Error assigning site";
+    toast.error(errorMessage);
+  } finally {
+    setIsBulkUpdating(false);
+  }
+};
 
   const handleBulkDelete = async () => {
     if (selectedEmployees.length === 0) {
@@ -3239,7 +3217,6 @@ const handleViewHistory = (employee: ExtendedEmployee) => {
           </DialogHeader>
           
           <div className="space-y-6">
-            {/* EPF Form content - keeping as is from your original code */}
             <div className="text-center border-b-2 border-black pb-4">
               <h2 className="text-xl font-bold">New Form : 11 - Declaration Form</h2>
               <p className="text-sm">(To be retained by the employer for future reference)</p>
@@ -3957,7 +3934,6 @@ const handleViewHistory = (employee: ExtendedEmployee) => {
           
           {editFormData && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-              {/* Edit form fields - keeping as is from your original code */}
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Name *</Label>
                 <Input
@@ -4471,7 +4447,6 @@ const handleViewHistory = (employee: ExtendedEmployee) => {
         </DialogContent>
       </Dialog>
 
-      {/* Site History Dialog - FIXED to display all site history correctly */}
       <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
         <DialogContent className="max-w-2xl p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-4 border-b">
@@ -4485,96 +4460,86 @@ const handleViewHistory = (employee: ExtendedEmployee) => {
           </DialogHeader>
           
           <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-          {selectedEmployeeForHistory?.siteHistory && selectedEmployeeForHistory.siteHistory.length > 0 ? (
-  <div className="space-y-4">
-    <div className="relative">
-      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-      <div className="space-y-6">
-        {selectedEmployeeForHistory.siteHistory.map((history, index) => {
-          const isLastEntry = index === selectedEmployeeForHistory.siteHistory.length - 1;
-          const hasLeftDate = history.leftDate !== undefined && history.leftDate !== null && history.leftDate !== '';
-          
-          // Get the site name - prioritize history.siteName, then fallback to employee's current site for last entry
-          let displaySiteName = history.siteName;
-          
-          // If site name is empty or undefined, try to get it from the employee's current site
-          if (!displaySiteName || displaySiteName === '') {
-            if (!hasLeftDate && isLastEntry && selectedEmployeeForHistory.siteName) {
-              displaySiteName = selectedEmployeeForHistory.siteName;
-            } else {
-              displaySiteName = 'Unknown Site';
-            }
-          }
-          
-          console.log(`History entry ${index}:`, {
-            originalSiteName: history.siteName,
-            displaySiteName: displaySiteName,
-            hasLeftDate: hasLeftDate,
-            isLastEntry: isLastEntry,
-            currentSite: selectedEmployeeForHistory.siteName
-          });
-          
-          return (
-            <div key={index} className="relative pl-10">
-              <div className={`absolute left-2 top-1 w-4 h-4 rounded-full border-4 border-white ${
-                !hasLeftDate && isLastEntry ? 'bg-green-500' : 'bg-blue-500'
-              }`}></div>
-              <div className="bg-white p-4 rounded-lg border shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <MapPin className="h-4 w-4 text-blue-600" />
-                  <span className="font-semibold text-lg">{displaySiteName}</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Assigned Date:</span>
-                    <div className="font-medium">
-                      {history.assignedDate ? new Date(history.assignedDate).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric'
-                      }) : 'Not specified'}
-                    </div>
+            {selectedEmployeeForHistory?.siteHistory && selectedEmployeeForHistory.siteHistory.length > 0 ? (
+              <div className="space-y-4">
+                <div className="relative">
+                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                  <div className="space-y-6">
+                    {selectedEmployeeForHistory.siteHistory.map((history, index) => {
+                      const isLastEntry = index === selectedEmployeeForHistory.siteHistory.length - 1;
+                      const hasLeftDate = history.leftDate !== undefined && history.leftDate !== null && history.leftDate !== '';
+                      
+                      let displaySiteName = history.siteName;
+                      
+                      if (!displaySiteName || displaySiteName === '') {
+                        if (!hasLeftDate && isLastEntry && selectedEmployeeForHistory.siteName) {
+                          displaySiteName = selectedEmployeeForHistory.siteName;
+                        } else {
+                          displaySiteName = 'Unknown Site';
+                        }
+                      }
+                      
+                      return (
+                        <div key={index} className="relative pl-10">
+                          <div className={`absolute left-2 top-1 w-4 h-4 rounded-full border-4 border-white ${
+                            !hasLeftDate && isLastEntry ? 'bg-green-500' : 'bg-blue-500'
+                          }`}></div>
+                          <div className="bg-white p-4 rounded-lg border shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                              <MapPin className="h-4 w-4 text-blue-600" />
+                              <span className="font-semibold text-lg">{displaySiteName}</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Assigned Date:</span>
+                                <div className="font-medium">
+                                  {history.assignedDate ? new Date(history.assignedDate).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  }) : 'Not specified'}
+                                </div>
+                              </div>
+                              {hasLeftDate && (
+                                <div>
+                                  <span className="text-muted-foreground">Left Date:</span>
+                                  <div className="font-medium">
+                                    {new Date(history.leftDate).toLocaleDateString('en-IN', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              {hasLeftDate && history.daysWorked !== undefined && (
+                                <div className="sm:col-span-2">
+                                  <span className="text-muted-foreground">Days Worked:</span>
+                                  <div className="font-medium text-green-600">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {history.daysWorked} days
+                                  </div>
+                                </div>
+                              )}
+                              {!hasLeftDate && isLastEntry && (
+                                <div className="sm:col-span-2">
+                                  <Badge className="bg-green-100 text-green-800">Current Site</Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {hasLeftDate && (
-                    <div>
-                      <span className="text-muted-foreground">Left Date:</span>
-                      <div className="font-medium">
-                        {new Date(history.leftDate).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {hasLeftDate && history.daysWorked !== undefined && (
-                    <div className="sm:col-span-2">
-                      <span className="text-muted-foreground">Days Worked:</span>
-                      <div className="font-medium text-green-600">
-                        <Clock className="h-3 w-3 inline mr-1" />
-                        {history.daysWorked} days
-                      </div>
-                    </div>
-                  )}
-                  {!hasLeftDate && isLastEntry && (
-                    <div className="sm:col-span-2">
-                      <Badge className="bg-green-100 text-green-800">Current Site</Badge>
-                    </div>
-                  )}
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-) : (
-  <div className="text-center py-8 text-muted-foreground">
-    <History className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-    <p>No site assignment history found for this employee.</p>
-  </div>
-)}
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p>No site assignment history found for this employee.</p>
+              </div>
+            )}
           </div>
 
           <div className="px-6 py-4 border-t bg-gray-50">

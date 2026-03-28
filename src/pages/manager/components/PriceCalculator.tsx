@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Card, 
@@ -65,12 +65,33 @@ import {
   ChevronRight,
   ChevronLeft,
   CheckSquare,
-  Square
+  Square,
+  X,
+  RefreshCw,
+  UserCheck,
+  UserCog,
+  Loader2,
+  Link as LinkIcon,
+  Download as DownloadIcon,
+  ExternalLink,
+  MoreVertical,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { format } from 'date-fns';
+import { useRole } from "@/context/RoleContext";
+import { trainingApi } from '../../../services/trainingApi';
+import { briefingApi } from '../../../services/briefingApi';
+import { siteService, Site } from '@/services/SiteService';
+import assignTaskService, { AssignTask } from '@/services/assignTaskService';
+import axios from "axios";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
 
 // Types
 interface TrainingSession {
+  _id: string;
   id: string;
   title: string;
   description: string;
@@ -89,9 +110,15 @@ interface TrainingSession {
   feedback: Feedback[];
   location: string;
   objectives: string[];
+  supervisors?: Array<{ id: string; name: string }>;
+  managers?: Array<{ id: string; name: string }>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface StaffBriefing {
+  _id: string;
   id: string;
   date: string;
   time: string;
@@ -105,19 +132,28 @@ interface StaffBriefing {
   attachments: Attachment[];
   notes: string;
   shift: 'morning' | 'evening' | 'night';
+  supervisors?: Array<{ id: string; name: string }>;
+  managers?: Array<{ id: string; name: string }>;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Attachment {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   type: 'image' | 'document' | 'video';
   url: string;
   size: string;
   uploadedAt: string;
+  isNew?: boolean;
+  file?: File;
 }
 
 interface Feedback {
-  id: string;
+  _id?: string;
+  id?: string;
   employeeId: string;
   employeeName: string;
   rating: number;
@@ -126,7 +162,8 @@ interface Feedback {
 }
 
 interface ActionItem {
-  id: string;
+  _id?: string;
+  id?: string;
   description: string;
   assignedTo: string;
   dueDate: string;
@@ -134,145 +171,48 @@ interface ActionItem {
   priority: 'low' | 'medium' | 'high';
 }
 
-// Sample data
-const initialTrainingSessions: TrainingSession[] = [
-  {
-    id: 'TRN001',
-    title: 'Fire Safety Training',
-    description: 'Comprehensive fire safety training covering evacuation procedures, fire extinguisher usage, and emergency response protocols.',
-    type: 'safety',
-    date: '2024-12-15',
-    time: '10:00 AM',
-    duration: '3 hours',
-    trainer: 'John Safety Officer',
-    supervisor: 'Manager Smith',
-    site: 'Main Building',
-    department: 'All Departments',
-    attendees: ['EMP001', 'EMP002', 'EMP003', 'EMP004', 'EMP005'],
-    maxAttendees: 20,
-    status: 'scheduled',
-    attachments: [
-      { id: 'ATT001', name: 'fire_safety_manual.pdf', type: 'document', url: '#', size: '2.4 MB', uploadedAt: '2024-12-01' },
-      { id: 'ATT002', name: 'evacuation_plan.jpg', type: 'image', url: '#', size: '1.2 MB', uploadedAt: '2024-12-01' }
-    ],
-    feedback: [],
-    location: 'Main Conference Room',
-    objectives: ['Understand fire safety protocols', 'Learn evacuation procedures', 'Practice fire extinguisher usage']
-  },
-  {
-    id: 'TRN002',
-    title: 'Equipment Operation Training',
-    description: 'Training on proper operation and maintenance of heavy machinery and equipment.',
-    type: 'technical',
-    date: '2024-12-10',
-    time: '09:00 AM',
-    duration: '4 hours',
-    trainer: 'Robert Engineer',
-    supervisor: 'Supervisor Lee',
-    site: 'Warehouse',
-    department: 'Operations',
-    attendees: ['EMP006', 'EMP007', 'EMP008'],
-    maxAttendees: 15,
-    status: 'ongoing',
-    attachments: [
-      { id: 'ATT003', name: 'equipment_manual.pdf', type: 'document', url: '#', size: '3.1 MB', uploadedAt: '2024-12-05' },
-      { id: 'ATT004', name: 'safety_video.mp4', type: 'video', url: '#', size: '45 MB', uploadedAt: '2024-12-05' }
-    ],
-    feedback: [
-      { id: 'FB001', employeeId: 'EMP006', employeeName: 'Mike Johnson', rating: 4, comment: 'Very informative session', submittedAt: '2024-12-10' }
-    ],
-    location: 'Equipment Room',
-    objectives: ['Safe equipment operation', 'Basic troubleshooting', 'Preventive maintenance']
-  },
-  {
-    id: 'TRN003',
-    title: 'Customer Service Excellence',
-    description: 'Enhancing customer service skills and handling difficult customer situations.',
-    type: 'soft_skills',
-    date: '2024-12-05',
-    time: '02:00 PM',
-    duration: '2 hours',
-    trainer: 'Sarah Customer Manager',
-    supervisor: 'Manager Garcia',
-    site: 'Admin Block',
-    department: 'Front Desk',
-    attendees: ['EMP009', 'EMP010', 'EMP011', 'EMP012'],
-    maxAttendees: 12,
-    status: 'completed',
-    attachments: [
-      { id: 'ATT005', name: 'customer_service_guide.pdf', type: 'document', url: '#', size: '1.8 MB', uploadedAt: '2024-12-01' }
-    ],
-    feedback: [
-      { id: 'FB002', employeeId: 'EMP009', employeeName: 'Lisa Brown', rating: 5, comment: 'Excellent training material', submittedAt: '2024-12-05' },
-      { id: 'FB003', employeeId: 'EMP010', employeeName: 'David Wilson', rating: 4, comment: 'Good practical examples', submittedAt: '2024-12-05' }
-    ],
-    location: 'Training Room A',
-    objectives: ['Improve communication skills', 'Handle complaints effectively', 'Build customer relationships']
-  }
-];
+interface Supervisor {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'supervisor';
+  department?: string;
+  site?: string;
+  assignedSites?: string[];
+}
 
-const initialStaffBriefings: StaffBriefing[] = [
-  {
-    id: 'BRI001',
-    date: '2024-12-12',
-    time: '08:00 AM',
-    conductedBy: 'Manager Smith',
-    site: 'Main Building',
-    department: 'Housekeeping',
-    attendeesCount: 25,
-    topics: ['Daily tasks allocation', 'Safety reminders', 'Quality standards'],
-    keyPoints: ['Focus on common areas', 'Check equipment before use', 'Report any issues immediately'],
-    actionItems: [
-      { id: 'ACT001', description: 'Clean lobby area', assignedTo: 'Team A', dueDate: '2024-12-12', status: 'completed', priority: 'high' },
-      { id: 'ACT002', description: 'Inspect cleaning equipment', assignedTo: 'Team B', dueDate: '2024-12-13', status: 'pending', priority: 'medium' }
-    ],
-    attachments: [
-      { id: 'ATT006', name: 'briefing_notes.pdf', type: 'document', url: '#', size: '0.8 MB', uploadedAt: '2024-12-12' },
-      { id: 'ATT007', name: 'team_photo.jpg', type: 'image', url: '#', size: '2.1 MB', uploadedAt: '2024-12-12' }
-    ],
-    notes: 'All team members present. Emphasized on maintaining hygiene standards.',
-    shift: 'morning'
-  },
-  {
-    id: 'BRI002',
-    date: '2024-12-11',
-    time: '04:00 PM',
-    conductedBy: 'Supervisor Lee',
-    site: 'Parking Area',
-    department: 'Security',
-    attendeesCount: 8,
-    topics: ['Night shift protocols', 'Security checks', 'Emergency procedures'],
-    keyPoints: ['Regular patrol rounds', 'Monitor CCTV cameras', 'Report suspicious activities'],
-    actionItems: [
-      { id: 'ACT003', description: 'Check all emergency exits', assignedTo: 'Night Team', dueDate: '2024-12-11', status: 'completed', priority: 'high' }
-    ],
-    attachments: [
-      { id: 'ATT008', name: 'security_checklist.pdf', type: 'document', url: '#', size: '1.1 MB', uploadedAt: '2024-12-11' }
-    ],
-    notes: 'Briefing for night shift team. All equipment checked and functional.',
-    shift: 'evening'
-  },
-  {
-    id: 'BRI003',
-    date: '2024-12-10',
-    time: '10:00 PM',
-    conductedBy: 'Manager Garcia',
-    site: 'IT Building',
-    department: 'Maintenance',
-    attendeesCount: 6,
-    topics: ['Equipment maintenance', 'Safety protocols', 'Work order priorities'],
-    keyPoints: ['Follow lockout-tagout procedures', 'Wear proper PPE', 'Complete work orders by priority'],
-    actionItems: [
-      { id: 'ACT004', description: 'Repair AC unit in server room', assignedTo: 'Tech Team', dueDate: '2024-12-11', status: 'in_progress', priority: 'high' }
-    ],
-    attachments: [
-      { id: 'ATT009', name: 'maintenance_schedule.pdf', type: 'document', url: '#', size: '1.5 MB', uploadedAt: '2024-12-10' },
-      { id: 'ATT010', name: 'equipment_photo.jpg', type: 'image', url: '#', size: '3.2 MB', uploadedAt: '2024-12-10' }
-    ],
-    notes: 'Urgent maintenance required for server room AC. Team assigned for immediate action.',
-    shift: 'night'
-  }
-];
+interface Manager {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'manager';
+  department?: string;
+  site?: string;
+  assignedSites?: string[];
+}
+
+interface Employee {
+  _id: string;
+  employeeId: string;
+  name: string;
+  department: string;
+  position: string;
+  designation?: string;
+  status: "active" | "inactive" | "left";
+  siteName?: string;
+  assignedSites?: string[];
+}
+
+interface ExistingAttachment {
+  _id?: string;
+  name: string;
+  type: string;
+  url: string;
+  size: string;
+  uploadedAt?: string;
+  isNew?: boolean;
+  file?: File;
+}
 
 const departments = ['All Departments', 'Housekeeping', 'Security', 'Maintenance', 'Operations', 'Front Desk', 'Administration', 'IT Support'];
 const trainingTypes = [
@@ -284,13 +224,668 @@ const trainingTypes = [
 ];
 const shifts = ['morning', 'evening', 'night'];
 const priorities = ['low', 'medium', 'high'];
-const sites = ['Main Building', 'Parking Area', 'IT Building', 'Warehouse', 'Admin Block', 'All Sites'];
-const supervisors = ['John Safety Officer', 'Robert Engineer', 'Sarah Customer Manager', 'Manager Smith', 'Supervisor Lee', 'Manager Garcia', 'Team Lead Brown'];
 
-const TrainingBriefingSection: React.FC = () => {
+// Attachment Viewer Component
+const AttachmentViewer = ({ attachment, onClose }: { attachment: any; onClose: () => void }) => {
+  const isImage = attachment.type === 'image' || attachment.url?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+  const isVideo = attachment.type === 'video' || attachment.url?.match(/\.(mp4|mov|avi|webm)$/i);
+  const isPDF = attachment.url?.match(/\.pdf$/i);
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>{attachment.name}</DialogTitle>
+          <DialogDescription>File size: {attachment.size}</DialogDescription>
+        </DialogHeader>
+        <div className="mt-4">
+          {isImage && (
+            <img src={attachment.url} alt={attachment.name} className="max-w-full h-auto rounded-lg" />
+          )}
+          {isVideo && (
+            <video controls className="w-full rounded-lg">
+              <source src={attachment.url} />
+              Your browser does not support the video tag.
+            </video>
+          )}
+          {isPDF && (
+            <iframe src={attachment.url} className="w-full h-[70vh] rounded-lg" title={attachment.name} />
+          )}
+          {!isImage && !isVideo && !isPDF && (
+            <div className="text-center py-12">
+              <File className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-600 mb-4">Preview not available for this file type</p>
+              <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                <DownloadIcon className="h-4 w-4" />
+                Download File
+              </a>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50">
+            <ExternalLink className="h-4 w-4" />
+            Open in New Tab
+          </a>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Training Detail Dialog
+const TrainingDetailDialog = ({ training, open, onClose, onEdit, onUpdateStatus, getStatusBadge, getTypeColor, formatDate, trainingTypes }: any) => {
+  const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
+
+  if (!training) return null;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 md:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+              <Calendar className="h-5 w-5" />
+              Training Session Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
+              <div className="flex flex-col md:flex-row justify-between items-start gap-3">
+                <div>
+                  <h2 className="text-xl font-bold">{training.title}</h2>
+                  <p className="text-gray-600 mt-1">{training.description}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Badge className={getTypeColor(training.type)}>
+                    {trainingTypes.find((t: any) => t.value === training.type)?.label || training.type}
+                  </Badge>
+                  <Badge className={getStatusBadge(training.status)}>
+                    {training.status.charAt(0).toUpperCase() + training.status.slice(1)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Date & Time</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span>{formatDate(training.date)} at {training.time}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Duration</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                  <span>{training.duration}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Trainer</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <span>{training.trainer}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Location</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Target className="h-4 w-4 text-gray-400" />
+                  <span>{training.location}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Site</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <span>{training.site}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Department</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Users className="h-4 w-4 text-gray-400" />
+                  <span>{training.department}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Max Attendees</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Users className="h-4 w-4 text-gray-400" />
+                  <span>{training.maxAttendees}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Current Attendees</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Users className="h-4 w-4 text-gray-400" />
+                  <span>{training.attendees?.length || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {(training.supervisors && training.supervisors.length > 0) && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Supervisors
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {training.supervisors.map((sup: any, idx: number) => (
+                    <Badge key={idx} variant="outline" className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {sup.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(training.managers && training.managers.length > 0) && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <UserCog className="h-4 w-4" />
+                  Managers
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {training.managers.map((mgr: any, idx: number) => (
+                    <Badge key={idx} variant="outline" className="flex items-center gap-1">
+                      <UserCog className="h-3 w-3" />
+                      {mgr.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {training.objectives && training.objectives.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Training Objectives</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  {training.objectives.map((obj: string, idx: number) => (
+                    <li key={idx} className="text-sm text-gray-600">{obj}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {training.attachments && training.attachments.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Attachments</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {training.attachments.map((att: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100" onClick={() => setSelectedAttachment(att)}>
+                      <div className="flex items-center gap-2">
+                        {att.type === 'image' ? <ImageIcon className="h-4 w-4 text-blue-500" /> :
+                         att.type === 'video' ? <Video className="h-4 w-4 text-red-500" /> :
+                         <File className="h-4 w-4 text-gray-500" />}
+                        <span className="text-sm truncate max-w-[150px]">{att.name}</span>
+                      </div>
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {training.feedback && training.feedback.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Feedback</h4>
+                <div className="space-y-2">
+                  {training.feedback.map((fb: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-gray-50 rounded">
+                      <div className="flex justify-between items-start">
+                        <p className="font-medium">{fb.employeeName}</p>
+                        <div className="flex">
+                          {[...Array(5)].map((_, i) => (
+                            <svg key={i} className={`h-3 w-3 ${i < fb.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">{fb.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-4 text-xs text-gray-500">
+              <div className="flex justify-between">
+                <span>Created: {formatDate(training.createdAt)}</span>
+                <span>Last Updated: {formatDate(training.updatedAt)}</span>
+              </div>
+              {training.createdBy && <div className="mt-1">Created By: {training.createdBy}</div>}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t">
+              <Button onClick={() => { onClose(); onEdit(training); }} className="flex-1">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Training
+              </Button>
+              <Select value={training.status} onValueChange={(value) => onUpdateStatus(training._id, value)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Update Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="ongoing">Ongoing</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {selectedAttachment && <AttachmentViewer attachment={selectedAttachment} onClose={() => setSelectedAttachment(null)} />}
+    </>
+  );
+};
+
+// Briefing Detail Dialog
+const BriefingDetailDialog = ({ briefing, open, onClose, onEdit, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate }: any) => {
+  const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
+
+  if (!briefing) return null;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 md:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg md:text-xl">
+              <MessageSquare className="h-5 w-5" />
+              Staff Briefing Details
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-lg p-4">
+              <div className="flex flex-col md:flex-row justify-between items-start gap-3">
+                <div>
+                  <h2 className="text-xl font-bold">{briefing.site}</h2>
+                  <p className="text-gray-600 mt-1">Conducted by: {briefing.conductedBy}</p>
+                </div>
+                <Badge className={getShiftBadge(briefing.shift)}>
+                  {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Date & Time</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span>{formatDate(briefing.date)} at {briefing.time}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Attendees</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Users className="h-4 w-4 text-gray-400" />
+                  <span>{briefing.attendeesCount} staff members</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-500">Department</label>
+                <div className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <span>{briefing.department}</span>
+                </div>
+              </div>
+            </div>
+
+            {(briefing.supervisors && briefing.supervisors.length > 0) && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Supervisors
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {briefing.supervisors.map((sup: any, idx: number) => (
+                    <Badge key={idx} variant="outline" className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {sup.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(briefing.managers && briefing.managers.length > 0) && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <UserCog className="h-4 w-4" />
+                  Managers
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {briefing.managers.map((mgr: any, idx: number) => (
+                    <Badge key={idx} variant="outline" className="flex items-center gap-1">
+                      <UserCog className="h-3 w-3" />
+                      {mgr.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {briefing.topics && briefing.topics.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Topics Discussed</h4>
+                <div className="flex flex-wrap gap-2">
+                  {briefing.topics.map((topic: string, idx: number) => (
+                    <Badge key={idx} variant="outline">{topic}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {briefing.keyPoints && briefing.keyPoints.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Key Points</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  {briefing.keyPoints.map((point: string, idx: number) => (
+                    <li key={idx} className="text-sm text-gray-600">{point}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {briefing.actionItems && briefing.actionItems.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Action Items</h4>
+                <div className="space-y-2">
+                  {briefing.actionItems.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 mt-1"
+                        onClick={() => onUpdateAction(briefing._id, item._id || item.id || '', item.status === 'completed' ? 'pending' : 'completed')}
+                      >
+                        {item.status === 'completed' ? (
+                          <CheckSquare className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Square className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{item.description}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-500 mt-1">
+                          <span>Assigned to: {item.assignedTo}</span>
+                          <span>Due: {formatDate(item.dueDate)}</span>
+                        </div>
+                      </div>
+                      <Badge className={getPriorityBadge(item.priority)}>
+                        {item.priority.toUpperCase()}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {briefing.notes && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Notes</h4>
+                <div className="p-3 bg-gray-50 rounded">
+                  <p className="text-sm text-gray-600">{briefing.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {briefing.attachments && briefing.attachments.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm mb-2">Attachments</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {briefing.attachments.map((att: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100" onClick={() => setSelectedAttachment(att)}>
+                      <div className="flex items-center gap-2">
+                        {att.type === 'image' ? <ImageIcon className="h-4 w-4 text-blue-500" /> :
+                         att.type === 'video' ? <Video className="h-4 w-4 text-red-500" /> :
+                         <File className="h-4 w-4 text-gray-500" />}
+                        <span className="text-sm truncate max-w-[150px]">{att.name}</span>
+                      </div>
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t pt-4 text-xs text-gray-500">
+              <div className="flex justify-between">
+                <span>Created: {formatDate(briefing.createdAt)}</span>
+                <span>Last Updated: {formatDate(briefing.updatedAt)}</span>
+              </div>
+              {briefing.createdBy && <div className="mt-1">Created By: {briefing.createdBy}</div>}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t">
+              <Button onClick={() => { onClose(); onEdit(briefing); }} className="flex-1">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Briefing
+              </Button>
+              <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {selectedAttachment && <AttachmentViewer attachment={selectedAttachment} onClose={() => setSelectedAttachment(null)} />}
+    </>
+  );
+};
+
+// Mobile responsive supervisor selection card
+const MobileSupervisorCard = ({ supervisor, selected, onToggle }: { supervisor: Supervisor; selected: boolean; onToggle: (id: string) => void }) => {
+  return (
+    <div onClick={() => onToggle(supervisor._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
+      <div className="flex items-center gap-3">
+        <div className={`flex items-center justify-center h-5 w-5 rounded border ${selected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm">{supervisor.name}</h4>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{supervisor.department}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile responsive manager selection card
+const MobileManagerCard = ({ manager, selected, onToggle }: { manager: Manager; selected: boolean; onToggle: (id: string) => void }) => {
+  return (
+    <div onClick={() => onToggle(manager._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
+      <div className="flex items-center gap-3">
+        <div className={`flex items-center justify-center h-5 w-5 rounded border ${selected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm">{manager.name}</h4>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{manager.department}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile responsive employee selection card
+const MobileEmployeeCard = ({ employee, selected, onToggle }: { employee: Employee; selected: boolean; onToggle: (id: string) => void }) => {
+  return (
+    <div onClick={() => onToggle(employee._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
+      <div className="flex items-center gap-3">
+        <div className={`flex items-center justify-center h-5 w-5 rounded border ${selected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm">{employee.name}</h4>
+            <Badge variant="outline" className="text-xs">
+              {employee.employeeId}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{employee.position}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile responsive training card
+const MobileTrainingCard = ({ session, onView, onUpdateStatus, onDelete, getTypeColor, getStatusBadge, formatDate, trainingTypes, loading }: any) => {
+  const [expanded, setExpanded] = useState(false);
+  const canEdit = session.createdBy === session.currentManagerId;
+  
+  return (
+    <Card className="mb-3 overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex-1">
+            <h3 className="font-semibold text-base">{session.title}</h3>
+            <p className="text-xs text-muted-foreground mt-1">Trainer: {session.trainer}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onView(session)}><Eye className="h-4 w-4 mr-2" /> View</DropdownMenuItem>
+                {canEdit && (
+                  <>
+                    <DropdownMenuItem onClick={() => onUpdateStatus(session._id, 'scheduled')}><Calendar className="h-4 w-4 mr-2" /> Scheduled</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onUpdateStatus(session._id, 'ongoing')}><Clock className="h-4 w-4 mr-2" /> Ongoing</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onUpdateStatus(session._id, 'completed')}><CheckCircle className="h-4 w-4 mr-2" /> Completed</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onUpdateStatus(session._id, 'cancelled')}><XCircle className="h-4 w-4 mr-2" /> Cancelled</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onDelete(session._id)} className="text-red-600"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <Badge className={getTypeColor(session.type)}>{trainingTypes.find((t: any) => t.value === session.type)?.label || session.type}</Badge>
+          <Badge className={getStatusBadge(session.status)}>{session.status.charAt(0).toUpperCase() + session.status.slice(1)}</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+          <div className="flex items-center gap-1"><Calendar className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{formatDate(session.date)}</span></div>
+          <div className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{session.time} ({session.duration})</span></div>
+          <div className="flex items-center gap-1"><Building className="h-3 w-3 text-muted-foreground" /><span className="text-xs truncate">{session.site}</span></div>
+          <div className="flex items-center gap-1"><Users className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{session.attendees?.length || 0}/{session.maxAttendees}</span></div>
+        </div>
+        {expanded && (
+          <div className="mt-3 pt-3 border-t space-y-3">
+            <div><p className="text-xs text-muted-foreground">Description</p><p className="text-sm">{session.description}</p></div>
+            <div><p className="text-xs text-muted-foreground">Location</p><p className="text-sm">{session.location}</p></div>
+            <div><p className="text-xs text-muted-foreground">Department</p><p className="text-sm">{session.department}</p></div>
+            {session.objectives && session.objectives.length > 0 && (
+              <div><p className="text-xs text-muted-foreground">Objectives</p><ul className="list-disc pl-4 text-sm">{session.objectives.slice(0, 3).map((obj: string, idx: number) => (<li key={idx} className="text-xs">{obj}</li>))}{session.objectives.length > 3 && (<li className="text-xs text-muted-foreground">+{session.objectives.length - 3} more</li>)}</ul></div>
+            )}
+            {session.attachments && session.attachments.length > 0 && (
+              <div><p className="text-xs text-muted-foreground">Attachments</p><div className="flex flex-wrap gap-1 mt-1">{session.attachments.slice(0, 3).map((att: any, idx: number) => (<Badge key={idx} variant="outline" className="text-xs cursor-pointer" onClick={() => onView(session)}>{att.type === 'image' ? <ImageIcon className="h-3 w-3 mr-1" /> : att.type === 'video' ? <Video className="h-3 w-3 mr-1" /> : <File className="h-3 w-3 mr-1" />}<span className="truncate max-w-[80px]">{att.name}</span></Badge>))}{session.attachments.length > 3 && (<Badge variant="outline" className="text-xs">+{session.attachments.length - 3}</Badge>)}</div></div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Mobile responsive briefing card
+const MobileBriefingCard = ({ briefing, onView, onDelete, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate, loading }: any) => {
+  const [expanded, setExpanded] = useState(false);
+  const canEdit = briefing.createdBy === briefing.currentManagerId;
+  
+  return (
+    <Card className="mb-3 overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex-1"><h3 className="font-semibold text-base">{briefing.site}</h3><p className="text-xs text-muted-foreground">Conducted by: {briefing.conductedBy}</p></div>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onView(briefing)}><Eye className="h-4 w-4 mr-2" /> View</DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => onDelete(briefing._id)} className="text-red-600"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <Badge className={getShiftBadge(briefing.shift)}>{briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift</Badge>
+          <Badge variant="outline" className="bg-blue-50">{briefing.department}</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+          <div className="flex items-center gap-1"><Calendar className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{formatDate(briefing.date)}</span></div>
+          <div className="flex items-center gap-1"><Clock className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{briefing.time}</span></div>
+          <div className="flex items-center gap-1"><Users className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{briefing.attendeesCount} attendees</span></div>
+        </div>
+        {briefing.topics && briefing.topics.length > 0 && (<div className="flex flex-wrap gap-1 mb-2">{briefing.topics.slice(0, 2).map((topic: string, idx: number) => (<Badge key={idx} variant="outline" className="text-xs">{topic}</Badge>))}{briefing.topics.length > 2 && (<Badge variant="outline" className="text-xs">+{briefing.topics.length - 2}</Badge>)}</div>)}
+        {expanded && (
+          <div className="mt-3 pt-3 border-t space-y-3">
+            {briefing.supervisors && briefing.supervisors.length > 0 && (
+              <div><p className="text-xs text-muted-foreground">Supervisors</p><div className="flex flex-wrap gap-1 mt-1">{briefing.supervisors.map((sup: any, idx: number) => (<Badge key={idx} variant="outline" className="text-xs"><User className="h-3 w-3 mr-1" />{sup.name}</Badge>))}</div></div>
+            )}
+            {briefing.managers && briefing.managers.length > 0 && (
+              <div><p className="text-xs text-muted-foreground">Managers</p><div className="flex flex-wrap gap-1 mt-1">{briefing.managers.map((mgr: any, idx: number) => (<Badge key={idx} variant="outline" className="text-xs"><UserCog className="h-3 w-3 mr-1" />{mgr.name}</Badge>))}</div></div>
+            )}
+            {briefing.keyPoints && briefing.keyPoints.length > 0 && (
+              <div><p className="text-xs text-muted-foreground">Key Points</p><ul className="list-disc pl-4 text-sm">{briefing.keyPoints.map((point: string, idx: number) => (<li key={idx} className="text-xs">{point}</li>))}</ul></div>
+            )}
+            {briefing.actionItems && briefing.actionItems.length > 0 && (
+              <div><p className="text-xs text-muted-foreground mb-2">Action Items</p><div className="space-y-2">{briefing.actionItems.slice(0, 3).map((item: any) => (<div key={item._id || item.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded"><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onUpdateAction(briefing._id, item._id || item.id || '', item.status === 'completed' ? 'pending' : 'completed')}>{item.status === 'completed' ? <CheckSquare className="h-4 w-4 text-green-500" /> : <Square className="h-4 w-4 text-gray-400" />}</Button><div className="flex-1"><p className="text-xs font-medium">{item.description}</p><div className="flex items-center gap-2 text-xs text-muted-foreground"><span>{item.assignedTo}</span><span>•</span><span>Due: {formatDate(item.dueDate)}</span></div></div><Badge className={getPriorityBadge(item.priority)}>{item.priority}</Badge></div>))}{briefing.actionItems.length > 3 && (<p className="text-xs text-muted-foreground text-center">+{briefing.actionItems.length - 3} more items</p>)}</div></div>
+            )}
+            {briefing.notes && (<div><p className="text-xs text-muted-foreground">Notes</p><p className="text-sm bg-gray-50 p-2 rounded">{briefing.notes}</p></div>)}
+            {briefing.attachments && briefing.attachments.length > 0 && (<div><p className="text-xs text-muted-foreground">Attachments</p><div className="flex flex-wrap gap-1 mt-1">{briefing.attachments.map((att: any, idx: number) => (<Badge key={idx} variant="outline" className="text-xs cursor-pointer" onClick={() => onView(briefing)}>{att.type === 'image' ? <ImageIcon className="h-3 w-3 mr-1" /> : att.type === 'video' ? <Video className="h-3 w-3 mr-1" /> : <File className="h-3 w-3 mr-1" />}<span className="truncate max-w-[80px]">{att.name}</span></Badge>))}</div></div>)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const MobileStatCard = ({ title, value, subValue, icon: Icon, color = "blue" }: any) => {
+  const colorClasses: any = { blue: "bg-blue-100 text-blue-600", green: "bg-green-100 text-green-600", purple: "bg-purple-100 text-purple-600", red: "bg-red-100 text-red-600" };
+  return (<Card><CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">{title}</p><p className="text-xl font-bold mt-1">{value}</p>{subValue && <p className="text-xs text-muted-foreground mt-1">{subValue}</p>}</div><div className={`p-3 rounded-lg ${colorClasses[color]}`}><Icon className="h-5 w-5" /></div></div></CardContent></Card>);
+};
+
+const TrainingBriefingSectionManager: React.FC = () => {
+  const { user: authUser, isAuthenticated } = useRole();
   const [activeTab, setActiveTab] = useState<'training' | 'briefing'>('training');
-  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>(initialTrainingSessions);
-  const [staffBriefings, setStaffBriefings] = useState<StaffBriefing[]>(initialStaffBriefings);
+  const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([]);
+  const [staffBriefings, setStaffBriefings] = useState<StaffBriefing[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -298,11 +893,64 @@ const TrainingBriefingSection: React.FC = () => {
   const [showAddBriefing, setShowAddBriefing] = useState(false);
   const [selectedTraining, setSelectedTraining] = useState<TrainingSession | null>(null);
   const [selectedBriefing, setSelectedBriefing] = useState<StaffBriefing | null>(null);
+  const [editingTraining, setEditingTraining] = useState<TrainingSession | null>(null);
+  const [editingBriefing, setEditingBriefing] = useState<StaffBriefing | null>(null);
+  const [showEditTrainingDialog, setShowEditTrainingDialog] = useState(false);
+  const [showEditBriefingDialog, setShowEditBriefingDialog] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [currentMonth, setCurrentMonth] = useState(new Date());
-
+  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState({
+    sites: true,
+    supervisors: true,
+    managers: true,
+    employees: true,
+    trainings: true,
+    briefings: true
+  });
+  
+  // Edit mode attachments
+  const [editTrainingAttachments, setEditTrainingAttachments] = useState<ExistingAttachment[]>([]);
+  const [editBriefingAttachments, setEditBriefingAttachments] = useState<ExistingAttachment[]>([]);
+  const [editTrainingNewFiles, setEditTrainingNewFiles] = useState<File[]>([]);
+  const [editBriefingNewFiles, setEditBriefingNewFiles] = useState<File[]>([]);
+  const editTrainingFileInputRef = useRef<HTMLInputElement>(null);
+  const editBriefingFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Data states
+  const [sites, setSites] = useState<Site[]>([]);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [managers, setManagers] = useState<Manager[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  
+  // Manager's assigned sites
+  const managerId = authUser?._id || authUser?.id || "";
+  const managerName = authUser?.name || "Manager";
+  const [managerAssignedSites, setManagerAssignedSites] = useState<string[]>([]);
+  const [managerAssignedSiteNames, setManagerAssignedSiteNames] = useState<string[]>([]);
+  
+  // Filtered states based on selected site
+  const [filteredSupervisors, setFilteredSupervisors] = useState<Supervisor[]>([]);
+  const [filteredManagers, setFilteredManagers] = useState<Manager[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  
+  // Multi-select states
+  const [selectedSupervisors, setSelectedSupervisors] = useState<string[]>([]);
+  const [selectedManagers, setSelectedManagers] = useState<string[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+  const [supervisorSearchQuery, setSupervisorSearchQuery] = useState("");
+  const [managerSearchQuery, setManagerSearchQuery] = useState("");
+  
+  // Edit mode multi-select states
+  const [editSelectedSupervisors, setEditSelectedSupervisors] = useState<string[]>([]);
+  const [editSelectedManagers, setEditSelectedManagers] = useState<string[]>([]);
+  const [editEmployeeSearchQuery, setEditEmployeeSearchQuery] = useState("");
+  const [editSupervisorSearchQuery, setEditSupervisorSearchQuery] = useState("");
+  const [editManagerSearchQuery, setEditManagerSearchQuery] = useState("");
+  
   // Form states for training
   const [trainingForm, setTrainingForm] = useState({
     title: '',
@@ -312,14 +960,29 @@ const TrainingBriefingSection: React.FC = () => {
     time: '',
     duration: '',
     trainer: '',
-    supervisor: '',
-    site: 'Main Building',
+    site: '',
     department: 'All Departments',
     maxAttendees: 20,
     location: '',
-    objectives: [''] as string[]
+    objectives: [] as string[]
   });
-
+  
+  // Edit training form state
+  const [editTrainingForm, setEditTrainingForm] = useState({
+    title: '',
+    description: '',
+    type: 'safety' as const,
+    date: '',
+    time: '',
+    duration: '',
+    trainer: '',
+    site: '',
+    department: 'All Departments',
+    maxAttendees: 20,
+    location: '',
+    objectives: [] as string[]
+  });
+  
   // Form states for briefing
   const [briefingForm, setBriefingForm] = useState({
     date: '',
@@ -328,84 +991,832 @@ const TrainingBriefingSection: React.FC = () => {
     site: '',
     department: '',
     attendeesCount: 0,
-    topics: [''] as string[],
-    keyPoints: [''] as string[],
-    actionItems: [] as Omit<ActionItem, 'id'>[],
+    topics: [] as string[],
+    keyPoints: [] as string[],
+    actionItems: [] as Omit<ActionItem, '_id' | 'id'>[],
     notes: '',
     shift: 'morning' as const
   });
-
-  // Filter training sessions
-  const filteredTrainingSessions = trainingSessions.filter(session => {
-    const matchesSearch = session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.trainer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.supervisor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.site.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDepartment = filterDepartment === 'all' || session.department === filterDepartment;
-    const matchesStatus = filterStatus === 'all' || session.status === filterStatus;
-    return matchesSearch && matchesDepartment && matchesStatus;
+  
+  // Edit briefing form state
+  const [editBriefingForm, setEditBriefingForm] = useState({
+    date: '',
+    time: '',
+    conductedBy: '',
+    site: '',
+    department: '',
+    attendeesCount: 0,
+    topics: [] as string[],
+    keyPoints: [] as string[],
+    actionItems: [] as ActionItem[],
+    notes: '',
+    shift: 'morning' as const
   });
-
-  // Filter staff briefings
-  const filteredStaffBriefings = staffBriefings.filter(briefing => {
-    const matchesSearch = briefing.conductedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         briefing.site.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         briefing.topics.some(topic => topic.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesDepartment = filterDepartment === 'all' || briefing.department === filterDepartment;
-    return matchesSearch && matchesDepartment;
-  });
-
+  
+  // Mobile responsive state
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  
+  // Check for mobile view
+  useEffect(() => {
+    const checkMobile = () => setIsMobileView(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Get manager's assigned sites from tasks
+  const fetchManagerAssignedSites = useCallback(async () => {
+    if (!managerId) return;
+    
+    try {
+      const allTasks = await assignTaskService.getAllAssignTasks();
+      const assignedSitesSet = new Set<string>();
+      const assignedSiteNamesSet = new Set<string>();
+      
+      allTasks.forEach((task: AssignTask) => {
+        const isManagerAssigned = task.assignedManagers?.some(mgr => mgr.userId === managerId);
+        if (isManagerAssigned && task.siteId) {
+          assignedSitesSet.add(task.siteId);
+          if (task.siteName) {
+            assignedSiteNamesSet.add(task.siteName);
+          }
+        }
+      });
+      
+      setManagerAssignedSites(Array.from(assignedSitesSet));
+      setManagerAssignedSiteNames(Array.from(assignedSiteNamesSet));
+      console.log("Manager assigned sites:", Array.from(assignedSitesSet));
+    } catch (error) {
+      console.error("Error fetching manager assigned sites:", error);
+      toast.error("Failed to load your assigned sites");
+    }
+  }, [managerId]);
+  
+  // Fetch all data
+  useEffect(() => {
+    if (managerId && isAuthenticated) {
+      fetchManagerAssignedSites();
+    }
+  }, [managerId, isAuthenticated, fetchManagerAssignedSites]);
+  
+  // Fetch data after manager assigned sites are loaded
+  useEffect(() => {
+    if (managerAssignedSites.length > 0) {
+      fetchAllData();
+    }
+  }, [managerAssignedSites]);
+  
+  // Fetch data when filters change
+  useEffect(() => {
+    if (managerAssignedSites.length > 0) {
+      fetchTrainings();
+      fetchBriefings();
+    }
+  }, [searchTerm, filterDepartment, filterStatus, managerAssignedSites]);
+  
+  // Filter data when site changes for forms
+  useEffect(() => {
+    if (trainingForm.site) {
+      filterDataBySite(trainingForm.site);
+    } else if (briefingForm.site) {
+      filterDataBySite(briefingForm.site);
+    }
+  }, [trainingForm.site, briefingForm.site, supervisors, managers, employees]);
+  
+  // Filter data when site changes for edit forms
+  useEffect(() => {
+    if (editTrainingForm.site) {
+      filterDataBySiteForEdit(editTrainingForm.site);
+    } else if (editBriefingForm.site) {
+      filterDataBySiteForEdit(editBriefingForm.site);
+    }
+  }, [editTrainingForm.site, editBriefingForm.site, supervisors, managers, employees]);
+  
+  const filterDataBySiteForEdit = (siteName: string) => {
+    const selectedSite = sites.find(site => site.name === siteName);
+    if (!selectedSite) {
+      setFilteredSupervisors([]);
+      setFilteredManagers([]);
+      setFilteredEmployees([]);
+      return;
+    }
+    const siteSupervisors = supervisors.filter(sup => 
+      sup.assignedSites?.includes(selectedSite._id) || sup.site === siteName
+    );
+    setFilteredSupervisors(siteSupervisors);
+    const siteManagers = managers.filter(mgr => 
+      mgr.assignedSites?.includes(selectedSite._id) || mgr.site === siteName
+    );
+    setFilteredManagers(siteManagers);
+    const siteEmployees = employees.filter(emp => 
+      emp.siteName === siteName || emp.assignedSites?.includes(selectedSite._id)
+    );
+    setFilteredEmployees(siteEmployees);
+  };
+  
+  const fetchAllData = async () => {
+    try {
+      setLoadingData({
+        sites: true,
+        supervisors: true,
+        managers: true,
+        employees: true,
+        trainings: true,
+        briefings: true
+      });
+      await Promise.all([
+        fetchSites(),
+        fetchSupervisorsAndManagers(),
+        fetchEmployees(),
+        fetchTrainings(),
+        fetchBriefings()
+      ]);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load data");
+    } finally {
+      setLoadingData({
+        sites: false,
+        supervisors: false,
+        managers: false,
+        employees: false,
+        trainings: false,
+        briefings: false
+      });
+    }
+  };
+  
+  const fetchSites = async () => {
+    try {
+      const data = await siteService.getAllSites();
+      const filteredSites = data.filter(site => managerAssignedSites.includes(site._id));
+      setSites(filteredSites);
+      console.log("Filtered sites for manager:", filteredSites.length);
+    } catch (error) {
+      console.error("Error fetching sites:", error);
+      toast.error("Failed to load sites");
+    }
+  };
+  
+  const fetchSupervisorsAndManagers = async () => {
+    try {
+      const tasksData = await assignTaskService.getAllAssignTasks();
+      const supervisorMap = new Map<string, Supervisor>();
+      const managerMap = new Map<string, Manager>();
+      
+      tasksData.forEach((task: AssignTask) => {
+        if (managerAssignedSites.includes(task.siteId)) {
+          if (task.assignedSupervisors && Array.isArray(task.assignedSupervisors)) {
+            task.assignedSupervisors.forEach(user => {
+              if (!supervisorMap.has(user.userId)) {
+                supervisorMap.set(user.userId, {
+                  _id: user.userId,
+                  name: user.name,
+                  email: '',
+                  role: 'supervisor',
+                  department: task.taskType || 'General',
+                  site: task.siteName,
+                  assignedSites: [task.siteId]
+                });
+              } else {
+                const existing = supervisorMap.get(user.userId);
+                if (existing && !existing.assignedSites?.includes(task.siteId)) {
+                  existing.assignedSites = [...(existing.assignedSites || []), task.siteId];
+                }
+              }
+            });
+          }
+          
+          if (task.assignedManagers && Array.isArray(task.assignedManagers)) {
+            task.assignedManagers.forEach(user => {
+              if (!managerMap.has(user.userId)) {
+                managerMap.set(user.userId, {
+                  _id: user.userId,
+                  name: user.name,
+                  email: '',
+                  role: 'manager',
+                  department: task.taskType || 'General',
+                  site: task.siteName,
+                  assignedSites: [task.siteId]
+                });
+              } else {
+                const existing = managerMap.get(user.userId);
+                if (existing && !existing.assignedSites?.includes(task.siteId)) {
+                  existing.assignedSites = [...(existing.assignedSites || []), task.siteId];
+                }
+              }
+            });
+          }
+        }
+      });
+      
+      setSupervisors(Array.from(supervisorMap.values()));
+      setManagers(Array.from(managerMap.values()));
+      console.log("Fetched supervisors:", supervisorMap.size, "managers:", managerMap.size);
+    } catch (error) {
+      console.error("Error fetching supervisors and managers:", error);
+      toast.error("Failed to load supervisors and managers");
+    }
+  };
+  
+  const fetchEmployees = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/employees`);
+      if (response.data.success) {
+        const employeesData = response.data.data || [];
+        const filteredEmployeesData = employeesData.filter((emp: Employee) => {
+          return (emp.siteName && managerAssignedSiteNames.includes(emp.siteName)) ||
+                 (emp.assignedSites && emp.assignedSites.some(site => managerAssignedSites.includes(site)));
+        });
+        const uniqueEmployees = Array.from(
+          new Map(filteredEmployeesData.map((emp: Employee) => [emp._id, emp])).values()
+        ).filter(emp => emp.status === "active");
+        setEmployees(uniqueEmployees);
+        console.log("Filtered employees for manager:", uniqueEmployees.length);
+      }
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      toast.error("Failed to load employees");
+    }
+  };
+  
+  const fetchTrainings = async () => {
+    try {
+      setLoadingData(prev => ({ ...prev, trainings: true }));
+      const params: any = {
+        search: searchTerm,
+        department: filterDepartment === 'all' ? '' : filterDepartment,
+        status: filterStatus === 'all' ? '' : filterStatus
+      };
+      const response = await trainingApi.getAllTrainings(params);
+      if (response.success) {
+        const filteredTrainings = response.trainings.filter((training: TrainingSession) => 
+          managerAssignedSiteNames.includes(training.site)
+        );
+        setTrainingSessions(filteredTrainings);
+        console.log("Filtered trainings for manager:", filteredTrainings.length);
+      }
+    } catch (error: any) {
+      console.error("Error fetching trainings:", error);
+      toast.error("Failed to load training sessions");
+    } finally {
+      setLoadingData(prev => ({ ...prev, trainings: false }));
+    }
+  };
+  
+  const fetchBriefings = async () => {
+    try {
+      setLoadingData(prev => ({ ...prev, briefings: true }));
+      const params: any = {
+        search: searchTerm,
+        department: filterDepartment === 'all' ? '' : filterDepartment
+      };
+      const response = await briefingApi.getAllBriefings(params);
+      if (response.success) {
+        const filteredBriefings = response.briefings.filter((briefing: StaffBriefing) => 
+          managerAssignedSiteNames.includes(briefing.site)
+        );
+        setStaffBriefings(filteredBriefings);
+        console.log("Filtered briefings for manager:", filteredBriefings.length);
+      }
+    } catch (error: any) {
+      console.error("Error fetching briefings:", error);
+      toast.error("Failed to load staff briefings");
+    } finally {
+      setLoadingData(prev => ({ ...prev, briefings: false }));
+    }
+  };
+  
+  const filterDataBySite = (siteName: string) => {
+    const selectedSite = sites.find(site => site.name === siteName);
+    if (!selectedSite) {
+      setFilteredSupervisors([]);
+      setFilteredManagers([]);
+      setFilteredEmployees([]);
+      return;
+    }
+    const siteSupervisors = supervisors.filter(sup => 
+      sup.assignedSites?.includes(selectedSite._id) || sup.site === siteName
+    );
+    setFilteredSupervisors(siteSupervisors);
+    const siteManagers = managers.filter(mgr => 
+      mgr.assignedSites?.includes(selectedSite._id) || mgr.site === siteName
+    );
+    setFilteredManagers(siteManagers);
+    const siteEmployees = employees.filter(emp => 
+      emp.siteName === siteName || emp.assignedSites?.includes(selectedSite._id)
+    );
+    setFilteredEmployees(siteEmployees);
+  };
+  
   // Handle file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setAttachments(prev => [...prev, ...files]);
     toast.success(`${files.length} file(s) added`);
   };
-
+  
   // Remove attachment
   const removeAttachment = (index: number) => {
     setAttachments(prev => prev.filter((_, i) => i !== index));
     toast.info('File removed');
   };
-
+  
+  // Edit mode file handlers
+  const handleEditTrainingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newAttachments = files.map(file => ({
+      name: file.name,
+      type: file.type.startsWith('image/') ? 'image' as const : 
+            file.type.startsWith('video/') ? 'video' as const : 'document' as const,
+      url: URL.createObjectURL(file),
+      size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      isNew: true,
+      file: file
+    }));
+    setEditTrainingAttachments(prev => [...prev, ...newAttachments]);
+    setEditTrainingNewFiles(prev => [...prev, ...files]);
+    toast.success(`${files.length} file(s) added to training`);
+  };
+  
+  const handleEditBriefingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const newAttachments = files.map(file => ({
+      name: file.name,
+      type: file.type.startsWith('image/') ? 'image' as const : 
+            file.type.startsWith('video/') ? 'video' as const : 'document' as const,
+      url: URL.createObjectURL(file),
+      size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      isNew: true,
+      file: file
+    }));
+    setEditBriefingAttachments(prev => [...prev, ...newAttachments]);
+    setEditBriefingNewFiles(prev => [...prev, ...files]);
+    toast.success(`${files.length} file(s) added to briefing`);
+  };
+  
+  const removeEditTrainingAttachment = (index: number) => {
+    const attachment = editTrainingAttachments[index];
+    if (attachment.isNew && attachment.url) {
+      URL.revokeObjectURL(attachment.url);
+    }
+    setEditTrainingAttachments(prev => prev.filter((_, i) => i !== index));
+    if (attachment.isNew && attachment.file) {
+      setEditTrainingNewFiles(prev => prev.filter(f => f !== attachment.file));
+    }
+    toast.info('File removed');
+  };
+  
+  const removeEditBriefingAttachment = (index: number) => {
+    const attachment = editBriefingAttachments[index];
+    if (attachment.isNew && attachment.url) {
+      URL.revokeObjectURL(attachment.url);
+    }
+    setEditBriefingAttachments(prev => prev.filter((_, i) => i !== index));
+    if (attachment.isNew && attachment.file) {
+      setEditBriefingNewFiles(prev => prev.filter(f => f !== attachment.file));
+    }
+    toast.info('File removed');
+  };
+  
+  // Supervisor selection handlers
+  const handleSupervisorToggle = (supervisorId: string) => {
+    setSelectedSupervisors(prev => {
+      if (prev.includes(supervisorId)) {
+        return prev.filter(id => id !== supervisorId);
+      } else {
+        return [...prev, supervisorId];
+      }
+    });
+  };
+  
+  // Manager selection handlers
+  const handleManagerToggle = (managerId: string) => {
+    setSelectedManagers(prev => {
+      if (prev.includes(managerId)) {
+        return prev.filter(id => id !== managerId);
+      } else {
+        return [...prev, managerId];
+      }
+    });
+  };
+  
+  // Employee selection handlers
+  const handleEmployeeToggle = (employeeId: string) => {
+    setSelectedEmployees(prev => {
+      if (prev.includes(employeeId)) {
+        return prev.filter(id => id !== employeeId);
+      } else {
+        return [...prev, employeeId];
+      }
+    });
+  };
+  
+  // Edit mode supervisor selection handlers
+  const handleEditSupervisorToggle = (supervisorId: string) => {
+    setEditSelectedSupervisors(prev => {
+      if (prev.includes(supervisorId)) {
+        return prev.filter(id => id !== supervisorId);
+      } else {
+        return [...prev, supervisorId];
+      }
+    });
+  };
+  
+  // Edit mode manager selection handlers
+  const handleEditManagerToggle = (managerId: string) => {
+    setEditSelectedManagers(prev => {
+      if (prev.includes(managerId)) {
+        return prev.filter(id => id !== managerId);
+      } else {
+        return [...prev, managerId];
+      }
+    });
+  };
+  
   // Add training session
-  const handleAddTraining = () => {
+  const handleAddTraining = async () => {
     if (!trainingForm.title || !trainingForm.date || !trainingForm.trainer) {
       toast.error('Please fill in all required fields');
       return;
     }
-
-    const newTraining: TrainingSession = {
-      id: `TRN${String(trainingSessions.length + 1).padStart(3, '0')}`,
-      title: trainingForm.title,
-      description: trainingForm.description,
-      type: trainingForm.type,
-      date: trainingForm.date,
-      time: trainingForm.time,
-      duration: trainingForm.duration,
-      trainer: trainingForm.trainer,
-      supervisor: trainingForm.supervisor,
-      site: trainingForm.site,
-      department: trainingForm.department,
-      attendees: [],
-      maxAttendees: trainingForm.maxAttendees,
-      status: 'scheduled',
-      attachments: attachments.map((file, index) => ({
-        id: `ATT${String(trainingSessions.length * 10 + index + 1).padStart(3, '0')}`,
-        name: file.name,
-        type: file.type.startsWith('image/') ? 'image' : 
-               file.type.startsWith('video/') ? 'video' : 'document',
-        url: '#',
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        uploadedAt: new Date().toISOString().split('T')[0]
-      })),
-      feedback: [],
-      location: trainingForm.location,
-      objectives: trainingForm.objectives.filter(obj => obj.trim() !== '')
+    
+    if (selectedSupervisors.length === 0) {
+      toast.error('Please select at least one supervisor');
+      return;
+    }
+    
+    if (selectedManagers.length === 0) {
+      toast.error('Please select at least one manager');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const supervisorsList = selectedSupervisors.map(supId => {
+        const sup = filteredSupervisors.find(s => s._id === supId);
+        return sup ? { id: sup._id, name: sup.name } : null;
+      }).filter(Boolean);
+      
+      const managersList = selectedManagers.map(mgrId => {
+        const mgr = filteredManagers.find(m => m._id === mgrId);
+        return mgr ? { id: mgr._id, name: mgr.name } : null;
+      }).filter(Boolean);
+      
+      const trainingData = {
+        title: trainingForm.title,
+        description: trainingForm.description,
+        type: trainingForm.type,
+        date: trainingForm.date,
+        time: trainingForm.time,
+        duration: trainingForm.duration,
+        trainer: trainingForm.trainer,
+        site: trainingForm.site,
+        department: trainingForm.department,
+        maxAttendees: trainingForm.maxAttendees,
+        location: trainingForm.location,
+        objectives: trainingForm.objectives.filter(obj => obj.trim() !== ''),
+        supervisors: supervisorsList,
+        managers: managersList,
+        attendees: selectedEmployees
+      };
+      
+      const response = await trainingApi.createTraining(trainingData, attachments);
+      
+      if (response.success) {
+        toast.success('Training session added successfully');
+        await fetchTrainings();
+        resetTrainingForm();
+        setAttachments([]);
+        setShowAddTraining(false);
+      } else {
+        throw new Error(response.message || 'Failed to create training');
+      }
+    } catch (error: any) {
+      console.error('Error creating training:', error);
+      toast.error(error.response?.data?.message || error.message || 'Error adding training session');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Add staff briefing
+  const handleAddBriefing = async () => {
+    if (!briefingForm.date || !briefingForm.conductedBy || !briefingForm.site) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    if (selectedSupervisors.length === 0) {
+      toast.error('Please select at least one supervisor');
+      return;
+    }
+    
+    if (selectedManagers.length === 0) {
+      toast.error('Please select at least one manager');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const supervisorsList = selectedSupervisors.map(supId => {
+        const sup = filteredSupervisors.find(s => s._id === supId);
+        return sup ? { id: sup._id, name: sup.name } : null;
+      }).filter(Boolean);
+      
+      const managersList = selectedManagers.map(mgrId => {
+        const mgr = filteredManagers.find(m => m._id === mgrId);
+        return mgr ? { id: mgr._id, name: mgr.name } : null;
+      }).filter(Boolean);
+      
+      const actionItems = briefingForm.actionItems.map(item => ({ 
+        description: item.description, 
+        assignedTo: item.assignedTo, 
+        dueDate: item.dueDate, 
+        status: item.status || 'pending', 
+        priority: item.priority || 'medium' 
+      }));
+      
+      const briefingData = {
+        date: briefingForm.date,
+        time: briefingForm.time,
+        conductedBy: briefingForm.conductedBy,
+        site: briefingForm.site,
+        department: briefingForm.department,
+        attendeesCount: briefingForm.attendeesCount,
+        topics: briefingForm.topics.filter(topic => topic.trim() !== ''),
+        keyPoints: briefingForm.keyPoints.filter(point => point.trim() !== ''),
+        actionItems: actionItems,
+        notes: briefingForm.notes,
+        shift: briefingForm.shift,
+        supervisors: supervisorsList,
+        managers: managersList
+      };
+      
+      const response = await briefingApi.createBriefing(briefingData, attachments);
+      
+      if (response.success) {
+        toast.success('Staff briefing added successfully');
+        await fetchBriefings();
+        resetBriefingForm();
+        setAttachments([]);
+        setShowAddBriefing(false);
+      } else {
+        throw new Error(response.message || 'Failed to create briefing');
+      }
+    } catch (error: any) {
+      console.error('Error creating briefing:', error);
+      toast.error(error.response?.data?.message || error.message || 'Error adding staff briefing');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Update training
+ const handleUpdateTraining = async () => {
+  if (!editingTraining) return;
+  
+  try {
+    setLoading(true);
+    
+    const supervisorsList = editSelectedSupervisors.map(supId => {
+      const sup = filteredSupervisors.find(s => s._id === supId);
+      return sup ? { id: sup._id, name: sup.name } : null;
+    }).filter(Boolean);
+    
+    const managersList = editSelectedManagers.map(mgrId => {
+      const mgr = filteredManagers.find(m => m._id === mgrId);
+      return mgr ? { id: mgr._id, name: mgr.name } : null;
+    }).filter(Boolean);
+    
+    const existingAttachments = editTrainingAttachments
+      .filter(att => !att.isNew)
+      .map(({ isNew, file, ...rest }) => rest);
+    
+    const newFiles = editTrainingNewFiles;
+    
+    const updateData = {
+      title: editTrainingForm.title,
+      description: editTrainingForm.description,
+      type: editTrainingForm.type,
+      date: editTrainingForm.date,
+      time: editTrainingForm.time,
+      duration: editTrainingForm.duration,
+      trainer: editTrainingForm.trainer,
+      site: editTrainingForm.site,
+      department: editTrainingForm.department,
+      maxAttendees: editTrainingForm.maxAttendees,
+      location: editTrainingForm.location,
+      objectives: editTrainingForm.objectives.filter(obj => obj.trim() !== ''),
+      supervisors: supervisorsList,
+      managers: managersList,
+      attachments: existingAttachments
     };
+    
+    console.log('Updating training with data:', updateData);
+    console.log('New files to upload:', newFiles.length);
+    
+    // Make sure to use the imported trainingApi
+    const response = await trainingApi.updateTraining(editingTraining._id, updateData, newFiles);
+    
+    if (response.success) {
+      toast.success('Training session updated successfully');
+      await fetchTrainings();
+      setShowEditTrainingDialog(false);
+      setEditingTraining(null);
+      resetEditTrainingForm();
+      setEditTrainingAttachments([]);
+      setEditTrainingNewFiles([]);
+    } else {
+      throw new Error(response.message || 'Failed to update training');
+    }
+  } catch (error: any) {
+    console.error('Error updating training:', error);
+    toast.error(error.response?.data?.message || error.message || 'Error updating training session');
+  } finally {
+    setLoading(false);
+  }
+};
 
-    setTrainingSessions(prev => [newTraining, ...prev]);
+const handleUpdateBriefing = async () => {
+  if (!editingBriefing) return;
+  
+  try {
+    setLoading(true);
+    
+    const supervisorsList = editSelectedSupervisors.map(supId => {
+      const sup = filteredSupervisors.find(s => s._id === supId);
+      return sup ? { id: sup._id, name: sup.name } : null;
+    }).filter(Boolean);
+    
+    const managersList = editSelectedManagers.map(mgrId => {
+      const mgr = filteredManagers.find(m => m._id === mgrId);
+      return mgr ? { id: mgr._id, name: mgr.name } : null;
+    }).filter(Boolean);
+    
+    const actionItems = editBriefingForm.actionItems.map(item => ({ 
+      description: item.description, 
+      assignedTo: item.assignedTo, 
+      dueDate: item.dueDate, 
+      status: item.status || 'pending', 
+      priority: item.priority || 'medium' 
+    }));
+    
+    const existingAttachments = editBriefingAttachments
+      .filter(att => !att.isNew)
+      .map(({ isNew, file, ...rest }) => rest);
+    
+    const newFiles = editBriefingNewFiles;
+    
+    const updateData = {
+      date: editBriefingForm.date,
+      time: editBriefingForm.time,
+      conductedBy: editBriefingForm.conductedBy,
+      site: editBriefingForm.site,
+      department: editBriefingForm.department,
+      attendeesCount: editBriefingForm.attendeesCount,
+      topics: editBriefingForm.topics.filter(topic => topic.trim() !== ''),
+      keyPoints: editBriefingForm.keyPoints.filter(point => point.trim() !== ''),
+      actionItems: actionItems,
+      notes: editBriefingForm.notes,
+      shift: editBriefingForm.shift,
+      supervisors: supervisorsList,
+      managers: managersList,
+      attachments: existingAttachments
+    };
+    
+    console.log('Updating briefing with data:', updateData);
+    console.log('New files to upload:', newFiles.length);
+    
+    // Make sure to use the imported briefingApi
+    const response = await briefingApi.updateBriefing(editingBriefing._id, updateData, newFiles);
+    
+    if (response.success) {
+      toast.success('Staff briefing updated successfully');
+      await fetchBriefings();
+      setShowEditBriefingDialog(false);
+      setEditingBriefing(null);
+      resetEditBriefingForm();
+      setEditBriefingAttachments([]);
+      setEditBriefingNewFiles([]);
+    } else {
+      throw new Error(response.message || 'Failed to update briefing');
+    }
+  } catch (error: any) {
+    console.error('Error updating briefing:', error);
+    toast.error(error.response?.data?.message || error.message || 'Error updating staff briefing');
+  } finally {
+    setLoading(false);
+  }
+};
+  
+  // Delete training session
+  const deleteTraining = async (id: string) => {
+    try {
+      await trainingApi.deleteTraining(id);
+      await fetchTrainings();
+      toast.success('Training session deleted');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error deleting training session');
+    }
+  };
+  
+  // Delete briefing
+  const deleteBriefing = async (id: string) => {
+    try {
+      await briefingApi.deleteBriefing(id);
+      await fetchBriefings();
+      toast.success('Staff briefing deleted');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error deleting staff briefing');
+    }
+  };
+  
+  // Update training status
+  const updateTrainingStatus = async (id: string, status: TrainingSession['status']) => {
+    try {
+      await trainingApi.updateTrainingStatus(id, status);
+      await fetchTrainings();
+      toast.success(`Training status updated to ${status}`);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error updating training status');
+    }
+  };
+  
+  // Update action item status
+  const updateActionItemStatus = async (briefingId: string, actionItemId: string, status: ActionItem['status']) => {
+    try {
+      await briefingApi.updateActionItemStatus(briefingId, actionItemId, status);
+      await fetchBriefings();
+      toast.success('Action item status updated');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error updating action item status');
+    }
+  };
+  
+  // Open edit dialogs
+  const openEditTrainingDialog = (training: TrainingSession) => {
+    setEditingTraining(training);
+    setEditTrainingForm({
+      title: training.title,
+      description: training.description,
+      type: training.type,
+      date: training.date,
+      time: training.time,
+      duration: training.duration,
+      trainer: training.trainer,
+      site: training.site,
+      department: training.department,
+      maxAttendees: training.maxAttendees,
+      location: training.location,
+      objectives: training.objectives || []
+    });
+    setEditSelectedSupervisors(training.supervisors?.map(s => s.id) || []);
+    setEditSelectedManagers(training.managers?.map(m => m.id) || []);
+    
+    const existingAttachments = (training.attachments || []).map(att => ({
+      ...att,
+      isNew: false
+    }));
+    setEditTrainingAttachments(existingAttachments);
+    setEditTrainingNewFiles([]);
+    
+    setShowEditTrainingDialog(true);
+  };
+  
+  const openEditBriefingDialog = (briefing: StaffBriefing) => {
+    setEditingBriefing(briefing);
+    setEditBriefingForm({
+      date: briefing.date,
+      time: briefing.time,
+      conductedBy: briefing.conductedBy,
+      site: briefing.site,
+      department: briefing.department,
+      attendeesCount: briefing.attendeesCount,
+      topics: briefing.topics || [],
+      keyPoints: briefing.keyPoints || [],
+      actionItems: briefing.actionItems || [],
+      notes: briefing.notes,
+      shift: briefing.shift
+    });
+    setEditSelectedSupervisors(briefing.supervisors?.map(s => s.id) || []);
+    setEditSelectedManagers(briefing.managers?.map(m => m.id) || []);
+    
+    const existingAttachments = (briefing.attachments || []).map(att => ({
+      ...att,
+      isNew: false
+    }));
+    setEditBriefingAttachments(existingAttachments);
+    setEditBriefingNewFiles([]);
+    
+    setShowEditBriefingDialog(true);
+  };
+  
+  // Reset forms
+  const resetTrainingForm = () => {
     setTrainingForm({
       title: '',
       description: '',
@@ -414,53 +1825,21 @@ const TrainingBriefingSection: React.FC = () => {
       time: '',
       duration: '',
       trainer: '',
-      supervisor: '',
-      site: 'Main Building',
+      site: '',
       department: 'All Departments',
       maxAttendees: 20,
       location: '',
-      objectives: ['']
+      objectives: []
     });
-    setAttachments([]);
-    setShowAddTraining(false);
-    toast.success('Training session added successfully');
+    setSelectedSupervisors([]);
+    setSelectedManagers([]);
+    setSelectedEmployees([]);
+    setSupervisorSearchQuery("");
+    setManagerSearchQuery("");
+    setEmployeeSearchQuery("");
   };
-
-  // Add staff briefing
-  const handleAddBriefing = () => {
-    if (!briefingForm.date || !briefingForm.conductedBy || !briefingForm.site) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const newBriefing: StaffBriefing = {
-      id: `BRI${String(staffBriefings.length + 1).padStart(3, '0')}`,
-      date: briefingForm.date,
-      time: briefingForm.time,
-      conductedBy: briefingForm.conductedBy,
-      site: briefingForm.site,
-      department: briefingForm.department,
-      attendeesCount: briefingForm.attendeesCount,
-      topics: briefingForm.topics.filter(topic => topic.trim() !== ''),
-      keyPoints: briefingForm.keyPoints.filter(point => point.trim() !== ''),
-      actionItems: briefingForm.actionItems.map((item, index) => ({
-        id: `ACT${String(staffBriefings.length * 10 + index + 1).padStart(3, '0')}`,
-        ...item
-      })),
-      attachments: attachments.map((file, index) => ({
-        id: `ATT${String(staffBriefings.length * 10 + index + 1).padStart(3, '0')}`,
-        name: file.name,
-        type: file.type.startsWith('image/') ? 'image' : 
-               file.type.startsWith('video/') ? 'video' : 'document',
-        url: '#',
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        uploadedAt: new Date().toISOString().split('T')[0]
-      })),
-      notes: briefingForm.notes,
-      shift: briefingForm.shift
-    };
-
-    setStaffBriefings(prev => [newBriefing, ...prev]);
+  
+  const resetBriefingForm = () => {
     setBriefingForm({
       date: '',
       time: '',
@@ -468,53 +1847,55 @@ const TrainingBriefingSection: React.FC = () => {
       site: '',
       department: '',
       attendeesCount: 0,
-      topics: [''],
-      keyPoints: [''],
+      topics: [],
+      keyPoints: [],
       actionItems: [],
       notes: '',
       shift: 'morning'
     });
-    setAttachments([]);
-    setShowAddBriefing(false);
-    toast.success('Staff briefing added successfully');
+    setSelectedSupervisors([]);
+    setSelectedManagers([]);
+    setSupervisorSearchQuery("");
+    setManagerSearchQuery("");
   };
-
-  // Delete training session
-  const deleteTraining = (id: string) => {
-    setTrainingSessions(prev => prev.filter(session => session.id !== id));
-    toast.success('Training session deleted');
+  
+  const resetEditTrainingForm = () => {
+    setEditTrainingForm({
+      title: '',
+      description: '',
+      type: 'safety',
+      date: '',
+      time: '',
+      duration: '',
+      trainer: '',
+      site: '',
+      department: 'All Departments',
+      maxAttendees: 20,
+      location: '',
+      objectives: []
+    });
+    setEditSelectedSupervisors([]);
+    setEditSelectedManagers([]);
   };
-
-  // Delete briefing
-  const deleteBriefing = (id: string) => {
-    setStaffBriefings(prev => prev.filter(briefing => briefing.id !== id));
-    toast.success('Staff briefing deleted');
+  
+  const resetEditBriefingForm = () => {
+    setEditBriefingForm({
+      date: '',
+      time: '',
+      conductedBy: '',
+      site: '',
+      department: '',
+      attendeesCount: 0,
+      topics: [],
+      keyPoints: [],
+      actionItems: [],
+      notes: '',
+      shift: 'morning'
+    });
+    setEditSelectedSupervisors([]);
+    setEditSelectedManagers([]);
   };
-
-  // Update training status
-  const updateTrainingStatus = (id: string, status: TrainingSession['status']) => {
-    setTrainingSessions(prev => prev.map(session => 
-      session.id === id ? { ...session, status } : session
-    ));
-    toast.success(`Training status updated to ${status}`);
-  };
-
-  // Update action item status
-  const updateActionItemStatus = (briefingId: string, actionItemId: string, status: ActionItem['status']) => {
-    setStaffBriefings(prev => prev.map(briefing => {
-      if (briefing.id === briefingId) {
-        return {
-          ...briefing,
-          actionItems: briefing.actionItems.map(item => 
-            item.id === actionItemId ? { ...item, status } : item
-          )
-        };
-      }
-      return briefing;
-    }));
-    toast.success('Action item status updated');
-  };
-
+  
   // Add objective field
   const addObjective = () => {
     setTrainingForm(prev => ({
@@ -522,7 +1903,7 @@ const TrainingBriefingSection: React.FC = () => {
       objectives: [...prev.objectives, '']
     }));
   };
-
+  
   // Remove objective field
   const removeObjective = (index: number) => {
     setTrainingForm(prev => ({
@@ -530,14 +1911,35 @@ const TrainingBriefingSection: React.FC = () => {
       objectives: prev.objectives.filter((_, i) => i !== index)
     }));
   };
-
+  
   // Update objective
   const updateObjective = (index: number, value: string) => {
     const newObjectives = [...trainingForm.objectives];
     newObjectives[index] = value;
     setTrainingForm(prev => ({ ...prev, objectives: newObjectives }));
   };
-
+  
+  // Edit objective handlers
+  const addEditObjective = () => {
+    setEditTrainingForm(prev => ({
+      ...prev,
+      objectives: [...prev.objectives, '']
+    }));
+  };
+  
+  const removeEditObjective = (index: number) => {
+    setEditTrainingForm(prev => ({
+      ...prev,
+      objectives: prev.objectives.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const updateEditObjective = (index: number, value: string) => {
+    const newObjectives = [...editTrainingForm.objectives];
+    newObjectives[index] = value;
+    setEditTrainingForm(prev => ({ ...prev, objectives: newObjectives }));
+  };
+  
   // Add topic field
   const addTopic = () => {
     setBriefingForm(prev => ({
@@ -545,7 +1947,7 @@ const TrainingBriefingSection: React.FC = () => {
       topics: [...prev.topics, '']
     }));
   };
-
+  
   // Remove topic field
   const removeTopic = (index: number) => {
     setBriefingForm(prev => ({
@@ -553,14 +1955,35 @@ const TrainingBriefingSection: React.FC = () => {
       topics: prev.topics.filter((_, i) => i !== index)
     }));
   };
-
+  
   // Update topic
   const updateTopic = (index: number, value: string) => {
     const newTopics = [...briefingForm.topics];
     newTopics[index] = value;
     setBriefingForm(prev => ({ ...prev, topics: newTopics }));
   };
-
+  
+  // Edit topic handlers
+  const addEditTopic = () => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      topics: [...prev.topics, '']
+    }));
+  };
+  
+  const removeEditTopic = (index: number) => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      topics: prev.topics.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const updateEditTopic = (index: number, value: string) => {
+    const newTopics = [...editBriefingForm.topics];
+    newTopics[index] = value;
+    setEditBriefingForm(prev => ({ ...prev, topics: newTopics }));
+  };
+  
   // Add key point field
   const addKeyPoint = () => {
     setBriefingForm(prev => ({
@@ -568,7 +1991,7 @@ const TrainingBriefingSection: React.FC = () => {
       keyPoints: [...prev.keyPoints, '']
     }));
   };
-
+  
   // Remove key point field
   const removeKeyPoint = (index: number) => {
     setBriefingForm(prev => ({
@@ -576,14 +1999,35 @@ const TrainingBriefingSection: React.FC = () => {
       keyPoints: prev.keyPoints.filter((_, i) => i !== index)
     }));
   };
-
+  
   // Update key point
   const updateKeyPoint = (index: number, value: string) => {
     const newKeyPoints = [...briefingForm.keyPoints];
     newKeyPoints[index] = value;
     setBriefingForm(prev => ({ ...prev, keyPoints: newKeyPoints }));
   };
-
+  
+  // Edit key point handlers
+  const addEditKeyPoint = () => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      keyPoints: [...prev.keyPoints, '']
+    }));
+  };
+  
+  const removeEditKeyPoint = (index: number) => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      keyPoints: prev.keyPoints.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const updateEditKeyPoint = (index: number, value: string) => {
+    const newKeyPoints = [...editBriefingForm.keyPoints];
+    newKeyPoints[index] = value;
+    setEditBriefingForm(prev => ({ ...prev, keyPoints: newKeyPoints }));
+  };
+  
   // Add action item
   const addActionItem = () => {
     setBriefingForm(prev => ({
@@ -600,7 +2044,7 @@ const TrainingBriefingSection: React.FC = () => {
       ]
     }));
   };
-
+  
   // Remove action item
   const removeActionItem = (index: number) => {
     setBriefingForm(prev => ({
@@ -608,14 +2052,44 @@ const TrainingBriefingSection: React.FC = () => {
       actionItems: prev.actionItems.filter((_, i) => i !== index)
     }));
   };
-
+  
   // Update action item
-  const updateActionItem = (index: number, field: keyof ActionItem, value: string) => {
+  const updateActionItem = (index: number, field: string, value: string) => {
     const newActionItems = [...briefingForm.actionItems];
     newActionItems[index] = { ...newActionItems[index], [field]: value };
     setBriefingForm(prev => ({ ...prev, actionItems: newActionItems }));
   };
-
+  
+  // Edit action item handlers
+  const addEditActionItem = () => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      actionItems: [
+        ...prev.actionItems,
+        {
+          description: '',
+          assignedTo: '',
+          dueDate: '',
+          status: 'pending',
+          priority: 'medium'
+        }
+      ]
+    }));
+  };
+  
+  const removeEditActionItem = (index: number) => {
+    setEditBriefingForm(prev => ({
+      ...prev,
+      actionItems: prev.actionItems.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const updateEditActionItem = (index: number, field: string, value: string) => {
+    const newActionItems = [...editBriefingForm.actionItems];
+    newActionItems[index] = { ...newActionItems[index], [field]: value };
+    setEditBriefingForm(prev => ({ ...prev, actionItems: newActionItems }));
+  };
+  
   // Get status badge color
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -626,7 +2100,7 @@ const TrainingBriefingSection: React.FC = () => {
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   };
-
+  
   // Get priority badge color
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -636,7 +2110,7 @@ const TrainingBriefingSection: React.FC = () => {
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   };
-
+  
   // Get shift badge color
   const getShiftBadge = (shift: string) => {
     switch (shift) {
@@ -646,18 +2120,29 @@ const TrainingBriefingSection: React.FC = () => {
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   };
-
+  
+  // Get type color
+  const getTypeColor = (type: string) => {
+    const found = trainingTypes.find(t => t.value === type);
+    return found?.color || 'bg-gray-100 text-gray-800';
+  };
+  
   // Format date
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
   };
-
+  
   // Calendar navigation
   const nextMonth = () => {
     setCurrentMonth(prev => {
@@ -666,7 +2151,7 @@ const TrainingBriefingSection: React.FC = () => {
       return newDate;
     });
   };
-
+  
   const prevMonth = () => {
     setCurrentMonth(prev => {
       const newDate = new Date(prev);
@@ -674,15 +2159,14 @@ const TrainingBriefingSection: React.FC = () => {
       return newDate;
     });
   };
-
+  
   // Get events for calendar
   const getCalendarEvents = () => {
     const events = [];
     
-    // Training events
     trainingSessions.forEach(session => {
       events.push({
-        id: session.id,
+        id: session._id,
         title: session.title,
         date: session.date,
         type: 'training',
@@ -691,10 +2175,9 @@ const TrainingBriefingSection: React.FC = () => {
       });
     });
     
-    // Briefing events
     staffBriefings.forEach(briefing => {
       events.push({
-        id: briefing.id,
+        id: briefing._id,
         title: `Briefing - ${briefing.department}`,
         date: briefing.date,
         type: 'briefing',
@@ -705,340 +2188,1153 @@ const TrainingBriefingSection: React.FC = () => {
     
     return events;
   };
-
+  
   const calendarEvents = getCalendarEvents();
-
-  // Mobile card component for training sessions
-  const MobileTrainingCard = ({ session }: { session: TrainingSession }) => (
-    <div className="border rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{session.title}</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{session.description}</p>
+  
+  const filteredSupervisorsList = filteredSupervisors.filter(sup => 
+    sup.name.toLowerCase().includes(supervisorSearchQuery.toLowerCase()) ||
+    (sup.department && sup.department.toLowerCase().includes(supervisorSearchQuery.toLowerCase()))
+  );
+  const filteredManagersList = filteredManagers.filter(mgr => 
+    mgr.name.toLowerCase().includes(managerSearchQuery.toLowerCase()) ||
+    (mgr.department && mgr.department.toLowerCase().includes(managerSearchQuery.toLowerCase()))
+  );
+  const filteredEmployeesList = filteredEmployees.filter(emp => 
+    emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
+    emp.employeeId.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
+    (emp.position && emp.position.toLowerCase().includes(employeeSearchQuery.toLowerCase()))
+  );
+  
+  const filteredEditSupervisorsList = filteredSupervisors.filter(sup => 
+    sup.name.toLowerCase().includes(editSupervisorSearchQuery.toLowerCase()) ||
+    (sup.department && sup.department.toLowerCase().includes(editSupervisorSearchQuery.toLowerCase()))
+  );
+  const filteredEditManagersList = filteredManagers.filter(mgr => 
+    mgr.name.toLowerCase().includes(editManagerSearchQuery.toLowerCase()) ||
+    (mgr.department && mgr.department.toLowerCase().includes(editManagerSearchQuery.toLowerCase()))
+  );
+  
+  // Stats calculations
+  const totalTrainings = trainingSessions.length;
+  const totalBriefings = staffBriefings.length;
+  const completedTrainings = trainingSessions.filter(t => t.status === 'completed').length;
+  const pendingActions = staffBriefings.reduce((acc, briefing) => 
+    acc + briefing.actionItems.filter(a => a.status === 'pending').length, 0
+  );
+  
+  // Add Training Form Component
+  const AddTrainingFormComponent = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Title *</label>
+          <Input
+            placeholder="Enter training title"
+            value={trainingForm.title}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, title: e.target.value }))}
+            className="w-full"
+          />
         </div>
-        <div className="flex flex-col gap-2 ml-2 flex-shrink-0">
-          <Badge className={trainingTypes.find(t => t.value === session.type)?.color}>
-            {trainingTypes.find(t => t.value === session.type)?.label}
-          </Badge>
-          <Badge className={getStatusBadge(session.status)}>
-            {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-          </Badge>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Type</label>
+          <Select
+            value={trainingForm.type}
+            onValueChange={(value: any) => setTrainingForm(prev => ({ ...prev, type: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {trainingTypes.map(type => (
+                <SelectItem key={type.value} value={type.value}>
+                  {type.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Date *</label>
+          <Input
+            type="date"
+            value={trainingForm.date}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, date: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Time</label>
+          <Input
+            type="time"
+            value={trainingForm.time}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, time: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Duration</label>
+          <Input
+            placeholder="e.g., 2 hours"
+            value={trainingForm.duration}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, duration: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Trainer *</label>
+          <Input
+            placeholder="Enter trainer name"
+            value={trainingForm.trainer}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, trainer: e.target.value }))}
+            className="w-full"
+          />
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="flex items-center gap-2 min-w-0">
-          <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{formatDate(session.date)}</span>
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Site *</label>
+          <Select
+            value={trainingForm.site}
+            onValueChange={(value) => setTrainingForm(prev => ({ ...prev, site: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select site" />
+            </SelectTrigger>
+            <SelectContent>
+              {sites.map(site => (
+                <SelectItem key={site._id} value={site.name}>
+                  {site.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{session.time}</span>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Department</label>
+          <Select
+            value={trainingForm.department}
+            onValueChange={(value) => setTrainingForm(prev => ({ ...prev, department: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              {departments.map(dept => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{session.trainer}</span>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Max Attendees</label>
+          <Input
+            type="number"
+            min="1"
+            value={trainingForm.maxAttendees}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
+            className="w-full"
+          />
         </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{session.attendees.length}/{session.maxAttendees}</span>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Location</label>
+          <Input
+            placeholder="Enter location"
+            value={trainingForm.location}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, location: e.target.value }))}
+            className="w-full"
+          />
         </div>
-      </div>
-      
-      <div className="flex flex-wrap gap-2 pt-2 border-t dark:border-gray-700">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="flex-1 min-w-[80px]">
-              <Eye className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">View</span>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Objectives</label>
+          <div className="space-y-2">
+            {trainingForm.objectives.map((objective, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Objective ${index + 1}`}
+                  value={objective}
+                  onChange={(e) => updateObjective(index, e.target.value)}
+                  className="flex-1"
+                />
+                {trainingForm.objectives.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeObjective(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addObjective}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Objective
             </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-            <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">Training Session Details</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-base sm:text-lg font-semibold">{session.title}</h3>
-                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">{session.description}</p>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Date & Time</p>
-                  <p className="text-sm">{formatDate(session.date)} at {session.time}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Duration</p>
-                  <p className="text-sm">{session.duration}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Trainer</p>
-                  <p className="text-sm">{session.trainer}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Supervisor</p>
-                  <p className="text-sm">{session.supervisor}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Site</p>
-                  <p className="text-sm">{session.site}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Department</p>
-                  <p className="text-sm">{session.department}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Location</p>
-                  <p className="text-sm">{session.location}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Status</p>
-                  <Badge className={getStatusBadge(session.status)}>
-                    {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-                  </Badge>
-                </div>
-              </div>
-              
-              {session.objectives.length > 0 && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Objectives</h4>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {session.objectives.map((obj, idx) => (
-                      <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{obj}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              {session.feedback.length > 0 && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Feedback</h4>
-                  <div className="space-y-2">
-                    {session.feedback.map(fb => (
-                      <div key={fb.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                          <p className="font-medium text-sm">{fb.employeeName}</p>
-                          <div className="flex">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} className={`h-3 w-3 sm:h-4 sm:w-4 ${i < fb.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">{fb.comment}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
         
-        <Select
-          value={session.status}
-          onValueChange={(value: any) => updateTrainingStatus(session.id, value)}
-        >
-          <SelectTrigger className="flex-1 min-w-[100px] h-8 text-xs sm:text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="scheduled">Scheduled</SelectItem>
-            <SelectItem value="ongoing">Ongoing</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => deleteTraining(session.id)}
-          className="flex-shrink-0 px-2"
-        >
-          <Trash2 className="h-4 w-4 text-red-500" />
-        </Button>
+        <div>
+          <label className="text-sm font-medium mb-2 block">Description</label>
+          <Textarea
+            placeholder="Enter training description"
+            value={trainingForm.description}
+            onChange={(e) => setTrainingForm(prev => ({ ...prev, description: e.target.value }))}
+            rows={3}
+            className="w-full"
+          />
+        </div>
       </div>
     </div>
   );
-
-  // Mobile card component for staff briefings
-  const MobileBriefingCard = ({ briefing }: { briefing: StaffBriefing }) => (
-    <div className="border rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-            Briefing - {briefing.site}
-          </h3>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge className={getShiftBadge(briefing.shift)}>
-              {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
-            </Badge>
-            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">by {briefing.conductedBy}</span>
-          </div>
-        </div>
+  
+  // Supervisors Multi-Select Component
+  const SupervisorsMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
+    <div className="py-4 border-t dark:border-gray-700">
+      <div className="mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <UserCheck className="h-5 w-5" />
+          Supervisors *
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          Select supervisors assigned to this site
+        </p>
       </div>
-      
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="flex items-center gap-2 min-w-0">
-          <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{formatDate(briefing.date)}</span>
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{briefing.time}</span>
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Building className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{briefing.department}</span>
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-600 dark:text-gray-400 truncate">{briefing.attendeesCount} attendees</span>
-        </div>
-      </div>
-      
-      {briefing.topics.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {briefing.topics.slice(0, 3).map((topic, idx) => (
-            <Badge key={idx} variant="outline" className="text-xs">
-              {topic}
-            </Badge>
-          ))}
-          {briefing.topics.length > 3 && (
-            <Badge variant="outline" className="text-xs">+{briefing.topics.length - 3}</Badge>
+      <div className="space-y-2">
+        <Input
+          placeholder="Search supervisors..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-9"
+          disabled={disabled}
+        />
+        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+          {filteredSupervisorsList.length > 0 ? (
+            filteredSupervisorsList.map(sup => (
+              <div
+                key={sup._id}
+                onClick={() => onToggle(sup._id)}
+                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                  selected.includes(sup._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                    selected.includes(sup._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                  }`}>
+                    {selected.includes(sup._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">{sup.name}</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{sup.department}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-muted-foreground">
+              {disabled ? "Select a site first" : "No supervisors available for this site"}
+            </div>
           )}
         </div>
-      )}
-      
-      <div className="flex gap-2 pt-2 border-t dark:border-gray-700">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="flex-1 min-w-[80px]">
-              <Eye className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">View</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-            <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">Staff Briefing Details</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-base sm:text-lg font-semibold">
-                  {briefing.site} - {briefing.department}
-                </h3>
-                <div className="flex flex-wrap items-center gap-3 mt-1">
-                  <Badge className={getShiftBadge(briefing.shift)}>
-                    {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
-                  </Badge>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Conducted by {briefing.conductedBy}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Date & Time</p>
-                  <p className="text-sm">{formatDate(briefing.date)} at {briefing.time}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Attendees</p>
-                  <p className="text-sm">{briefing.attendeesCount} staff members</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Site</p>
-                  <p className="text-sm">{briefing.site}</p>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500">Department</p>
-                  <p className="text-sm">{briefing.department}</p>
-                </div>
-              </div>
-              
-              {briefing.topics.length > 0 && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Topics Discussed</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {briefing.topics.map((topic, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">{topic}</Badge>
-                    ))}
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {selected.map(id => {
+              const sup = filteredSupervisors.find(s => s._id === id);
+              return sup ? (
+                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                  {sup.name}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  
+  // Managers Multi-Select Component
+  const ManagersMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
+    <div className="py-4 border-t dark:border-gray-700">
+      <div className="mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <UserCog className="h-5 w-5" />
+          Managers *
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          Select managers assigned to this site
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Input
+          placeholder="Search managers..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-9"
+          disabled={disabled}
+        />
+        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+          {filteredManagersList.length > 0 ? (
+            filteredManagersList.map(mgr => (
+              <div
+                key={mgr._id}
+                onClick={() => onToggle(mgr._id)}
+                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                  selected.includes(mgr._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                    selected.includes(mgr._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                  }`}>
+                    {selected.includes(mgr._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">{mgr.name}</h4>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{mgr.department}</p>
                   </div>
                 </div>
-              )}
-              
-              {briefing.keyPoints.length > 0 && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Key Points</h4>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {briefing.keyPoints.map((point, idx) => (
-                      <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{point}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              {briefing.actionItems.length > 0 && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Action Items</h4>
-                  <div className="space-y-2">
-                    {briefing.actionItems.map(item => (
-                      <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded gap-2">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => updateActionItemStatus(
-                              briefing.id,
-                              item.id,
-                              item.status === 'completed' ? 'pending' : 'completed'
-                            )}
-                            className="flex-shrink-0 p-1 h-auto"
-                          >
-                            {item.status === 'completed' ? (
-                              <CheckSquare className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <Square className="h-4 w-4 text-gray-400" />
-                            )}
-                          </Button>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm truncate">{item.description}</p>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                              <span className="truncate">Assigned: {item.assignedTo}</span>
-                              <span className="whitespace-nowrap">Due: {formatDate(item.dueDate)}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <Badge className={getPriorityBadge(item.priority) + " sm:ml-2 self-start sm:self-center"}>
-                          {item.priority.toUpperCase()}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {briefing.notes && (
-                <div>
-                  <h4 className="text-sm sm:text-base font-medium mb-2">Notes</h4>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                    {briefing.notes}
-                  </p>
-                </div>
-              )}
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-muted-foreground">
+              {disabled ? "Select a site first" : "No managers available for this site"}
             </div>
-          </DialogContent>
-        </Dialog>
-        
+          )}
+        </div>
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {selected.map(id => {
+              const mgr = filteredManagers.find(m => m._id === id);
+              return mgr ? (
+                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                  {mgr.name}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  
+  // Employees Multi-Select Component
+  const EmployeesMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
+    <div className="py-4 border-t dark:border-gray-700">
+      <div className="mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Employees
+        </h3>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          Select employees to assign to this training
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Input
+          placeholder="Search employees..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-9"
+          disabled={disabled}
+        />
+        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+          {filteredEmployeesList.length > 0 ? (
+            filteredEmployeesList.filter(emp => emp.status === "active").map(emp => (
+              <div
+                key={emp._id}
+                onClick={() => onToggle(emp._id)}
+                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                  selected.includes(emp._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                    selected.includes(emp._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                  }`}>
+                    {selected.includes(emp._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">{emp.name}</h4>
+                      <Badge variant="outline" className="text-xs">{emp.employeeId}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{emp.position}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-4 text-muted-foreground">
+              No employees available
+            </div>
+          )}
+        </div>
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {selected.map(id => {
+              const emp = filteredEmployees.find(e => e._id === id);
+              return emp ? (
+                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                  {emp.name}
+                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+                </Badge>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  
+  // Attachments Section
+  const AttachmentsSection = ({ attachments, onUpload, onRemove, fileInputRef }: any) => (
+    <div className="py-4 border-t dark:border-gray-700">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base sm:text-lg font-semibold">Attachments</h3>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            Upload photos, documents, or other files
+          </p>
+        </div>
+        <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            onChange={onUpload}
+            className="hidden"
+            accept="image/*,video/*,.pdf,.doc,.docx"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full sm:w-auto"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Files
+          </Button>
+        </div>
+      </div>
+      
+      {attachments.length > 0 && (
+        <div className="space-y-2 max-h-40 overflow-y-auto">
+          {attachments.map((file: any, index: number) => (
+            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {file.type === 'image' || file.type?.startsWith('image/') ? (
+                  <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                ) : file.type === 'video' || file.type?.startsWith('video/') ? (
+                  <Video className="h-5 w-5 text-red-500 flex-shrink-0" />
+                ) : (
+                  <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{file.name}</p>
+                  <p className="text-xs text-gray-500">{file.size}</p>
+                </div>
+                {file.url && !file.isNew && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(file.url, '_blank')}
+                    className="h-8 w-8 p-0"
+                    title="View"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(index)}
+                className="flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  
+  // Action Items Section
+  const ActionItemsSection = ({ actionItems, onAdd, onRemove, onUpdate }: any) => (
+    <div className="py-4 border-t dark:border-gray-700">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base sm:text-lg font-semibold">Action Items</h3>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            Add tasks assigned during the briefing
+          </p>
+        </div>
         <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => deleteBriefing(briefing.id)}
-          className="flex-shrink-0 px-2"
+          type="button"
+          variant="outline"
+          onClick={onAdd}
+          className="w-full sm:w-auto"
         >
-          <Trash2 className="h-4 w-4 text-red-500" />
+          <Plus className="h-4 w-4 mr-2" />
+          Add Action Item
         </Button>
+      </div>
+      
+      {actionItems.map((item: any, index: number) => (
+        <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium mb-1 block">Description</label>
+            <Input
+              placeholder="Task description"
+              value={item.description}
+              onChange={(e) => onUpdate(index, 'description', e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Assigned To</label>
+            <Input
+              placeholder="Person/Team"
+              value={item.assignedTo}
+              onChange={(e) => onUpdate(index, 'assignedTo', e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Due Date</label>
+            <Input
+              type="date"
+              value={item.dueDate}
+              onChange={(e) => onUpdate(index, 'dueDate', e.target.value)}
+              className="w-full"
+            />
+          </div>
+          <div className="flex items-end gap-2 sm:col-span-4">
+            <div className="flex-1">
+              <label className="text-xs font-medium mb-1 block">Priority</label>
+              <Select
+                value={item.priority}
+                onValueChange={(value: any) => onUpdate(index, 'priority', value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {priorities.map(priority => (
+                    <SelectItem key={priority} value={priority}>
+                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(index)}
+              className="mb-0.5"
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+  
+  // Add Briefing Form Component
+  const AddBriefingFormComponent = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Date *</label>
+          <Input
+            type="date"
+            value={briefingForm.date}
+            onChange={(e) => setBriefingForm(prev => ({ ...prev, date: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Time</label>
+          <Input
+            type="time"
+            value={briefingForm.time}
+            onChange={(e) => setBriefingForm(prev => ({ ...prev, time: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Shift</label>
+          <Select
+            value={briefingForm.shift}
+            onValueChange={(value: any) => setBriefingForm(prev => ({ ...prev, shift: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select shift" />
+            </SelectTrigger>
+            <SelectContent>
+              {shifts.map(shift => (
+                <SelectItem key={shift} value={shift}>
+                  {shift.charAt(0).toUpperCase() + shift.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Conducted By *</label>
+          <Input
+            placeholder="Enter conductor name"
+            value={briefingForm.conductedBy}
+            onChange={(e) => setBriefingForm(prev => ({ ...prev, conductedBy: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Site *</label>
+          <Select
+            value={briefingForm.site}
+            onValueChange={(value) => setBriefingForm(prev => ({ ...prev, site: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select site" />
+            </SelectTrigger>
+            <SelectContent>
+              {sites.map(site => (
+                <SelectItem key={site._id} value={site.name}>
+                  {site.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Department</label>
+          <Select
+            value={briefingForm.department}
+            onValueChange={(value) => setBriefingForm(prev => ({ ...prev, department: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              {departments.map(dept => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
+          <Input
+            type="number"
+            min="0"
+            value={briefingForm.attendeesCount}
+            onChange={(e) => setBriefingForm(prev => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
+            className="w-full"
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
+          <div className="space-y-2">
+            {briefingForm.topics.map((topic, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Topic ${index + 1}`}
+                  value={topic}
+                  onChange={(e) => updateTopic(index, e.target.value)}
+                  className="flex-1"
+                />
+                {briefingForm.topics.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeTopic(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addTopic}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Topic
+            </Button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Key Points</label>
+          <div className="space-y-2">
+            {briefingForm.keyPoints.map((point, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Key point ${index + 1}`}
+                  value={point}
+                  onChange={(e) => updateKeyPoint(index, e.target.value)}
+                  className="flex-1"
+                />
+                {briefingForm.keyPoints.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeKeyPoint(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addKeyPoint}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Key Point
+            </Button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Notes</label>
+          <Textarea
+            placeholder="Enter additional notes"
+            value={briefingForm.notes}
+            onChange={(e) => setBriefingForm(prev => ({ ...prev, notes: e.target.value }))}
+            rows={3}
+            className="w-full"
+          />
+        </div>
+      </div>
+    </div>
+  );
+  
+  // Edit Training Form Component
+  const EditTrainingFormComponent = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Title *</label>
+          <Input
+            placeholder="Enter training title"
+            value={editTrainingForm.title}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, title: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Type</label>
+          <Select
+            value={editTrainingForm.type}
+            onValueChange={(value: any) => setEditTrainingForm(prev => ({ ...prev, type: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              {trainingTypes.map(type => (
+                <SelectItem key={type.value} value={type.value}>
+                  {type.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Date *</label>
+          <Input
+            type="date"
+            value={editTrainingForm.date}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, date: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Time</label>
+          <Input
+            type="time"
+            value={editTrainingForm.time}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, time: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Duration</label>
+          <Input
+            placeholder="e.g., 2 hours"
+            value={editTrainingForm.duration}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, duration: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Trainer *</label>
+          <Input
+            placeholder="Enter trainer name"
+            value={editTrainingForm.trainer}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, trainer: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Site *</label>
+          <Select
+            value={editTrainingForm.site}
+            onValueChange={(value) => setEditTrainingForm(prev => ({ ...prev, site: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select site" />
+            </SelectTrigger>
+            <SelectContent>
+              {sites.map(site => (
+                <SelectItem key={site._id} value={site.name}>
+                  {site.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Department</label>
+          <Select
+            value={editTrainingForm.department}
+            onValueChange={(value) => setEditTrainingForm(prev => ({ ...prev, department: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              {departments.map(dept => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Max Attendees</label>
+          <Input
+            type="number"
+            min="1"
+            value={editTrainingForm.maxAttendees}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Location</label>
+          <Input
+            placeholder="Enter location"
+            value={editTrainingForm.location}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, location: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Training Objectives</label>
+          <div className="space-y-2">
+            {editTrainingForm.objectives.map((objective, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Objective ${index + 1}`}
+                  value={objective}
+                  onChange={(e) => updateEditObjective(index, e.target.value)}
+                  className="flex-1"
+                />
+                {editTrainingForm.objectives.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeEditObjective(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addEditObjective}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Objective
+            </Button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Description</label>
+          <Textarea
+            placeholder="Enter training description"
+            value={editTrainingForm.description}
+            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, description: e.target.value }))}
+            rows={3}
+            className="w-full"
+          />
+        </div>
+      </div>
+    </div>
+  );
+  
+  // Edit Briefing Form Component
+  const EditBriefingFormComponent = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Date *</label>
+          <Input
+            type="date"
+            value={editBriefingForm.date}
+            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, date: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Time</label>
+          <Input
+            type="time"
+            value={editBriefingForm.time}
+            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, time: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Shift</label>
+          <Select
+            value={editBriefingForm.shift}
+            onValueChange={(value: any) => setEditBriefingForm(prev => ({ ...prev, shift: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select shift" />
+            </SelectTrigger>
+            <SelectContent>
+              {shifts.map(shift => (
+                <SelectItem key={shift} value={shift}>
+                  {shift.charAt(0).toUpperCase() + shift.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Conducted By *</label>
+          <Input
+            placeholder="Enter conductor name"
+            value={editBriefingForm.conductedBy}
+            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, conductedBy: e.target.value }))}
+            className="w-full"
+          />
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Site *</label>
+          <Select
+            value={editBriefingForm.site}
+            onValueChange={(value) => setEditBriefingForm(prev => ({ ...prev, site: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select site" />
+            </SelectTrigger>
+            <SelectContent>
+              {sites.map(site => (
+                <SelectItem key={site._id} value={site.name}>
+                  {site.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Department</label>
+          <Select
+            value={editBriefingForm.department}
+            onValueChange={(value) => setEditBriefingForm(prev => ({ ...prev, department: value }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              {departments.map(dept => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
+          <Input
+            type="number"
+            min="0"
+            value={editBriefingForm.attendeesCount}
+            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
+            className="w-full"
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
+          <div className="space-y-2">
+            {editBriefingForm.topics.map((topic, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Topic ${index + 1}`}
+                  value={topic}
+                  onChange={(e) => updateEditTopic(index, e.target.value)}
+                  className="flex-1"
+                />
+                {editBriefingForm.topics.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeEditTopic(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addEditTopic}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Topic
+            </Button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Key Points</label>
+          <div className="space-y-2">
+            {editBriefingForm.keyPoints.map((point, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`Key point ${index + 1}`}
+                  value={point}
+                  onChange={(e) => updateEditKeyPoint(index, e.target.value)}
+                  className="flex-1"
+                />
+                {editBriefingForm.keyPoints.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeEditKeyPoint(index)}
+                    className="flex-shrink-0"
+                  >
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addEditKeyPoint}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Key Point
+            </Button>
+          </div>
+        </div>
+        
+        <div>
+          <label className="text-sm font-medium mb-2 block">Notes</label>
+          <Textarea
+            placeholder="Enter additional notes"
+            value={editBriefingForm.notes}
+            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, notes: e.target.value }))}
+            rows={3}
+            className="w-full"
+          />
+        </div>
       </div>
     </div>
   );
@@ -1053,16 +3349,25 @@ const TrainingBriefingSection: React.FC = () => {
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Training & Staff Briefing</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
+              Training & Staff Briefing
+            </h1>
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
-              Manage training sessions and daily staff briefings
+              Manage training sessions and daily staff briefings for your assigned sites
             </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Badge variant="outline" className="bg-blue-50">
+                <Building className="h-3 w-3 mr-1" />
+                Your Sites: {managerAssignedSiteNames.length > 0 ? managerAssignedSiteNames.join(', ') : 'Loading...'}
+              </Badge>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <Button 
               variant="outline" 
               onClick={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}
               className="flex-1 sm:flex-none min-w-[100px]"
+              disabled={loading}
             >
               {viewMode === 'list' ? (
                 <>
@@ -1078,9 +3383,10 @@ const TrainingBriefingSection: React.FC = () => {
                 </>
               )}
             </Button>
+            
             <Dialog open={showAddTraining} onOpenChange={setShowAddTraining}>
               <DialogTrigger asChild>
-                <Button className="flex-1 sm:flex-none min-w-[100px]">
+                <Button className="flex-1 sm:flex-none min-w-[100px]" disabled={loading}>
                   <Plus className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Add Training</span>
                   <span className="sm:hidden">Training</span>
@@ -1094,282 +3400,50 @@ const TrainingBriefingSection: React.FC = () => {
                   </DialogDescription>
                 </DialogHeader>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Training Title *</label>
-                      <Input
-                        placeholder="Enter training title"
-                        value={trainingForm.title}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, title: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Training Type</label>
-                      <Select
-                        value={trainingForm.type}
-                        onValueChange={(value: any) => setTrainingForm(prev => ({ ...prev, type: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {trainingTypes.map(type => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Date *</label>
-                      <Input
-                        type="date"
-                        value={trainingForm.date}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, date: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Time</label>
-                      <Input
-                        type="time"
-                        value={trainingForm.time}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, time: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Duration</label>
-                      <Input
-                        placeholder="e.g., 2 hours"
-                        value={trainingForm.duration}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, duration: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Trainer *</label>
-                      <Input
-                        placeholder="Enter trainer name"
-                        value={trainingForm.trainer}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, trainer: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Supervisor</label>
-                      <Select
-                        value={trainingForm.supervisor}
-                        onValueChange={(value) => setTrainingForm(prev => ({ ...prev, supervisor: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select supervisor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {supervisors.map(supervisor => (
-                            <SelectItem key={supervisor} value={supervisor}>
-                              {supervisor}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Site</label>
-                      <Select
-                        value={trainingForm.site}
-                        onValueChange={(value) => setTrainingForm(prev => ({ ...prev, site: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select site" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sites.map(site => (
-                            <SelectItem key={site} value={site}>
-                              {site}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Department</label>
-                      <Select
-                        value={trainingForm.department}
-                        onValueChange={(value) => setTrainingForm(prev => ({ ...prev, department: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departments.map(dept => (
-                            <SelectItem key={dept} value={dept}>
-                              {dept}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Max Attendees</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={trainingForm.maxAttendees}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Location</label>
-                      <Input
-                        placeholder="Enter location"
-                        value={trainingForm.location}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, location: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Training Objectives</label>
-                      <div className="space-y-2">
-                        {trainingForm.objectives.map((objective, index) => (
-                          <div key={index} className="flex gap-2">
-                            <Input
-                              placeholder={`Objective ${index + 1}`}
-                              value={objective}
-                              onChange={(e) => updateObjective(index, e.target.value)}
-                              className="flex-1"
-                            />
-                            {trainingForm.objectives.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeObjective(index)}
-                                className="flex-shrink-0"
-                              >
-                                <XCircle className="h-4 w-4 text-red-500" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addObjective}
-                          className="w-full"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Objective
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Description</label>
-                      <Textarea
-                        placeholder="Enter training description"
-                        value={trainingForm.description}
-                        onChange={(e) => setTrainingForm(prev => ({ ...prev, description: e.target.value }))}
-                        rows={3}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Attachments Section */}
-                <div className="py-4 border-t dark:border-gray-700">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold">Attachments</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                        Upload training materials, photos, or videos
-                      </p>
-                    </div>
-                    <div>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        multiple
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full sm:w-auto"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Files
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {attachments.length > 0 && (
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {file.type.startsWith('image/') ? (
-                              <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                            ) : file.type.startsWith('video/') ? (
-                              <Video className="h-5 w-5 text-red-500 flex-shrink-0" />
-                            ) : (
-                              <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{file.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {(file.size / (1024 * 1024)).toFixed(1)} MB
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeAttachment(index)}
-                            className="flex-shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <AddTrainingFormComponent />
+                <SupervisorsMultiSelect 
+                  selected={selectedSupervisors}
+                  onToggle={handleSupervisorToggle}
+                  searchQuery={supervisorSearchQuery}
+                  setSearchQuery={setSupervisorSearchQuery}
+                  disabled={!trainingForm.site}
+                />
+                <ManagersMultiSelect 
+                  selected={selectedManagers}
+                  onToggle={handleManagerToggle}
+                  searchQuery={managerSearchQuery}
+                  setSearchQuery={setManagerSearchQuery}
+                  disabled={!trainingForm.site}
+                />
+                <EmployeesMultiSelect 
+                  selected={selectedEmployees}
+                  onToggle={handleEmployeeToggle}
+                  searchQuery={employeeSearchQuery}
+                  setSearchQuery={setEmployeeSearchQuery}
+                  disabled={!trainingForm.site}
+                />
+                <AttachmentsSection 
+                  attachments={attachments}
+                  onUpload={handleFileUpload}
+                  onRemove={removeAttachment}
+                  fileInputRef={fileInputRef}
+                />
                 
                 <DialogFooter className="flex-col sm:flex-row gap-2">
                   <DialogClose asChild>
                     <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
                   </DialogClose>
-                  <Button onClick={handleAddTraining} className="w-full sm:w-auto">Add Training Session</Button>
+                  <Button onClick={handleAddTraining} disabled={loading} className="w-full sm:w-auto">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Add Training Session
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
             
             <Dialog open={showAddBriefing} onOpenChange={setShowAddBriefing}>
               <DialogTrigger asChild>
-                <Button variant="secondary" className="flex-1 sm:flex-none min-w-[100px]">
+                <Button variant="secondary" className="flex-1 sm:flex-none min-w-[100px]" disabled={loading}>
                   <Plus className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Add Briefing</span>
                   <span className="sm:hidden">Briefing</span>
@@ -1383,336 +3457,42 @@ const TrainingBriefingSection: React.FC = () => {
                   </DialogDescription>
                 </DialogHeader>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Date *</label>
-                      <Input
-                        type="date"
-                        value={briefingForm.date}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, date: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Time</label>
-                      <Input
-                        type="time"
-                        value={briefingForm.time}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, time: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Shift</label>
-                      <Select
-                        value={briefingForm.shift}
-                        onValueChange={(value: any) => setBriefingForm(prev => ({ ...prev, shift: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select shift" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {shifts.map(shift => (
-                            <SelectItem key={shift} value={shift}>
-                              {shift.charAt(0).toUpperCase() + shift.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Conducted By *</label>
-                      <Input
-                        placeholder="Enter conductor name"
-                        value={briefingForm.conductedBy}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, conductedBy: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Site *</label>
-                      <Input
-                        placeholder="Enter site/location"
-                        value={briefingForm.site}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, site: e.target.value }))}
-                        className="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Department</label>
-                      <Select
-                        value={briefingForm.department}
-                        onValueChange={(value) => setBriefingForm(prev => ({ ...prev, department: value }))}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departments.map(dept => (
-                            <SelectItem key={dept} value={dept}>
-                              {dept}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={briefingForm.attendeesCount}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
-                      <div className="space-y-2">
-                        {briefingForm.topics.map((topic, index) => (
-                          <div key={index} className="flex gap-2">
-                            <Input
-                              placeholder={`Topic ${index + 1}`}
-                              value={topic}
-                              onChange={(e) => updateTopic(index, e.target.value)}
-                              className="flex-1"
-                            />
-                            {briefingForm.topics.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeTopic(index)}
-                                className="flex-shrink-0"
-                              >
-                                <XCircle className="h-4 w-4 text-red-500" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addTopic}
-                          className="w-full"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Topic
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Key Points</label>
-                      <div className="space-y-2">
-                        {briefingForm.keyPoints.map((point, index) => (
-                          <div key={index} className="flex gap-2">
-                            <Input
-                              placeholder={`Key point ${index + 1}`}
-                              value={point}
-                              onChange={(e) => updateKeyPoint(index, e.target.value)}
-                              className="flex-1"
-                            />
-                            {briefingForm.keyPoints.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeKeyPoint(index)}
-                                className="flex-shrink-0"
-                              >
-                                <XCircle className="h-4 w-4 text-red-500" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={addKeyPoint}
-                          className="w-full"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Key Point
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Notes</label>
-                      <Textarea
-                        placeholder="Enter additional notes"
-                        value={briefingForm.notes}
-                        onChange={(e) => setBriefingForm(prev => ({ ...prev, notes: e.target.value }))}
-                        rows={3}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Action Items Section */}
-                <div className="py-4 border-t dark:border-gray-700">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold">Action Items</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                        Add tasks assigned during the briefing
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addActionItem}
-                      className="w-full sm:w-auto"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Action Item
-                    </Button>
-                  </div>
-                  
-                  {briefingForm.actionItems.map((item, index) => (
-                    <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3">
-                      <div className="sm:col-span-2">
-                        <label className="text-xs font-medium mb-1 block">Description</label>
-                        <Input
-                          placeholder="Task description"
-                          value={item.description}
-                          onChange={(e) => updateActionItem(index, 'description', e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium mb-1 block">Assigned To</label>
-                        <Input
-                          placeholder="Person/Team"
-                          value={item.assignedTo}
-                          onChange={(e) => updateActionItem(index, 'assignedTo', e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium mb-1 block">Due Date</label>
-                        <Input
-                          type="date"
-                          value={item.dueDate}
-                          onChange={(e) => updateActionItem(index, 'dueDate', e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="flex items-end gap-2 sm:col-span-4">
-                        <div className="flex-1">
-                          <label className="text-xs font-medium mb-1 block">Priority</label>
-                          <Select
-                            value={item.priority}
-                            onValueChange={(value: any) => updateActionItem(index, 'priority', value)}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {priorities.map(priority => (
-                                <SelectItem key={priority} value={priority}>
-                                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeActionItem(index)}
-                          className="mb-0.5"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Attachments Section */}
-                <div className="py-4 border-t dark:border-gray-700">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold">Attachments</h3>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                        Upload photos, documents, or other files
-                      </p>
-                    </div>
-                    <div>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        multiple
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        accept="image/*,video/*,.pdf,.doc,.docx"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full sm:w-auto"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Files
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {attachments.length > 0 && (
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {file.type.startsWith('image/') ? (
-                              <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                            ) : file.type.startsWith('video/') ? (
-                              <Video className="h-5 w-5 text-red-500 flex-shrink-0" />
-                            ) : (
-                              <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{file.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {(file.size / (1024 * 1024)).toFixed(1)} MB
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeAttachment(index)}
-                            className="flex-shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <AddBriefingFormComponent />
+                <SupervisorsMultiSelect 
+                  selected={selectedSupervisors}
+                  onToggle={handleSupervisorToggle}
+                  searchQuery={supervisorSearchQuery}
+                  setSearchQuery={setSupervisorSearchQuery}
+                  disabled={!briefingForm.site}
+                />
+                <ManagersMultiSelect 
+                  selected={selectedManagers}
+                  onToggle={handleManagerToggle}
+                  searchQuery={managerSearchQuery}
+                  setSearchQuery={setManagerSearchQuery}
+                  disabled={!briefingForm.site}
+                />
+                <ActionItemsSection 
+                  actionItems={briefingForm.actionItems}
+                  onAdd={addActionItem}
+                  onRemove={removeActionItem}
+                  onUpdate={updateActionItem}
+                />
+                <AttachmentsSection 
+                  attachments={attachments}
+                  onUpload={handleFileUpload}
+                  onRemove={removeAttachment}
+                  fileInputRef={fileInputRef}
+                />
                 
                 <DialogFooter className="flex-col sm:flex-row gap-2">
                   <DialogClose asChild>
                     <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
                   </DialogClose>
-                  <Button onClick={handleAddBriefing} className="w-full sm:w-auto">Add Staff Briefing</Button>
+                  <Button onClick={handleAddBriefing} disabled={loading} className="w-full sm:w-auto">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Add Staff Briefing
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -1726,8 +3506,7 @@ const TrainingBriefingSection: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Total Training</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{trainingSessions.length}</p>
-                  <p className="text-xs text-green-600 mt-1 hidden sm:block">+2 this week</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{totalTrainings}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
                   <Calendar className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-300" />
@@ -1741,8 +3520,7 @@ const TrainingBriefingSection: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Briefings</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{staffBriefings.length}</p>
-                  <p className="text-xs text-green-600 mt-1 hidden sm:block">Daily avg: 3</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{totalBriefings}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-green-100 dark:bg-green-900 rounded-full flex-shrink-0">
                   <Users className="h-4 w-4 sm:h-6 sm:w-6 text-green-600 dark:text-green-300" />
@@ -1756,12 +3534,7 @@ const TrainingBriefingSection: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Completed</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {trainingSessions.filter(t => t.status === 'completed').length}
-                  </p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 hidden sm:block">
-                    {Math.round((trainingSessions.filter(t => t.status === 'completed').length / trainingSessions.length) * 100)}% rate
-                  </p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{completedTrainings}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-purple-100 dark:bg-purple-900 rounded-full flex-shrink-0">
                   <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-purple-600 dark:text-purple-300" />
@@ -1775,12 +3548,7 @@ const TrainingBriefingSection: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Pending Actions</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    {staffBriefings.reduce((acc, briefing) => 
-                      acc + briefing.actionItems.filter(a => a.status === 'pending').length, 0
-                    )}
-                  </p>
-                  <p className="text-xs text-red-600 mt-1 hidden sm:block">Needs attention</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{pendingActions}</p>
                 </div>
                 <div className="p-2 sm:p-3 bg-red-100 dark:bg-red-900 rounded-full flex-shrink-0">
                   <AlertCircle className="h-4 w-4 sm:h-6 sm:w-6 text-red-600 dark:text-red-300" />
@@ -1792,7 +3560,11 @@ const TrainingBriefingSection: React.FC = () => {
       </motion.div>
 
       {/* Main Content */}
-      {viewMode === 'list' ? (
+      {loadingData.trainings && loadingData.briefings ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : viewMode === 'list' ? (
         <>
           {/* Tabs */}
           <Tabs defaultValue="training" className="mb-4 sm:mb-6" onValueChange={(value: any) => setActiveTab(value)}>
@@ -1861,7 +3633,7 @@ const TrainingBriefingSection: React.FC = () => {
                       </Select>
                     )}
                     
-                    <Button variant="outline" size="sm" className="text-sm">
+                    <Button variant="outline" size="sm" className="text-sm" disabled={loading}>
                       <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                       <span className="hidden xs:inline">Export</span>
                     </Button>
@@ -1889,7 +3661,7 @@ const TrainingBriefingSection: React.FC = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-3 sm:p-6">
-                    {filteredTrainingSessions.length === 0 ? (
+                    {trainingSessions.length === 0 ? (
                       <div className="text-center py-8 sm:py-12">
                         <Calendar className="h-8 w-8 sm:h-12 sm:w-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
                         <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-1 sm:mb-2">
@@ -1907,199 +3679,120 @@ const TrainingBriefingSection: React.FC = () => {
                       <div className="space-y-3 sm:space-y-4">
                         {/* Desktop View */}
                         <div className="hidden md:block">
-                          {filteredTrainingSessions.map(session => (
-                            <Card key={session.id} className="overflow-hidden mb-4">
-                              <div className="p-4 sm:p-6">
-                                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div className="min-w-0 flex-1">
-                                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                          {session.title}
-                                        </h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
-                                          {session.description}
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                                        <Badge className={trainingTypes.find(t => t.value === session.type)?.color}>
-                                          {trainingTypes.find(t => t.value === session.type)?.label}
-                                        </Badge>
-                                        <Badge className={getStatusBadge(session.status)}>
-                                          {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                                      <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                        <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                                          {formatDate(session.date)}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                        <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                                          {session.time} ({session.duration})
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                        <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                                          {session.trainer}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                                          {session.attendees.length}/{session.maxAttendees} attendees
-                                        </span>
-                                      </div>
-                                    </div>
-                                    
-                                    {session.objectives.length > 0 && (
-                                      <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                          Objectives:
-                                        </h4>
-                                        <div className="flex flex-wrap gap-2">
-                                          {session.objectives.map((obj, idx) => (
-                                            <Badge key={idx} variant="outline" className="text-xs">
-                                              {obj}
-                                            </Badge>
-                                          ))}
+                          {trainingSessions.map(session => {
+                            const canEdit = session.createdBy === managerId;
+                            return (
+                              <Card key={session._id} className="overflow-hidden mb-4">
+                                <div className="p-4 sm:p-6">
+                                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between mb-2">
+                                        <div className="min-w-0 flex-1">
+                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                            {session.title}
+                                          </h3>
+                                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                                            {session.description}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                                          <Badge className={getTypeColor(session.type)}>
+                                            {trainingTypes.find(t => t.value === session.type)?.label}
+                                          </Badge>
+                                          <Badge className={getStatusBadge(session.status)}>
+                                            {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                                          </Badge>
                                         </div>
                                       </div>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex flex-row lg:flex-col gap-2 lg:min-w-[200px]">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="outline" size="sm" className="flex-1 lg:w-full">
-                                          <Eye className="h-4 w-4 mr-2" />
-                                          View Details
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-lg sm:text-xl">Training Session Details</DialogTitle>
-                                        </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div>
-                                            <h3 className="text-base sm:text-lg font-semibold">{session.title}</h3>
-                                            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">{session.description}</p>
-                                          </div>
-                                          
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Date & Time</p>
-                                              <p className="text-sm">{formatDate(session.date)} at {session.time}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Duration</p>
-                                              <p className="text-sm">{session.duration}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Trainer</p>
-                                              <p className="text-sm">{session.trainer}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Supervisor</p>
-                                              <p className="text-sm">{session.supervisor}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Site</p>
-                                              <p className="text-sm">{session.site}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Department</p>
-                                              <p className="text-sm">{session.department}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Location</p>
-                                              <p className="text-sm">{session.location}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Status</p>
-                                              <Badge className={getStatusBadge(session.status)}>
-                                                {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-                                              </Badge>
-                                            </div>
-                                          </div>
-                                          
-                                          {session.objectives.length > 0 && (
-                                            <div>
-                                              <h4 className="text-sm sm:text-base font-medium mb-2">Objectives</h4>
-                                              <ul className="list-disc pl-5 space-y-1">
-                                                {session.objectives.map((obj, idx) => (
-                                                  <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{obj}</li>
-                                                ))}
-                                              </ul>
-                                            </div>
-                                          )}
-                                          
-                                          {session.feedback.length > 0 && (
-                                            <div>
-                                              <h4 className="text-sm sm:text-base font-medium mb-2">Feedback</h4>
-                                              <div className="space-y-2">
-                                                {session.feedback.map(fb => (
-                                                  <div key={fb.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
-                                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                                                      <p className="font-medium text-sm">{fb.employeeName}</p>
-                                                      <div className="flex">
-                                                        {[...Array(5)].map((_, i) => (
-                                                          <Star key={i} className={`h-3 w-3 sm:h-4 sm:w-4 ${i < fb.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                                                        ))}
-                                                      </div>
-                                                    </div>
-                                                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">{fb.comment}</p>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-                                    
-                                    <div className="flex gap-2">
-                                      <Select
-                                        value={session.status}
-                                        onValueChange={(value: any) => updateTrainingStatus(session.id, value)}
-                                      >
-                                        <SelectTrigger className="flex-1 h-8 text-xs sm:text-sm">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="scheduled">Scheduled</SelectItem>
-                                          <SelectItem value="ongoing">Ongoing</SelectItem>
-                                          <SelectItem value="completed">Completed</SelectItem>
-                                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                                        </SelectContent>
-                                      </Select>
                                       
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => deleteTraining(session.id)}
-                                        className="flex-shrink-0 px-2"
-                                      >
-                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                                        <div className="flex items-center gap-2">
+                                          <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                                            {formatDate(session.date)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                                            {session.time} ({session.duration})
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                                            {session.trainer}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Building className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                                            {session.site}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-row lg:flex-col gap-2 lg:min-w-[200px]">
+                                      <Button variant="outline" size="sm" className="flex-1 lg:w-full" onClick={() => setSelectedTraining(session)}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
                                       </Button>
+                                      
+                                      {canEdit && (
+                                        <>
+                                          <Button variant="outline" size="sm" className="flex-1 lg:w-full" onClick={() => openEditTrainingDialog(session)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                          </Button>
+                                          <Select
+                                            value={session.status}
+                                            onValueChange={(value: any) => updateTrainingStatus(session._id, value)}
+                                          >
+                                            <SelectTrigger className="flex-1 h-8 text-xs">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="scheduled">Scheduled</SelectItem>
+                                              <SelectItem value="ongoing">Ongoing</SelectItem>
+                                              <SelectItem value="completed">Completed</SelectItem>
+                                              <SelectItem value="cancelled">Cancelled</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                          
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => deleteTraining(session._id)}
+                                            className="flex-shrink-0 px-2"
+                                          >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            </Card>
-                          ))}
+                              </Card>
+                            );
+                          })}
                         </div>
 
                         {/* Mobile View */}
                         <div className="md:hidden space-y-3">
-                          {filteredTrainingSessions.map(session => (
-                            <MobileTrainingCard key={session.id} session={session} />
+                          {trainingSessions.map(session => (
+                            <MobileTrainingCard 
+                              key={session._id} 
+                              session={{...session, currentManagerId: managerId}} 
+                              onView={setSelectedTraining}
+                              onUpdateStatus={updateTrainingStatus}
+                              onDelete={deleteTraining}
+                              getTypeColor={getTypeColor}
+                              getStatusBadge={getStatusBadge}
+                              formatDate={formatDate}
+                              trainingTypes={trainingTypes}
+                              loading={loading}
+                            />
                           ))}
                         </div>
                       </div>
@@ -2123,7 +3816,7 @@ const TrainingBriefingSection: React.FC = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-3 sm:p-6">
-                    {filteredStaffBriefings.length === 0 ? (
+                    {staffBriefings.length === 0 ? (
                       <div className="text-center py-8 sm:py-12">
                         <MessageSquare className="h-8 w-8 sm:h-12 sm:w-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
                         <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-1 sm:mb-2">
@@ -2141,203 +3834,91 @@ const TrainingBriefingSection: React.FC = () => {
                       <div className="space-y-3 sm:space-y-4">
                         {/* Desktop View */}
                         <div className="hidden md:block">
-                          {filteredStaffBriefings.map(briefing => (
-                            <Card key={briefing.id} className="overflow-hidden mb-4">
-                              <div className="p-4 sm:p-6">
-                                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <div>
-                                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                          Staff Briefing - {briefing.site}
-                                        </h3>
-                                        <div className="flex flex-wrap items-center gap-3 mt-1">
-                                          <Badge className={getShiftBadge(briefing.shift)}>
-                                            {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
-                                          </Badge>
-                                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                                            by {briefing.conductedBy}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <div className="text-right ml-4 flex-shrink-0">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                          {formatDate(briefing.date)}
-                                        </p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400">{briefing.time}</p>
-                                      </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
-                                      <div>
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Department:</p>
-                                        <p className="text-gray-600 dark:text-gray-400">{briefing.department}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Attendees:</p>
-                                        <p className="text-gray-600 dark:text-gray-400">{briefing.attendeesCount} staff</p>
-                                      </div>
-                                    </div>
-                                    
-                                    {briefing.topics.length > 0 && (
-                                      <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                          Topics:
-                                        </h4>
-                                        <div className="flex flex-wrap gap-2">
-                                          {briefing.topics.map((topic, index) => (
-                                            <Badge key={index} variant="outline" className="text-xs">
-                                              {topic}
+                          {staffBriefings.map(briefing => {
+                            const canEdit = briefing.createdBy === managerId;
+                            return (
+                              <Card key={briefing._id} className="overflow-hidden mb-4">
+                                <div className="p-4 sm:p-6">
+                                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between mb-2">
+                                        <div>
+                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                            Staff Briefing - {briefing.site}
+                                          </h3>
+                                          <div className="flex flex-wrap items-center gap-3 mt-1">
+                                            <Badge className={getShiftBadge(briefing.shift)}>
+                                              {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
                                             </Badge>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {briefing.keyPoints.length > 0 && (
-                                      <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                          Key Points:
-                                        </h4>
-                                        <ul className="list-disc pl-5 space-y-1">
-                                          {briefing.keyPoints.map((point, index) => (
-                                            <li key={index} className="text-sm text-gray-600 dark:text-gray-400">
-                                              {point}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-                                    
-                                    {briefing.actionItems.length > 0 && (
-                                      <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                          Action Items:
-                                        </h4>
-                                        <div className="space-y-2">
-                                          {briefing.actionItems.map(item => (
-                                            <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded gap-2">
-                                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => updateActionItemStatus(
-                                                    briefing.id,
-                                                    item.id,
-                                                    item.status === 'completed' ? 'pending' : 'completed'
-                                                  )}
-                                                  className="flex-shrink-0 p-1 h-auto"
-                                                >
-                                                  {item.status === 'completed' ? (
-                                                    <CheckSquare className="h-4 w-4 text-green-500" />
-                                                  ) : (
-                                                    <Square className="h-4 w-4 text-gray-400" />
-                                                  )}
-                                                </Button>
-                                                <div className="min-w-0 flex-1">
-                                                  <p className="font-medium text-sm truncate">{item.description}</p>
-                                                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                                                    <span className="truncate">Assigned: {item.assignedTo}</span>
-                                                    <span className="whitespace-nowrap">Due: {formatDate(item.dueDate)}</span>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                              <Badge className={getPriorityBadge(item.priority) + " sm:ml-2 self-start sm:self-center"}>
-                                                {item.priority.toUpperCase()}
-                                              </Badge>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {briefing.notes && (
-                                      <div className="mt-4">
-                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notes:</h4>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                                          {briefing.notes}
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex flex-row lg:flex-col gap-2 lg:min-w-[120px]">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="outline" size="sm" className="flex-1 lg:w-full">
-                                          <Eye className="h-4 w-4 mr-2" />
-                                          View
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="w-[95vw] sm:w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-                                        <DialogHeader>
-                                          <DialogTitle className="text-lg sm:text-xl">Staff Briefing Details</DialogTitle>
-                                        </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div>
-                                            <h3 className="text-base sm:text-lg font-semibold">
-                                              {briefing.site} - {briefing.department}
-                                            </h3>
-                                            <div className="flex flex-wrap items-center gap-3 mt-1">
-                                              <Badge className={getShiftBadge(briefing.shift)}>
-                                                {briefing.shift.charAt(0).toUpperCase() + briefing.shift.slice(1)} Shift
-                                              </Badge>
-                                              <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                Conducted by {briefing.conductedBy}
-                                              </span>
-                                            </div>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                              by {briefing.conductedBy}
+                                            </span>
                                           </div>
-                                          
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Date & Time</p>
-                                              <p className="text-sm">{formatDate(briefing.date)} at {briefing.time}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Attendees</p>
-                                              <p className="text-sm">{briefing.attendeesCount} staff members</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Site</p>
-                                              <p className="text-sm">{briefing.site}</p>
-                                            </div>
-                                            <div>
-                                              <p className="text-xs sm:text-sm font-medium text-gray-500">Department</p>
-                                              <p className="text-sm">{briefing.department}</p>
-                                            </div>
-                                          </div>
-                                          
-                                          {briefing.notes && (
-                                            <div>
-                                              <h4 className="text-sm sm:text-base font-medium mb-2">Notes</h4>
-                                              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                                                {briefing.notes}
-                                              </p>
-                                            </div>
-                                          )}
                                         </div>
-                                      </DialogContent>
-                                    </Dialog>
+                                        <div className="text-right ml-4 flex-shrink-0">
+                                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                            {formatDate(briefing.date)}
+                                          </p>
+                                          <p className="text-sm text-gray-600 dark:text-gray-400">{briefing.time}</p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Department:</p>
+                                          <p className="text-gray-600 dark:text-gray-400">{briefing.department}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Attendees:</p>
+                                          <p className="text-gray-600 dark:text-gray-400">{briefing.attendeesCount} staff</p>
+                                        </div>
+                                      </div>
+                                    </div>
                                     
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => deleteBriefing(briefing.id)}
-                                      className="flex-shrink-0 px-2"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
+                                    <div className="flex flex-row lg:flex-col gap-2 lg:min-w-[120px]">
+                                      <Button variant="outline" size="sm" className="flex-1 lg:w-full" onClick={() => setSelectedBriefing(briefing)}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View
+                                      </Button>
+                                      
+                                      {canEdit && (
+                                        <>
+                                          <Button variant="outline" size="sm" className="flex-1 lg:w-full" onClick={() => openEditBriefingDialog(briefing)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => deleteBriefing(briefing._id)}
+                                            className="flex-shrink-0 px-2"
+                                          >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </Card>
-                          ))}
+                              </Card>
+                            );
+                          })}
                         </div>
 
                         {/* Mobile View */}
                         <div className="md:hidden space-y-3">
-                          {filteredStaffBriefings.map(briefing => (
-                            <MobileBriefingCard key={briefing.id} briefing={briefing} />
+                          {staffBriefings.map(briefing => (
+                            <MobileBriefingCard 
+                              key={briefing._id} 
+                              briefing={{...briefing, currentManagerId: managerId}} 
+                              onView={setSelectedBriefing}
+                              onDelete={deleteBriefing}
+                              onUpdateAction={updateActionItemStatus}
+                              getShiftBadge={getShiftBadge}
+                              getPriorityBadge={getPriorityBadge}
+                              formatDate={formatDate}
+                              loading={loading}
+                            />
                           ))}
                         </div>
                       </div>
@@ -2416,7 +3997,18 @@ const TrainingBriefingSection: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-xs sm:text-sm ml-auto sm:ml-0">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs sm:text-sm ml-auto sm:ml-0"
+                        onClick={() => {
+                          if (event.type === 'training') {
+                            setSelectedTraining(event.session);
+                          } else {
+                            setSelectedBriefing(event.briefing);
+                          }
+                        }}
+                      >
                         View
                       </Button>
                     </div>
@@ -2426,6 +4018,114 @@ const TrainingBriefingSection: React.FC = () => {
           </Card>
         </motion.div>
       )}
+      
+      {/* Detail Dialogs */}
+      <TrainingDetailDialog 
+        training={selectedTraining} 
+        open={!!selectedTraining} 
+        onClose={() => setSelectedTraining(null)} 
+        onEdit={openEditTrainingDialog}
+        onUpdateStatus={updateTrainingStatus}
+        getStatusBadge={getStatusBadge}
+        getTypeColor={getTypeColor}
+        formatDate={formatDate}
+        trainingTypes={trainingTypes}
+      />
+      <BriefingDetailDialog 
+        briefing={selectedBriefing} 
+        open={!!selectedBriefing} 
+        onClose={() => setSelectedBriefing(null)} 
+        onEdit={openEditBriefingDialog}
+        onUpdateAction={updateActionItemStatus}
+        getShiftBadge={getShiftBadge}
+        getPriorityBadge={getPriorityBadge}
+        formatDate={formatDate}
+      />
+      
+      {/* Edit Dialogs */}
+      <Dialog open={showEditTrainingDialog} onOpenChange={setShowEditTrainingDialog}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">Edit Training Session</DialogTitle>
+            <DialogDescription className="text-sm">Update the training session details</DialogDescription>
+          </DialogHeader>
+          
+          <EditTrainingFormComponent />
+          <SupervisorsMultiSelect 
+            selected={editSelectedSupervisors}
+            onToggle={handleEditSupervisorToggle}
+            searchQuery={editSupervisorSearchQuery}
+            setSearchQuery={setEditSupervisorSearchQuery}
+            disabled={!editTrainingForm.site}
+          />
+          <ManagersMultiSelect 
+            selected={editSelectedManagers}
+            onToggle={handleEditManagerToggle}
+            searchQuery={editManagerSearchQuery}
+            setSearchQuery={setEditManagerSearchQuery}
+            disabled={!editTrainingForm.site}
+          />
+          <AttachmentsSection 
+            attachments={editTrainingAttachments}
+            onUpload={handleEditTrainingFileUpload}
+            onRemove={removeEditTrainingAttachment}
+            fileInputRef={editTrainingFileInputRef}
+          />
+          
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowEditTrainingDialog(false)}>Cancel</Button>
+            <Button onClick={handleUpdateTraining} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Update Training
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={showEditBriefingDialog} onOpenChange={setShowEditBriefingDialog}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">Edit Staff Briefing</DialogTitle>
+            <DialogDescription className="text-sm">Update the staff briefing details</DialogDescription>
+          </DialogHeader>
+          
+          <EditBriefingFormComponent />
+          <SupervisorsMultiSelect 
+            selected={editSelectedSupervisors}
+            onToggle={handleEditSupervisorToggle}
+            searchQuery={editSupervisorSearchQuery}
+            setSearchQuery={setEditSupervisorSearchQuery}
+            disabled={!editBriefingForm.site}
+          />
+          <ManagersMultiSelect 
+            selected={editSelectedManagers}
+            onToggle={handleEditManagerToggle}
+            searchQuery={editManagerSearchQuery}
+            setSearchQuery={setEditManagerSearchQuery}
+            disabled={!editBriefingForm.site}
+          />
+          <ActionItemsSection 
+            actionItems={editBriefingForm.actionItems}
+            onAdd={addEditActionItem}
+            onRemove={removeEditActionItem}
+            onUpdate={updateEditActionItem}
+          />
+          <AttachmentsSection 
+            attachments={editBriefingAttachments}
+            onUpload={handleEditBriefingFileUpload}
+            onRemove={removeEditBriefingAttachment}
+            fileInputRef={editBriefingFileInputRef}
+          />
+          
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowEditBriefingDialog(false)}>Cancel</Button>
+            <Button onClick={handleUpdateBriefing} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Update Briefing
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -2443,4 +4143,10 @@ const List: React.FC<{ className?: string }> = ({ className = "h-4 w-4" }) => (
   </svg>
 );
 
-export default TrainingBriefingSection;
+const Check: React.FC<{ className?: string }> = ({ className = "h-3 w-3" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
+
+export default TrainingBriefingSectionManager;

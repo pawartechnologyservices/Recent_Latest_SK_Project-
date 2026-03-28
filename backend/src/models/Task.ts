@@ -1,3 +1,4 @@
+// backend/models/Task.ts - Complete updated Task model with visit tracking
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IHourlyUpdate {
@@ -24,12 +25,20 @@ export interface IAssignedUser {
   status: 'pending' | 'in-progress' | 'completed' | 'cancelled'; // Individual status
 }
 
+export interface IVisitHistory {
+  visitedBy: string;
+  visitedByName: string;
+  visitedAt: Date;
+  notes?: string;
+}
+
 // Define methods interface
 export interface ITaskMethods {
   isUserAssigned(userId: string): boolean;
   getUserStatus(userId: string): string | null;
   updateUserStatus(userId: string, newStatus: string): boolean;
   updateOverallStatus(): void;
+  recordVisit(managerId: string, managerName: string, notes?: string): Promise<ITask>;
 }
 
 // Combine with Document
@@ -50,6 +59,11 @@ export interface ITask extends Document, ITaskMethods {
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+  // New visit tracking fields
+  lastVisitedAt?: Date;
+  visitedBy?: string;
+  visitCount: number;
+  visitHistory: IVisitHistory[];
 }
 
 // Define the model type
@@ -128,6 +142,28 @@ const AssignedUserSchema = new Schema({
   }
 }, { _id: false });
 
+// Visit History Schema
+const VisitHistorySchema = new Schema({
+  visitedBy: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  visitedByName: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  visitedAt: {
+    type: Date,
+    default: Date.now
+  },
+  notes: {
+    type: String,
+    trim: true
+  }
+}, { _id: false });
+
 const TaskSchema: Schema<ITask, ITaskModel> = new Schema(
   {
     title: {
@@ -142,19 +178,17 @@ const TaskSchema: Schema<ITask, ITaskModel> = new Schema(
       trim: true,
       minlength: [10, 'Task description must be at least 10 characters']
     },
-   // In Task model (Task.ts), update the assignedUsers validation (around line 78)
-
-assignedUsers: {
-  type: [AssignedUserSchema],
-  default: [],
-  validate: {
-    validator: function(users: IAssignedUser[]) {
-      // Allow empty array for templates and fully staffed sites
-      return true; // Remove the requirement for at least one assignee
+    assignedUsers: {
+      type: [AssignedUserSchema],
+      default: [],
+      validate: {
+        validator: function(users: IAssignedUser[]) {
+          // Allow empty array for templates and fully staffed sites
+          return true; // Remove the requirement for at least one assignee
+        },
+        message: 'At least one assignee is required'
+      }
     },
-    message: 'At least one assignee is required'
-  }
-},
     priority: {
       type: String,
       enum: ['high', 'medium', 'low'],
@@ -219,6 +253,24 @@ assignedUsers: {
       type: String,
       required: [true, 'Creator ID is required'],
       trim: true
+    },
+    // New visit tracking fields
+    lastVisitedAt: {
+      type: Date,
+      default: null
+    },
+    visitedBy: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    visitCount: {
+      type: Number,
+      default: 0
+    },
+    visitHistory: {
+      type: [VisitHistorySchema],
+      default: []
     }
   },
   {
@@ -226,7 +278,7 @@ assignedUsers: {
   }
 );
 
-// Indexes for better query performance
+// Indexes for better query performance (existing indexes)
 TaskSchema.index({ 'assignedUsers.userId': 1 });
 TaskSchema.index({ siteId: 1 });
 TaskSchema.index({ status: 1 });
@@ -235,38 +287,59 @@ TaskSchema.index({ deadline: 1 });
 TaskSchema.index({ createdBy: 1 });
 TaskSchema.index({ createdAt: -1 });
 
-// Virtual for formatted due date
+// New indexes for visit tracking
+TaskSchema.index({ visitedBy: 1 });
+TaskSchema.index({ lastVisitedAt: -1 });
+TaskSchema.index({ visitCount: -1 });
+
+// Virtual for formatted due date (existing)
 TaskSchema.virtual('formattedDueDate').get(function(this: ITask) {
   return this.dueDateTime.toLocaleString();
 });
 
-// Virtual for formatted deadline
+// Virtual for formatted deadline (existing)
 TaskSchema.virtual('formattedDeadline').get(function(this: ITask) {
   return this.deadline.toLocaleDateString();
 });
 
-// Virtual to get assigned user names as comma-separated string
+// Virtual to get assigned user names as comma-separated string (existing)
 TaskSchema.virtual('assignedUserNames').get(function(this: ITask) {
   return this.assignedUsers.map(user => user.name).join(', ');
 });
 
-// Virtual to get assigned user IDs as array
+// Virtual to get assigned user IDs as array (existing)
 TaskSchema.virtual('assignedUserIds').get(function(this: ITask) {
   return this.assignedUsers.map(user => user.userId);
 });
 
-// Method to check if a specific user is assigned
+// New virtual for last visit formatted
+TaskSchema.virtual('formattedLastVisited').get(function(this: ITask) {
+  if (!this.lastVisitedAt) return 'Never visited';
+  return this.lastVisitedAt.toLocaleString();
+});
+
+// New virtual for visit count summary
+TaskSchema.virtual('visitSummary').get(function(this: ITask) {
+  return {
+    totalVisits: this.visitCount,
+    lastVisitedAt: this.lastVisitedAt,
+    lastVisitedBy: this.visitedBy,
+    visitHistory: this.visitHistory.slice(-5) // Last 5 visits
+  };
+});
+
+// Method to check if a specific user is assigned (existing)
 TaskSchema.methods.isUserAssigned = function(userId: string): boolean {
   return this.assignedUsers.some((user: IAssignedUser) => user.userId === userId);
 };
 
-// Method to get user's individual status
+// Method to get user's individual status (existing)
 TaskSchema.methods.getUserStatus = function(userId: string): string | null {
   const user = this.assignedUsers.find((u: IAssignedUser) => u.userId === userId);
   return user ? user.status : null;
 };
 
-// Method to update user's individual status
+// Method to update user's individual status (existing)
 TaskSchema.methods.updateUserStatus = function(userId: string, newStatus: string): boolean {
   const userIndex = this.assignedUsers.findIndex((u: IAssignedUser) => u.userId === userId);
   if (userIndex === -1) return false;
@@ -279,7 +352,7 @@ TaskSchema.methods.updateUserStatus = function(userId: string, newStatus: string
   return true;
 };
 
-// Method to update overall status based on all users' statuses
+// Method to update overall status based on all users' statuses (existing)
 TaskSchema.methods.updateOverallStatus = function() {
   const allCompleted = this.assignedUsers.every((user: IAssignedUser) => user.status === 'completed');
   const anyInProgress = this.assignedUsers.some((user: IAssignedUser) => user.status === 'in-progress');
@@ -296,7 +369,29 @@ TaskSchema.methods.updateOverallStatus = function() {
   }
 };
 
-// Pre-save middleware to ensure overall status consistency
+// NEW METHOD: Record a site visit
+TaskSchema.methods.recordVisit = function(managerId: string, managerName: string, notes?: string): Promise<ITask> {
+  this.lastVisitedAt = new Date();
+  this.visitedBy = managerId;
+  this.visitCount = (this.visitCount || 0) + 1;
+  
+  // Initialize visitHistory if not exists
+  if (!this.visitHistory) {
+    this.visitHistory = [];
+  }
+  
+  // Add to visit history
+  this.visitHistory.push({
+    visitedBy: managerId,
+    visitedByName: managerName,
+    visitedAt: new Date(),
+    notes: notes || `Site visit recorded by ${managerName}`
+  });
+  
+  return this.save();
+};
+
+// Pre-save middleware to ensure overall status consistency (existing)
 TaskSchema.pre('save', function(next) {
   if (this.assignedUsers && this.assignedUsers.length > 0) {
     this.updateOverallStatus();

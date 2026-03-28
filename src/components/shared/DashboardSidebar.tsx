@@ -24,11 +24,15 @@ import {
   Package,
   ChevronRight,
   ChevronLeft,
-  Sparkles
+  Sparkles,
+  RotateCwSquareIcon,
+  icons,
+  User2Icon
 } from "lucide-react";
 import { useRole, UserRole } from "@/context/RoleContext";
 import { motion, AnimatePresence } from "framer-motion";
 import SKLogo from "@/assets/images/SKLogo.ico"; 
+import path from "path";
 
 // Separate component for Inventory button
 const InventoryNavItem = ({ 
@@ -104,6 +108,7 @@ const getSidebarItems = (role: UserRole) => {
         { name: "ERP", icon: ClipboardList, path: "erp" },
         { name: "Billing & Finance", icon: DollarSign, path: "billing" },
         { name: "Operations", icon: ClipboardList, path: "operations" },
+         { name: "Site Visits", icon: Calendar, path: "site-visits" }, 
         { name: "Reports", icon: BarChart3, path: "reports" },
         { name: "Documents", icon: FileText, path: "documents" },
         { name: "Notifications", icon: Bell, path: "notifications" },
@@ -134,6 +139,8 @@ const getSidebarItems = (role: UserRole) => {
         { name: "Supervisors", icon: Shield, path: "supervisors" },
     { name: "Assign Task", icon: ClipboardList, path: "assigntask" },
     { name: "Operations", icon: Workflow, path: "operations" }, 
+     { name: "My Sites", icon: Building2, path: "sites" },  // ADD THIS
+    
         { name: "Reports", icon: BarChart3, path: "reports" },
         { name: "Leave", icon: Calendar, path: "leave" },
         { name: "Attendance", icon: Calendar, path: "managerattendance" },
@@ -153,8 +160,9 @@ const getSidebarItems = (role: UserRole) => {
         { name: "Attendance", icon: Calendar, path: "attendance" },
         { name: "Leave", icon: Calendar, path: "leave" },
         { name: "Reports", icon: FileText, path: "reports" },
-        // { name: "Notifications", icon: Bell, path: "notifications" },
+        { name: "Roster", icon: RotateCwSquareIcon, path: "supervisorroster" },
         { name: "Settings", icon: Settings, path: "settings" },
+        {name: "Training & Briefing", icon: User2Icon, path: "supervisortraining"},
       ];
 
     case "employee":

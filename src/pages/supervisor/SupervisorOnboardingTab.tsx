@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Plus, Upload, Trash2, Camera, X, Save, Edit, Download, Loader2, UserCheck, User } from "lucide-react";
+import { FileText, Plus, Upload, Trash2, Camera, X, Save, Edit, Download, Loader2, UserCheck, User, Building, MapPin, Users, Check, Search, ChevronDown, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import axios from "axios";
 
 // Define the API Base URL
@@ -34,7 +35,7 @@ interface Employee {
   esicNumber?: string;
   panNumber?: string;
   photo?: string;
-  // Additional fields
+  photoPublicId?: string;
   siteName?: string;
   dateOfBirth?: string;
   bloodGroup?: string;
@@ -67,6 +68,8 @@ interface Employee {
   authorizedSignature?: string;
   createdAt?: string;
   updatedAt?: string;
+  isManager?: boolean;
+  isSupervisor?: boolean;
 }
 
 interface SalaryStructure {
@@ -89,8 +92,22 @@ interface SalaryStructure {
   lopDays: number;
 }
 
+interface Site {
+  _id: string;
+  name: string;
+  clientName?: string;
+  location?: string;
+  status?: string;
+  managerCount?: number;
+  supervisorCount?: number;
+  staffDeployment?: Array<{ role: string; count: number }>;
+  totalStaff?: number;
+  currentManagerCount?: number;
+  currentSupervisorCount?: number;
+  currentStaffCount?: number;
+}
+
 interface NewEmployeeForm {
-  // Basic Information
   name: string;
   email: string;
   phone: string;
@@ -98,8 +115,6 @@ interface NewEmployeeForm {
   panNumber: string;
   esicNumber: string;
   uanNumber: string;
-  
-  // Personal Details
   siteName: string;
   dateOfBirth: string;
   dateOfJoining: string;
@@ -107,51 +122,33 @@ interface NewEmployeeForm {
   bloodGroup: string;
   gender?: string;
   maritalStatus?: string;
-  
-  // Address
   permanentAddress: string;
   permanentPincode: string;
   localAddress: string;
   localPincode: string;
-  
-  // Bank Details
   bankName: string;
   accountNumber: string;
   ifscCode: string;
   branchName: string;
-  
-  // Family Details
   fatherName: string;
   motherName: string;
   spouseName: string;
   numberOfChildren: string;
-  
-  // Emergency Contact
   emergencyContactName: string;
   emergencyContactPhone: string;
   emergencyContactRelation: string;
-  
-  // Nominee Details
   nomineeName: string;
   nomineeRelation: string;
-  
-  // Uniform Details
   pantSize: string;
   shirtSize: string;
   capSize: string;
-  
-  // Issued Items
   idCardIssued: boolean;
   westcoatIssued: boolean;
   apronIssued: boolean;
-  
-  // Employment Details
   department: string;
   position: string;
   salary: string;
-  
-  // Documents
-  photo: File | null;
+  photo: File | string | null;
   employeeSignature: File | null;
   authorizedSignature: File | null;
 }
@@ -165,27 +162,22 @@ interface EPFForm11Data {
   maritalStatus: string;
   email: string;
   mobileNumber: string;
-  
   previousEPFMember: boolean;
   previousPensionMember: boolean;
-  
   previousUAN: string;
   previousPFAccountNumber: string;
   dateOfExit: string;
   schemeCertificateNumber: string;
   pensionPaymentOrder: string;
-  
   internationalWorker: boolean;
   countryOfOrigin: string;
   passportNumber: string;
   passportValidityFrom: string;
   passportValidityTo: string;
-  
   bankAccountNumber: string;
   ifscCode: string;
   aadharNumber: string;
   panNumber: string;
-  
   firstEPFMember: boolean;
   enrolledDate: string;
   firstEmploymentWages: string;
@@ -193,18 +185,12 @@ interface EPFForm11Data {
   epfAmountWithdrawn: boolean;
   epsAmountWithdrawn: boolean;
   epsAmountWithdrawnAfterSep2014: boolean;
-  
   declarationDate: string;
   declarationPlace: string;
   employerDeclarationDate: string;
-}
-
-interface Site {
-  _id: string;
-  name: string;
-  clientName?: string;
-  location?: string;
-  status?: string;
+  kycStatus?: "not_uploaded" | "uploaded_not_approved" | "uploaded_approved";
+  transferRequestGenerated?: boolean;
+  physicalClaimFiled?: boolean;
 }
 
 interface User {
@@ -215,23 +201,23 @@ interface User {
   role: string;
 }
 
-// FIXED ERROR #2: Added sites prop to the interface
 interface OnboardingTabProps {
   employees: Employee[];
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
   salaryStructures: SalaryStructure[];
   setSalaryStructures: React.Dispatch<React.SetStateAction<SalaryStructure[]>>;
-  sites?: Site[]; // Added sites prop - now using proper Site type
+  sites?: Site[];
   newJoinees?: Employee[];
   setNewJoinees?: React.Dispatch<React.SetStateAction<Employee[]>>;
   leftEmployees?: Employee[];
   setLeftEmployees?: React.Dispatch<React.SetStateAction<Employee[]>>;
+  currentUser?: User;
 }
 
 // Departments array
 const departments = [
-  "Housekeeping Management", 
-  "Security Management", 
+  "Housekeeping", 
+  "Security", 
   "Parking Management", 
   "Waste Management", 
   "STP Tank Cleaning", 
@@ -310,19 +296,20 @@ const resetNewEmployeeForm = () => ({
   authorizedSignature: null
 });
 
-// FIXED #1: Added sites prop to function parameters and fetch supervisor sites
-const OnboardingTab = ({ 
+const SupervisorOnboardingTab = ({ 
   employees, 
   setEmployees, 
   salaryStructures, 
   setSalaryStructures,
-  sites = [], // Added sites prop with default value
+  sites = [],
   newJoinees = [],
   setNewJoinees,
   leftEmployees,
-  setLeftEmployees
+  setLeftEmployees,
+  currentUser
 }: OnboardingTabProps) => {
   const [loading, setLoading] = useState(false);
+  const [isSavingEPF, setIsSavingEPF] = useState(false);
   const [activeTab, setActiveTab] = useState("onboarding");
   const [newEmployee, setNewEmployee] = useState<NewEmployeeForm>(resetNewEmployeeForm());
   const [uploadedDocuments, setUploadedDocuments] = useState<File[]>([]);
@@ -330,6 +317,25 @@ const OnboardingTab = ({
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [createdEmployeeData, setCreatedEmployeeData] = useState<Employee | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  
+  // Site dropdown states
+  const [siteSearch, setSiteSearch] = useState("");
+  const [showSiteDropdown, setShowSiteDropdown] = useState(false);
+  const [filteredSites, setFilteredSites] = useState<Site[]>(sites);
+  const [selectedSiteDetails, setSelectedSiteDetails] = useState<Site | null>(null);
+  const [currentSiteStaffCount, setCurrentSiteStaffCount] = useState<number>(0);
+  const [availableStaffPositions, setAvailableStaffPositions] = useState<number>(0);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const signatureEmployeeRef = useRef<HTMLInputElement>(null);
+  const signatureAuthorizedRef = useRef<HTMLInputElement>(null);
+  const documentUploadRef = useRef<HTMLInputElement>(null);
+  const siteSearchRef = useRef<HTMLInputElement>(null);
+  
   const [epfFormData, setEpfFormData] = useState<EPFForm11Data>({
     memberName: "",
     fatherOrSpouseName: "",
@@ -364,103 +370,322 @@ const OnboardingTab = ({
     epsAmountWithdrawnAfterSep2014: false,
     declarationDate: new Date().toISOString().split("T")[0],
     declarationPlace: "Mumbai",
-    employerDeclarationDate: new Date().toISOString().split("T")[0]
+    employerDeclarationDate: new Date().toISOString().split("T")[0],
+    kycStatus: "not_uploaded",
+    transferRequestGenerated: false,
+    physicalClaimFiled: false
   });
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const signatureEmployeeRef = useRef<HTMLInputElement>(null);
-  const signatureAuthorizedRef = useRef<HTMLInputElement>(null);
-  const documentUploadRef = useRef<HTMLInputElement>(null);
+  // Filter sites based on search
+  useEffect(() => {
+    if (!siteSearch.trim()) {
+      setFilteredSites(sites);
+      return;
+    }
 
-  // Initialize EPF Form with employee data
-  const initializeEPFForm = (employee: Employee) => {
-    setCreatedEmployeeData(employee);
+    const searchTerm = siteSearch.toLowerCase();
+    const filtered = sites.filter(site => 
+      site.name.toLowerCase().includes(searchTerm) ||
+      (site.clientName && site.clientName.toLowerCase().includes(searchTerm)) ||
+      (site.location && site.location.toLowerCase().includes(searchTerm))
+    );
+    setFilteredSites(filtered);
+  }, [siteSearch, sites]);
+
+  // Calculate regular staff count for a site
+  const calculateRegularStaffCount = (site: Site | null): number => {
+    if (!site) return 0;
     
-    const today = new Date().toISOString().split("T")[0];
-    
-    // Safely get salary with fallbacks
-    let salaryValue = 0;
-    if (employee.salary) {
-      salaryValue = typeof employee.salary === 'string' 
-        ? parseFloat(employee.salary) 
-        : Number(employee.salary) || 0;
+    if (site.staffDeployment && Array.isArray(site.staffDeployment)) {
+      const totalStaff = site.staffDeployment.reduce((sum, item) => sum + (item.count || 0), 0);
+      const managerCount = site.staffDeployment.find(item => item.role?.toLowerCase() === "manager")?.count || 0;
+      const supervisorCount = site.staffDeployment.find(item => item.role?.toLowerCase() === "supervisor")?.count || 0;
+      return totalStaff - managerCount - supervisorCount;
     }
     
-    // Safely get other properties with fallbacks
-    const epfData: EPFForm11Data = {
-      memberName: employee.name || "",
-      fatherOrSpouseName: employee.fatherName || employee.spouseName || "",
-      relationshipType: employee.fatherName ? "father" : "spouse",
-      dateOfBirth: employee.dateOfBirth || "",
-      gender: employee.gender || "",
-      maritalStatus: employee.maritalStatus || "",
-      email: employee.email || "",
-      mobileNumber: employee.phone || "",
-      
-      previousEPFMember: false,
-      previousPensionMember: false,
-      
-      previousUAN: employee.uanNumber || employee.uan || "",
-      previousPFAccountNumber: "",
-      dateOfExit: "",
-      schemeCertificateNumber: "",
-      pensionPaymentOrder: "",
-      
-      internationalWorker: false,
-      countryOfOrigin: "",
-      passportNumber: "",
-      passportValidityFrom: "",
-      passportValidityTo: "",
-      
-      bankAccountNumber: employee.accountNumber || "",
-      ifscCode: employee.ifscCode || "",
-      aadharNumber: employee.aadharNumber || "",
-      panNumber: employee.panNumber || "",
-      
-      firstEPFMember: true,
-      enrolledDate: employee.joinDate || employee.dateOfJoining || today,
-      firstEmploymentWages: salaryValue.toString() || "0",
-      epfMemberBeforeSep2014: false,
-      epfAmountWithdrawn: false,
-      epsAmountWithdrawn: false,
-      epsAmountWithdrawnAfterSep2014: false,
-      
-      declarationDate: today,
-      declarationPlace: "Mumbai",
-      employerDeclarationDate: today
-    };
-    
-    setEpfFormData(epfData);
-    setActiveTab("epf-form");
-    toast.success("Employee created successfully! Please fill EPF Form 11.");
+    const totalStaff = site.totalStaff || 0;
+    const managerCount = site.managerCount || 0;
+    const supervisorCount = site.supervisorCount || 0;
+    return totalStaff - managerCount - supervisorCount;
   };
 
-  const isAutoFilledField = (fieldName: keyof EPFForm11Data): boolean => {
-    const autoFilledFields: (keyof EPFForm11Data)[] = [
-      'memberName',
-      'fatherOrSpouseName',
-      'dateOfBirth',
-      'gender',
-      'maritalStatus',
-      'email',
-      'mobileNumber',
-      'aadharNumber',
-      'panNumber',
-      'bankAccountNumber',
-      'ifscCode',
-      'enrolledDate',
-      'firstEmploymentWages'
-    ];
-    
-    return autoFilledFields.includes(fieldName);
+  // Calculate current staff count for selected site
+  useEffect(() => {
+    if (newEmployee.siteName && sites.length > 0) {
+      const site = sites.find(s => s.name === newEmployee.siteName);
+      setSelectedSiteDetails(site || null);
+      
+      if (site) {
+        const siteEmployees = employees.filter(emp => 
+          emp.siteName === site.name && 
+          emp.status === "active"
+        );
+        setCurrentSiteStaffCount(siteEmployees.length);
+        
+        const regularStaffCount = calculateRegularStaffCount(site);
+        setAvailableStaffPositions(regularStaffCount);
+      }
+    } else {
+      setSelectedSiteDetails(null);
+      setCurrentSiteStaffCount(0);
+      setAvailableStaffPositions(0);
+    }
+  }, [newEmployee.siteName, sites, employees]);
+
+  // Check if site has available positions
+  const hasAvailablePositions = (site: Site | null): boolean => {
+    if (!site) return false;
+    const regularStaffCount = calculateRegularStaffCount(site);
+    const siteEmployees = employees.filter(emp => 
+      emp.siteName === site.name && 
+      emp.status === "active"
+    );
+    return siteEmployees.length < regularStaffCount;
   };
 
-  // Camera functions
+  // Handle site selection
+  const handleSiteSelect = (site: Site) => {
+    if (!hasAvailablePositions(site)) {
+      toast.error(`Cannot select "${site.name}": Site has reached its regular staff capacity.`);
+      return;
+    }
+    setNewEmployee(prev => ({ ...prev, siteName: site.name }));
+    setShowSiteDropdown(false);
+    setSiteSearch("");
+    toast.success(`Selected site: ${site.name}`);
+  };
+
+  // Clear site selection
+  const handleClearSite = () => {
+    setNewEmployee(prev => ({ ...prev, siteName: "" }));
+    setSiteSearch("");
+  };
+
+  // Get available positions count
+  const getAvailablePositions = (site: Site | null): number => {
+    if (!site) return 0;
+    const regularStaffCount = calculateRegularStaffCount(site);
+    const siteEmployees = employees.filter(emp => 
+      emp.siteName === site.name && 
+      emp.status === "active"
+    );
+    return Math.max(0, regularStaffCount - siteEmployees.length);
+  };
+
+  // Site Dropdown Component
+  const SiteDropdown = () => (
+    <div className="relative w-full">
+      <div className="relative">
+        <div 
+          className={`flex items-center justify-between w-full px-3 py-2.5 text-sm border rounded-md cursor-pointer hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
+            newEmployee.siteName && selectedSiteDetails && !hasAvailablePositions(selectedSiteDetails) ? 'border-amber-300 bg-amber-50' : 'border-gray-300'
+          }`}
+          onClick={() => {
+            setShowSiteDropdown(!showSiteDropdown);
+            if (!showSiteDropdown) {
+              setTimeout(() => siteSearchRef.current?.focus(), 100);
+            }
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {newEmployee.siteName ? (
+              <>
+                <Building className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                <span className="truncate font-medium text-gray-900">
+                  {newEmployee.siteName}
+                </span>
+              </>
+            ) : (
+              <span className="text-gray-500 truncate">Select a site...</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {newEmployee.siteName && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0 hover:bg-gray-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClearSite();
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+            <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${showSiteDropdown ? 'rotate-180' : ''}`} />
+          </div>
+        </div>
+        
+        {showSiteDropdown && (
+          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-80 overflow-hidden">
+            {/* Search Header */}
+            <div className="sticky top-0 bg-white border-b p-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  ref={siteSearchRef}
+                  type="text"
+                  placeholder="Search sites..."
+                  value={siteSearch}
+                  onChange={(e) => setSiteSearch(e.target.value)}
+                  className="pl-9 w-full text-sm h-9"
+                  autoFocus
+                />
+              </div>
+            </div>
+            
+            {/* Sites List */}
+            <div className="overflow-y-auto max-h-64">
+              {filteredSites.length === 0 ? (
+                <div className="p-6 text-center">
+                  <Search className="h-8 w-8 mx-auto text-gray-300" />
+                  <p className="text-sm font-medium text-gray-700 mt-2">No sites found</p>
+                </div>
+              ) : (
+                filteredSites.map((site) => {
+                  const availablePositions = getAvailablePositions(site);
+                  const isFull = availablePositions <= 0;
+                  const siteEmployees = employees.filter(emp => 
+                    emp.siteName === site.name && 
+                    emp.status === "active"
+                  );
+                  const regularStaffCount = calculateRegularStaffCount(site);
+                  
+                  return (
+                    <div
+                      key={site._id}
+                      className={`px-3 py-3 text-sm cursor-pointer transition-colors hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                        newEmployee.siteName === site.name ? "bg-blue-50 border-l-4 border-l-blue-500" : ""
+                      } ${isFull ? 'opacity-60' : ''}`}
+                      onClick={() => !isFull && handleSiteSelect(site)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full flex-shrink-0 ${site.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                            <span className={`font-medium truncate ${newEmployee.siteName === site.name ? 'text-blue-700' : 'text-gray-900'}`}>
+                              {site.name}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-1.5">
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <Building className="h-3 w-3" />
+                              <span className="truncate">Client: {site.clientName || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate">{site.location || 'Location not specified'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <Users className="h-3 w-3" />
+                              <span>Regular Staff: {regularStaffCount}</span>
+                              <span className="text-gray-400 mx-1">|</span>
+                              <span className={isFull ? 'text-red-600 font-medium' : 'text-green-600'}>
+                                Available: {availablePositions}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span>Current: {siteEmployees.length}</span>
+                              <span className="text-gray-300">|</span>
+                              <span>Capacity: {regularStaffCount}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="ml-2 flex-shrink-0">
+                          <Badge 
+                            variant={site.status === 'active' ? "default" : "secondary"}
+                            className={`text-xs ${site.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                          >
+                            {site.status === 'active' ? 'Active' : 'Inactive'}
+                          </Badge>
+                          {isFull && (
+                            <Badge variant="destructive" className="text-xs mt-1 block text-center">
+                              Full
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {isFull && (
+                        <div className="mt-2 text-xs text-red-600 bg-red-50 p-1 rounded">
+                          No regular staff positions available
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Click outside to close dropdown */}
+      {showSiteDropdown && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setShowSiteDropdown(false)}
+        />
+      )}
+      
+      {/* Site Status Display */}
+      {newEmployee.siteName && selectedSiteDetails && (
+        <div className="mt-2 space-y-2">
+          <div className={`p-3 rounded-md ${
+            currentSiteStaffCount >= availableStaffPositions 
+              ? 'bg-red-50 border border-red-200' 
+              : 'bg-green-50 border border-green-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Staff Status:</span>
+              <Badge variant={currentSiteStaffCount >= availableStaffPositions ? "destructive" : "default"}>
+                {currentSiteStaffCount}/{availableStaffPositions} Staff
+              </Badge>
+            </div>
+            <div className="mt-2 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span>Regular Staff Capacity:</span>
+                <span className="font-medium">{availableStaffPositions}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Currently Onboarded:</span>
+                <span className="font-medium">{currentSiteStaffCount}</span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>Available Positions:</span>
+                <span className={availableStaffPositions - currentSiteStaffCount <= 0 ? 'text-red-600' : 'text-green-600'}>
+                  {Math.max(0, availableStaffPositions - currentSiteStaffCount)}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {currentSiteStaffCount >= availableStaffPositions && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+              ⚠️ This site has reached its regular staff capacity. No more regular staff can be onboarded.
+            </div>
+          )}
+        </div>
+      )}
+      
+      {!newEmployee.siteName && (
+        <div className="text-xs text-amber-600 mt-1">
+          Required field. Select from available sites.
+        </div>
+      )}
+    </div>
+  );
+
+  // Camera functions - FIXED
   const startCamera = async () => {
     try {
+      if (streamRef.current) {
+        stopCamera();
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'user',
@@ -468,17 +693,31 @@ const OnboardingTab = ({
           height: { ideal: 720 }
         } 
       });
+      
       streamRef.current = stream;
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(error => {
-          console.error("Error playing video:", error);
-        });
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(error => {
+            console.error("Error playing video:", error);
+          });
+        };
       }
+      
       setShowCamera(true);
-    } catch (error) {
+      setCapturedImage(null);
+      toast.success("Camera started successfully");
+      
+    } catch (error: any) {
       console.error("Error accessing camera:", error);
-      toast.error("Cannot access camera. Please check permissions and try again.");
+      if (error.name === 'NotAllowedError') {
+        toast.error("Camera permission denied. Please allow camera access.");
+      } else if (error.name === 'NotFoundError') {
+        toast.error("No camera found on this device.");
+      } else {
+        toast.error("Cannot access camera. Please check permissions.");
+      }
     }
   };
 
@@ -491,17 +730,18 @@ const OnboardingTab = ({
       if (context) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        const imageData = canvas.toDataURL('image/jpeg', 0.9);
         setCapturedImage(imageData);
+        stopCamera();
+        toast.success("Photo captured successfully!");
       }
     }
   };
 
   const retakePhoto = () => {
     setCapturedImage(null);
+    startCamera();
   };
 
   const useCapturedPhoto = () => {
@@ -509,18 +749,19 @@ const OnboardingTab = ({
       fetch(capturedImage)
         .then(res => res.blob())
         .then(blob => {
-          const file = new File([blob], 'employee-photo.jpg', { type: 'image/jpeg' });
+          const file = new File([blob], `employee-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
           setNewEmployee({...newEmployee, photo: file});
-          toast.success("Photo captured successfully!");
+          const previewUrl = URL.createObjectURL(file);
+          setPhotoPreview(previewUrl);
+          toast.success("Photo added successfully!");
+          setShowCamera(false);
+          setCapturedImage(null);
         })
         .catch(error => {
           console.error("Error converting photo:", error);
           toast.error("Error processing photo. Please try again.");
         });
     }
-    stopCamera();
-    setShowCamera(false);
-    setCapturedImage(null);
   };
 
   const stopCamera = () => {
@@ -530,13 +771,19 @@ const OnboardingTab = ({
       });
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
   };
 
   useEffect(() => {
     return () => {
       stopCamera();
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
     };
-  }, []);
+  }, [photoPreview]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -546,269 +793,319 @@ const OnboardingTab = ({
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            const MAX_WIDTH = 400;
-            const MAX_HEIGHT = 400;
-            let { width, height } = img;
-
-            if (width > height) {
-              if (width > MAX_WIDTH) {
-                height *= MAX_WIDTH / width;
-                width = MAX_WIDTH;
-              }
-            } else {
-              if (height > MAX_HEIGHT) {
-                width *= MAX_HEIGHT / height;
-                height = MAX_HEIGHT;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob((blob) => {
-              if (blob) {
-                const compressedFile = new File([blob], file.name, { 
-                  type: 'image/jpeg', 
-                  lastModified: Date.now() 
-                });
-                setNewEmployee({...newEmployee, photo: compressedFile});
-                toast.success("Photo uploaded and compressed successfully!");
-              }
-            }, 'image/jpeg', 0.8);
-          }
-        };
-        img.onerror = () => {
-          toast.error("Error loading image. Please try another file.");
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => {
-        toast.error("Error reading file. Please try again.");
-      };
-      reader.readAsDataURL(file);
+      const previewUrl = URL.createObjectURL(file);
+      setPhotoPreview(previewUrl);
+      setNewEmployee({...newEmployee, photo: file});
+      toast.success("Photo selected successfully!");
+      
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
-const handleAddEmployee = async () => {
-  // Validate required fields
-  if (!newEmployee.name || !newEmployee.email || !newEmployee.aadharNumber || !newEmployee.position || !newEmployee.department) {
-    toast.error("Please fill all required fields (Name, Email, Aadhar Number, Position, Department)");
-    return;
-  }
+  const handleRemovePhoto = () => {
+    setNewEmployee({...newEmployee, photo: null});
+    if (photoPreview) {
+      URL.revokeObjectURL(photoPreview);
+      setPhotoPreview(null);
+    }
+  };
 
-  // Validate phone number
-  if (newEmployee.phone && !/^\d{10}$/.test(newEmployee.phone)) {
-    toast.error("Please enter a valid 10-digit phone number");
-    return;
-  }
+  const handleAddEmployee = async () => {
+    // Validate required fields (email is optional)
+    const requiredFields = [
+      { field: newEmployee.name, name: 'Name' },
+      { field: newEmployee.aadharNumber, name: 'Aadhar Number' },
+      { field: newEmployee.position, name: 'Position' },
+      { field: newEmployee.department, name: 'Department' },
+      { field: newEmployee.siteName, name: 'Site Name' },
+      { field: newEmployee.salary, name: 'Salary' }
+    ];
 
-  // Validate Aadhar number
-  if (!/^\d{12}$/.test(newEmployee.aadharNumber)) {
-    toast.error("Please enter a valid 12-digit Aadhar number");
-    return;
-  }
+    const missingFields = requiredFields
+      .filter(item => !item.field || item.field.trim() === '')
+      .map(item => item.name);
 
-  // Validate PAN number if provided
-  if (newEmployee.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(newEmployee.panNumber.toUpperCase())) {
-    toast.error("Please enter a valid PAN number (format: ABCDE1234F)");
-    return;
-  }
-
-  // Validate salary
-  if (!newEmployee.salary || parseFloat(newEmployee.salary) <= 0) {
-    toast.error("Please enter a valid salary amount");
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    // Create FormData object
-    const formData = new FormData();
-
-    // Add employee photo if exists
-    if (newEmployee.photo instanceof File) {
-      formData.append('photo', newEmployee.photo);
+    if (missingFields.length > 0) {
+      toast.error(`Please fill all required fields: ${missingFields.join(', ')}`);
+      return;
     }
 
-    // Add employee signature if exists
-    if (newEmployee.employeeSignature instanceof File) {
-      formData.append('employeeSignature', newEmployee.employeeSignature);
+    // Generate email if not provided
+    let finalEmail = newEmployee.email?.trim() || '';
+    if (!finalEmail && newEmployee.name) {
+      const nameParts = newEmployee.name.toLowerCase().split(' ');
+      const firstName = nameParts[0]?.replace(/[^a-z]/g, '') || 'employee';
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].replace(/[^a-z]/g, '') : '';
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      finalEmail = `${firstName}${lastName ? '.' + lastName : ''}${randomNum}@skenterprises.com`.toLowerCase();
+    } else if (!finalEmail) {
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      finalEmail = `employee${randomNum}@skenterprises.com`.toLowerCase();
     }
 
-    // Add authorized signature if exists
-    if (newEmployee.authorizedSignature instanceof File) {
-      formData.append('authorizedSignature', newEmployee.authorizedSignature);
-    }
-
-    // Add other form data
-    const employeeDataToSend = {
-      name: newEmployee.name,
-      email: newEmployee.email,
-      phone: newEmployee.phone,
-      aadharNumber: newEmployee.aadharNumber,
-      panNumber: newEmployee.panNumber?.toUpperCase() || '',
-      esicNumber: newEmployee.esicNumber,
-      uanNumber: newEmployee.uanNumber,
-      siteName: newEmployee.siteName,
-      dateOfBirth: newEmployee.dateOfBirth,
-      dateOfJoining: newEmployee.dateOfJoining,
-      dateOfExit: newEmployee.dateOfExit,
-      bloodGroup: newEmployee.bloodGroup,
-      gender: newEmployee.gender,
-      maritalStatus: newEmployee.maritalStatus,
-      permanentAddress: newEmployee.permanentAddress,
-      permanentPincode: newEmployee.permanentPincode,
-      localAddress: newEmployee.localAddress,
-      localPincode: newEmployee.localPincode,
-      bankName: newEmployee.bankName,
-      accountNumber: newEmployee.accountNumber,
-      ifscCode: newEmployee.ifscCode.toUpperCase(),
-      branchName: newEmployee.branchName,
-      fatherName: newEmployee.fatherName,
-      motherName: newEmployee.motherName,
-      spouseName: newEmployee.spouseName,
-      numberOfChildren: newEmployee.numberOfChildren,
-      emergencyContactName: newEmployee.emergencyContactName,
-      emergencyContactPhone: newEmployee.emergencyContactPhone,
-      emergencyContactRelation: newEmployee.emergencyContactRelation,
-      nomineeName: newEmployee.nomineeName,
-      nomineeRelation: newEmployee.nomineeRelation,
-      pantSize: newEmployee.pantSize,
-      shirtSize: newEmployee.shirtSize,
-      capSize: newEmployee.capSize,
-      idCardIssued: newEmployee.idCardIssued,
-      westcoatIssued: newEmployee.westcoatIssued,
-      apronIssued: newEmployee.apronIssued,
-      department: newEmployee.department,
-      position: newEmployee.position,
-      salary: newEmployee.salary
-    };
-
-    // Append all other data
-    Object.entries(employeeDataToSend).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        formData.append(key, value.toString());
+    // Validate email format if provided
+    if (finalEmail && finalEmail.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(finalEmail)) {
+        toast.error("Please enter a valid email address");
+        return;
       }
-    });
-
-    console.log('Sending employee data to backend...');
-
-    const response = await fetch(`${API_URL}/employees`, {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || data.error || "Failed to create employee");
     }
 
-    // Check different response formats
-    let createdEmployee;
+    // Validate phone number - optional
+    if (newEmployee.phone && !/^\d{10}$/.test(newEmployee.phone)) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
+
+    // Validate Aadhar number
+    if (!/^\d{12}$/.test(newEmployee.aadharNumber)) {
+      toast.error("Please enter a valid 12-digit Aadhar number");
+      return;
+    }
+
+    // Validate PAN number if provided
+    if (newEmployee.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(newEmployee.panNumber.toUpperCase())) {
+      toast.error("Please enter a valid PAN number (format: ABCDE1234F)");
+      return;
+    }
+
+    // Validate salary
+    const salaryValue = parseFloat(newEmployee.salary);
+    if (isNaN(salaryValue) || salaryValue <= 0) {
+      toast.error("Please enter a valid salary amount greater than 0");
+      return;
+    }
+
+    // Validate site capacity
+    if (selectedSiteDetails) {
+      const regularStaffCount = calculateRegularStaffCount(selectedSiteDetails);
+      const siteEmployees = employees.filter(emp => 
+        emp.siteName === selectedSiteDetails.name && 
+        emp.status === "active"
+      );
+      
+      if (siteEmployees.length >= regularStaffCount) {
+        toast.error(`Cannot onboard employee: Site "${selectedSiteDetails.name}" has reached its regular staff capacity (${regularStaffCount} staff).`);
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+
+      if (newEmployee.photo instanceof File) {
+        formData.append('photo', newEmployee.photo);
+      }
+
+      if (newEmployee.employeeSignature instanceof File) {
+        formData.append('employeeSignature', newEmployee.employeeSignature);
+      }
+
+      if (newEmployee.authorizedSignature instanceof File) {
+        formData.append('authorizedSignature', newEmployee.authorizedSignature);
+      }
+
+      const employeeDataToSend = {
+        name: newEmployee.name.trim(),
+        email: finalEmail,
+        phone: newEmployee.phone?.trim() || '',
+        aadharNumber: newEmployee.aadharNumber.replace(/\s/g, ''),
+        panNumber: newEmployee.panNumber?.toUpperCase().replace(/\s/g, '') || '',
+        esicNumber: newEmployee.esicNumber?.trim() || '',
+        uanNumber: newEmployee.uanNumber?.trim() || '',
+        siteName: newEmployee.siteName.trim(),
+        dateOfBirth: newEmployee.dateOfBirth || '',
+        dateOfJoining: newEmployee.dateOfJoining || new Date().toISOString().split("T")[0],
+        dateOfExit: newEmployee.dateOfExit || '',
+        bloodGroup: newEmployee.bloodGroup || '',
+        gender: newEmployee.gender || '',
+        maritalStatus: newEmployee.maritalStatus || '',
+        permanentAddress: newEmployee.permanentAddress?.trim() || '',
+        permanentPincode: newEmployee.permanentPincode?.trim() || '',
+        localAddress: newEmployee.localAddress?.trim() || '',
+        localPincode: newEmployee.localPincode?.trim() || '',
+        bankName: newEmployee.bankName?.trim() || '',
+        accountNumber: newEmployee.accountNumber?.replace(/\s/g, '') || '',
+        ifscCode: newEmployee.ifscCode?.toUpperCase().replace(/\s/g, '') || '',
+        branchName: newEmployee.branchName?.trim() || '',
+        fatherName: newEmployee.fatherName?.trim() || '',
+        motherName: newEmployee.motherName?.trim() || '',
+        spouseName: newEmployee.spouseName?.trim() || '',
+        numberOfChildren: newEmployee.numberOfChildren?.trim() || '',
+        emergencyContactName: newEmployee.emergencyContactName?.trim() || '',
+        emergencyContactPhone: newEmployee.emergencyContactPhone?.trim() || '',
+        emergencyContactRelation: newEmployee.emergencyContactRelation?.trim() || '',
+        nomineeName: newEmployee.nomineeName?.trim() || '',
+        nomineeRelation: newEmployee.nomineeRelation?.trim() || '',
+        pantSize: newEmployee.pantSize || '',
+        shirtSize: newEmployee.shirtSize || '',
+        capSize: newEmployee.capSize || '',
+        idCardIssued: newEmployee.idCardIssued,
+        westcoatIssued: newEmployee.westcoatIssued,
+        apronIssued: newEmployee.apronIssued,
+        department: newEmployee.department.trim(),
+        position: newEmployee.position.trim(),
+        salary: salaryValue.toString()
+      };
+
+      Object.entries(employeeDataToSend).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          formData.append(key, value.toString());
+        }
+      });
+
+      const response = await fetch(`${API_URL}/employees`, {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to create employee");
+      }
+
+      toast.success("Employee created successfully!");
+      
+      const createdEmployee = data.employee || data.data || data;
+      
+      if (!createdEmployee) {
+        throw new Error('No employee data returned from server');
+      }
+      
+      const processedEmployee: Employee = {
+        _id: createdEmployee._id,
+        employeeId: createdEmployee.employeeId,
+        name: createdEmployee.name,
+        email: createdEmployee.email,
+        phone: createdEmployee.phone,
+        aadharNumber: createdEmployee.aadharNumber,
+        department: createdEmployee.department,
+        position: createdEmployee.position,
+        joinDate: createdEmployee.joinDate || createdEmployee.dateOfJoining,
+        dateOfJoining: createdEmployee.dateOfJoining,
+        status: createdEmployee.status || 'active',
+        salary: createdEmployee.salary || 0,
+        uanNumber: createdEmployee.uanNumber,
+        uan: createdEmployee.uan,
+        esicNumber: createdEmployee.esicNumber,
+        panNumber: createdEmployee.panNumber,
+        photo: createdEmployee.photo,
+        photoPublicId: createdEmployee.photoPublicId,
+        siteName: createdEmployee.siteName,
+        dateOfBirth: createdEmployee.dateOfBirth,
+        bloodGroup: createdEmployee.bloodGroup,
+        gender: createdEmployee.gender,
+        maritalStatus: createdEmployee.maritalStatus,
+        permanentAddress: createdEmployee.permanentAddress,
+        permanentPincode: createdEmployee.permanentPincode,
+        localAddress: createdEmployee.localAddress,
+        localPincode: createdEmployee.localPincode,
+        bankName: createdEmployee.bankName,
+        accountNumber: createdEmployee.accountNumber,
+        ifscCode: createdEmployee.ifscCode,
+        branchName: createdEmployee.branchName,
+        fatherName: createdEmployee.fatherName,
+        motherName: createdEmployee.motherName,
+        spouseName: createdEmployee.spouseName,
+        numberOfChildren: createdEmployee.numberOfChildren,
+        emergencyContactName: createdEmployee.emergencyContactName,
+        emergencyContactPhone: createdEmployee.emergencyContactPhone,
+        emergencyContactRelation: createdEmployee.emergencyContactRelation,
+        nomineeName: createdEmployee.nomineeName,
+        nomineeRelation: createdEmployee.nomineeRelation,
+        pantSize: createdEmployee.pantSize,
+        shirtSize: createdEmployee.shirtSize,
+        capSize: createdEmployee.capSize,
+        idCardIssued: createdEmployee.idCardIssued || false,
+        westcoatIssued: createdEmployee.westcoatIssued || false,
+        apronIssued: createdEmployee.apronIssued || false,
+        employeeSignature: createdEmployee.employeeSignature,
+        authorizedSignature: createdEmployee.authorizedSignature,
+        createdAt: createdEmployee.createdAt,
+        updatedAt: createdEmployee.updatedAt
+      };
+      
+      setEmployees(prev => [...prev, processedEmployee]);
+      
+      setNewEmployee(resetNewEmployeeForm());
+      setUploadedDocuments([]);
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+        setPhotoPreview(null);
+      }
+      
+      initializeEPFForm(processedEmployee);
+
+    } catch (error: any) {
+      console.error("Error creating employee:", error);
+      toast.error(error.message || "Error creating employee. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeEPFForm = (employee: Employee) => {
+    setCreatedEmployeeData(employee);
     
-    if (data.employee) {
-      // Format: { success: true, employee: {...} }
-      createdEmployee = data.employee;
-    } else if (data.data) {
-      // Format: { success: true, data: {...} }
-      createdEmployee = data.data;
-    } else if (data.employees && data.employees.length > 0) {
-      // Format: { success: true, employees: [...] }
-      createdEmployee = data.employees[0];
-    } else if (data._id) {
-      // Format: direct employee object
-      createdEmployee = data;
-    }
-
-    console.log('Created employee data:', createdEmployee);
-
-    if (!createdEmployee) {
-      console.error('Server response:', data);
-      throw new Error('No employee data returned from server. Server response: ' + JSON.stringify(data));
-    }
-
-    toast.success("Employee created successfully!");
+    const today = new Date().toISOString().split("T")[0];
     
-    // Ensure the employee object has all required properties
-    const processedEmployee: Employee = {
-      _id: createdEmployee._id,
-      employeeId: createdEmployee.employeeId,
-      name: createdEmployee.name,
-      email: createdEmployee.email,
-      phone: createdEmployee.phone,
-      aadharNumber: createdEmployee.aadharNumber,
-      department: createdEmployee.department,
-      position: createdEmployee.position,
-      joinDate: createdEmployee.joinDate || createdEmployee.dateOfJoining,
-      dateOfJoining: createdEmployee.dateOfJoining,
-      status: createdEmployee.status || 'active',
-      salary: createdEmployee.salary || 0,
-      uanNumber: createdEmployee.uanNumber,
-      uan: createdEmployee.uan,
-      esicNumber: createdEmployee.esicNumber,
-      panNumber: createdEmployee.panNumber,
-      photo: createdEmployee.photo,
-      siteName: createdEmployee.siteName,
-      dateOfBirth: createdEmployee.dateOfBirth,
-      bloodGroup: createdEmployee.bloodGroup,
-      gender: createdEmployee.gender,
-      maritalStatus: createdEmployee.maritalStatus,
-      permanentAddress: createdEmployee.permanentAddress,
-      permanentPincode: createdEmployee.permanentPincode,
-      localAddress: createdEmployee.localAddress,
-      localPincode: createdEmployee.localPincode,
-      bankName: createdEmployee.bankName,
-      accountNumber: createdEmployee.accountNumber,
-      ifscCode: createdEmployee.ifscCode,
-      branchName: createdEmployee.branchName,
-      fatherName: createdEmployee.fatherName,
-      motherName: createdEmployee.motherName,
-      spouseName: createdEmployee.spouseName,
-      numberOfChildren: createdEmployee.numberOfChildren,
-      emergencyContactName: createdEmployee.emergencyContactName,
-      emergencyContactPhone: createdEmployee.emergencyContactPhone,
-      emergencyContactRelation: createdEmployee.emergencyContactRelation,
-      nomineeName: createdEmployee.nomineeName,
-      nomineeRelation: createdEmployee.nomineeRelation,
-      pantSize: createdEmployee.pantSize,
-      shirtSize: createdEmployee.shirtSize,
-      capSize: createdEmployee.capSize,
-      idCardIssued: createdEmployee.idCardIssued || false,
-      westcoatIssued: createdEmployee.westcoatIssued || false,
-      apronIssued: createdEmployee.apronIssued || false,
-      employeeSignature: createdEmployee.employeeSignature,
-      authorizedSignature: createdEmployee.authorizedSignature,
-      createdAt: createdEmployee.createdAt,
-      updatedAt: createdEmployee.updatedAt
+    let salaryValue = 0;
+    if (employee.salary) {
+      salaryValue = typeof employee.salary === 'string' 
+        ? parseFloat(employee.salary) 
+        : Number(employee.salary) || 0;
+    }
+    
+    const epfData: EPFForm11Data = {
+      memberName: employee.name || "",
+      fatherOrSpouseName: employee.fatherName || employee.spouseName || "",
+      relationshipType: employee.fatherName ? "father" : "spouse",
+      dateOfBirth: employee.dateOfBirth || "",
+      gender: employee.gender || "",
+      maritalStatus: employee.maritalStatus || "",
+      email: employee.email || "",
+      mobileNumber: employee.phone || "",
+      previousEPFMember: false,
+      previousPensionMember: false,
+      previousUAN: employee.uanNumber || employee.uan || "",
+      previousPFAccountNumber: "",
+      dateOfExit: "",
+      schemeCertificateNumber: "",
+      pensionPaymentOrder: "",
+      internationalWorker: false,
+      countryOfOrigin: "",
+      passportNumber: "",
+      passportValidityFrom: "",
+      passportValidityTo: "",
+      bankAccountNumber: employee.accountNumber || "",
+      ifscCode: employee.ifscCode || "",
+      aadharNumber: employee.aadharNumber || "",
+      panNumber: employee.panNumber || "",
+      firstEPFMember: true,
+      enrolledDate: employee.joinDate || employee.dateOfJoining || today,
+      firstEmploymentWages: salaryValue.toString() || "0",
+      epfMemberBeforeSep2014: false,
+      epfAmountWithdrawn: false,
+      epsAmountWithdrawn: false,
+      epsAmountWithdrawnAfterSep2014: false,
+      declarationDate: today,
+      declarationPlace: "Mumbai",
+      employerDeclarationDate: today,
+      kycStatus: "not_uploaded",
+      transferRequestGenerated: false,
+      physicalClaimFiled: false
     };
     
-    // Update employees list with the new employee
-    setEmployees(prev => [...prev, processedEmployee]);
-    
-    // Reset form FIRST
-    setNewEmployee(resetNewEmployeeForm());
-    setUploadedDocuments([]);
-    
-    // Then initialize EPF Form and switch tabs
-    initializeEPFForm(processedEmployee);
-
-  } catch (error: any) {
-    console.error("Error creating employee:", error);
-    toast.error(error.message || "Error creating employee. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+    setEpfFormData(epfData);
+    setActiveTab("epf-form");
+    toast.success("Employee created successfully! Please fill EPF Form 11.");
+  };
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -848,24 +1145,23 @@ const handleAddEmployee = async () => {
       return;
     }
 
-    // Validate Aadhar number
     if (!/^\d{12}$/.test(epfFormData.aadharNumber)) {
       toast.error("Please enter a valid 12-digit Aadhar number");
       return;
     }
 
-    // Validate PAN number if provided
     if (epfFormData.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(epfFormData.panNumber)) {
       toast.error("Please enter a valid PAN number (format: ABCDE1234F)");
       return;
     }
 
     try {
-      // Use _id (MongoDB ObjectId) instead of employeeId
+      setIsSavingEPF(true);
+      
       const employeeId = createdEmployeeData._id;
       
       if (!employeeId) {
-        toast.error("Invalid employee data");
+        toast.error("Invalid employee data - missing ID");
         return;
       }
       
@@ -879,9 +1175,9 @@ const handleAddEmployee = async () => {
           employeeId: employeeId,
           employeeNumber: createdEmployeeData.employeeId,
           firstEmploymentWages: parseFloat(epfFormData.firstEmploymentWages) || 0,
-          enrolledDate: new Date(epfFormData.enrolledDate || createdEmployeeData.joinDate || createdEmployeeData.dateOfJoining || new Date()),
-          declarationDate: new Date(epfFormData.declarationDate || new Date()),
-          employerDeclarationDate: new Date(epfFormData.employerDeclarationDate || new Date())
+          enrolledDate: epfFormData.enrolledDate || createdEmployeeData.joinDate || createdEmployeeData.dateOfJoining || new Date().toISOString().split('T')[0],
+          declarationDate: epfFormData.declarationDate || new Date().toISOString().split('T')[0],
+          employerDeclarationDate: epfFormData.employerDeclarationDate || new Date().toISOString().split('T')[0]
         })
       });
 
@@ -895,7 +1191,6 @@ const handleAddEmployee = async () => {
         toast.success("EPF Form saved successfully!");
         setActiveTab("onboarding");
         setCreatedEmployeeData(null);
-        // Reset EPF form data
         setEpfFormData({
           memberName: "",
           fatherOrSpouseName: "",
@@ -938,10 +1233,14 @@ const handleAddEmployee = async () => {
     } catch (error: any) {
       console.error("Error saving EPF Form:", error);
       toast.error(error.message || "Error saving EPF Form");
+    } finally {
+      setIsSavingEPF(false);
     }
   };
 
   const handlePrintEPFForm = () => {
+    if (!createdEmployeeData) return;
+    
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       toast.error("Please allow popups to print forms");
@@ -954,418 +1253,59 @@ const handleAddEmployee = async () => {
         <head>
           <title>EPF Form 11 - ${epfFormData.memberName}</title>
           <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0; 
-              padding: 20px;
-              font-size: 12px;
-              line-height: 1.4;
-            }
-            .form-container { 
-              max-width: 800px; 
-              margin: 0 auto; 
-              border: 1px solid #000;
-              padding: 20px;
-              position: relative;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 20px;
-              border-bottom: 2px solid #000;
-              padding-bottom: 10px;
-            }
-            .header h2 {
-              margin: 0;
-              font-size: 16px;
-              font-weight: bold;
-            }
-            .header h3 {
-              margin: 5px 0;
-              font-size: 14px;
-              font-weight: normal;
-            }
-            .subtitle {
-              font-size: 10px;
-              margin-top: 5px;
-              font-style: italic;
-            }
-            .section { 
-              margin-bottom: 20px; 
-            }
-            .section-title { 
-              background: #f0f0f0; 
-              padding: 8px; 
-              font-weight: bold;
-              border: 1px solid #000;
-              margin-bottom: 10px;
-              font-size: 11px;
-            }
-            .field-row {
-              display: flex;
-              margin-bottom: 8px;
-              align-items: flex-start;
-            }
-            .field-group {
-              display: flex;
-              flex-direction: column;
-              margin-right: 20px;
-              flex: 1;
-            }
-            .label { 
-              font-weight: bold; 
-              margin-bottom: 2px;
-              font-size: 10px;
-            }
-            .value { 
-              min-height: 18px;
-              border-bottom: 1px solid #000;
-              padding: 2px 5px;
-              flex: 1;
-            }
-            .checkbox-group {
-              display: flex;
-              align-items: center;
-              margin-right: 15px;
-            }
-            .checkbox {
-              margin-right: 5px;
-            }
-            .full-width {
-              width: 100%;
-            }
-            .half-width {
-              width: 48%;
-            }
-            .quarter-width {
-              width: 24%;
-            }
-            .signature-area { 
-              margin-top: 30px; 
-              border-top: 1px solid #000; 
-              padding-top: 15px;
-            }
-            .signature-line {
-              display: inline-block;
-              width: 200px;
-              border-bottom: 1px solid #000;
-              margin: 0 10px;
-            }
-            .declaration {
-              margin: 20px 0;
-              padding: 15px;
-              border: 1px solid #000;
-              background: #f9f9f9;
-            }
-            .declaration p {
-              margin: 5px 0;
-              font-size: 11px;
-            }
-            .note {
-              font-size: 10px;
-              font-style: italic;
-              color: #666;
-              margin-top: 3px;
-            }
-            @media print {
-              body { margin: 0; padding: 10px; }
-              .form-container { border: none; padding: 10px; }
-            }
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .form-container { max-width: 800px; margin: 0 auto; border: 1px solid #000; padding: 20px; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; }
+            .section { margin-bottom: 20px; }
+            .section-title { background: #f0f0f0; padding: 8px; font-weight: bold; }
+            .field-row { display: flex; margin-bottom: 8px; }
+            .label { font-weight: bold; width: 200px; }
+            .value { flex: 1; border-bottom: 1px solid #000; padding: 2px 5px; }
+            .signature-area { margin-top: 30px; border-top: 1px solid #000; padding-top: 15px; }
           </style>
         </head>
         <body>
           <div class="form-container">
             <div class="header">
-              <h2>New Form : 11 - Declaration Form</h2>
-              <h3>(To be retained by the employer for future reference)</h3>
-              <div class="subtitle">EMPLOYEES' PROVIDENT FUND ORGANISATION</div>
-              <div class="subtitle">Employees' Provident Fund Scheme, 1952 (Paragraph 34 & 57) and Employees' Pension Scheme, 1995 (Paragraph 24)</div>
-              <div class="subtitle">(Declaration by a person taking up Employment in any Establishment on which EPF Scheme, 1952 and for EPS, 1995 is applicable)</div>
+              <h2>EPF Form 11 - Declaration Form</h2>
             </div>
-            
             <div class="section">
               <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">1. Name of Member (Aadhar Name)</div>
-                  <div class="value">${epfFormData.memberName}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">2. ${epfFormData.relationshipType === 'father' ? 'Father\'s Name' : 'Spouse\'s Name'}</div>
-                  <div class="value">${epfFormData.fatherOrSpouseName}</div>
-                  <div class="note">(Please tick whichever applicable)</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">3. Date of Birth (dd/mm/yyyy)</div>
-                  <div class="value">${epfFormData.dateOfBirth}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">4. Gender (Male / Female / Transgender)</div>
-                  <div class="value">${epfFormData.gender}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">5. Marital Status ? (Single/Married/Widow/Widower/Divorcee)</div>
-                  <div class="value">${epfFormData.maritalStatus}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">6. (a) eMail ID</div>
-                  <div class="value">${epfFormData.email}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">(b) Mobile No (Aadhar Registered)</div>
-                  <div class="value">${epfFormData.mobileNumber}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">7. Whether earlier member of the Employee's Provident Fund Scheme, 1952 ?</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.previousEPFMember ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.previousEPFMember ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">8. Whether earlier member of the Employee's Pension Scheme, 1995 ?</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.previousPensionMember ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.previousPensionMember ? 'checked' : ''}> No
-                  </div>
-                </div>
-              </div>
-
-              <div class="section-title">9. Previous Employment details ? (If Yes, 7 & 8 details above)</div>
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">a) Universal Account Number (UAN)</div>
-                  <div class="value">${epfFormData.previousUAN}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">b) Previous PF Account Number</div>
-                  <div class="value">${epfFormData.previousPFAccountNumber}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">c) Date of Exit from previous Employment ? (dd/mm/yyyy)</div>
-                  <div class="value">${epfFormData.dateOfExit}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">d) Scheme Certificate No (If issued)</div>
-                  <div class="value">${epfFormData.schemeCertificateNumber}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">e) Pension Payment Order (PPO) (If issued)</div>
-                  <div class="value">${epfFormData.pensionPaymentOrder}</div>
-                </div>
-              </div>
-
-              <div class="section-title">10. International Worker Details</div>
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">a) International Worker</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.internationalWorker ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.internationalWorker ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">b) If Yes, state country of origin (name of other country)</div>
-                  <div class="value">${epfFormData.countryOfOrigin}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">c) Passport No.</div>
-                  <div class="value">${epfFormData.passportNumber}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">d) Validity of passport (dd/mm/yyyy) to (dd/mm/yyyy)</div>
-                  <div class="value">${epfFormData.passportValidityFrom} to ${epfFormData.passportValidityTo}</div>
-                </div>
-              </div>
-
-              <div class="section-title">11. KYC Details : (attach self attested copies of following KYC's)</div>
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">a) Bank Account No. & IFS Code</div>
-                  <div class="value">${epfFormData.bankAccountNumber} / ${epfFormData.ifscCode}</div>
-                </div>
-                <div class="field-group half-width">
-                  <div class="label">b) AADHAR Number</div>
-                  <div class="value">${epfFormData.aadharNumber}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group half-width">
-                  <div class="label">c) Permanent Account Number (PAN), If available</div>
-                  <div class="value">${epfFormData.panNumber}</div>
-                </div>
-              </div>
-
-              <div class="section-title">12. Declaration Details</div>
-              <div class="field-row">
-                <div class="field-group quarter-width">
-                  <div class="label">First EPF Member</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.firstEPFMember ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.firstEPFMember ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group quarter-width">
-                  <div class="label">Enrolled Date</div>
-                  <div class="value">${epfFormData.enrolledDate}</div>
-                </div>
-                <div class="field-group quarter-width">
-                  <div class="label">First Employment EPF Wages</div>
-                  <div class="value">₹${epfFormData.firstEmploymentWages}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group quarter-width">
-                  <div class="label">Are you EPF Member before 01/09/2014</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.epfMemberBeforeSep2014 ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.epfMemberBeforeSep2014 ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group quarter-width">
-                  <div class="label">If Yes, EPF Amount Withdrawn?</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.epfAmountWithdrawn ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.epfAmountWithdrawn ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group quarter-width">
-                  <div class="label">If Yes, EPS (Pension) Amount Withdrawn?</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.epsAmountWithdrawn ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.epsAmountWithdrawn ? 'checked' : ''}> No
-                  </div>
-                </div>
-                <div class="field-group quarter-width">
-                  <div class="label">After Sep 2014 earned EPS (Pension) Amount Withdrawn before Join current Employer?</div>
-                  <div class="checkbox-group">
-                    <input type="checkbox" class="checkbox" ${epfFormData.epsAmountWithdrawnAfterSep2014 ? 'checked' : ''}> Yes
-                    <input type="checkbox" class="checkbox" ${!epfFormData.epsAmountWithdrawnAfterSep2014 ? 'checked' : ''}> No
-                  </div>
-                </div>
-              </div>
-
-              <div class="declaration">
-                <p><strong>UNDERTAKING</strong></p>
-                <p>1) Certified that the particulars are true to the best of my knowledge</p>
-                <p>2) I authorise EPFO to use my Aadhar for verification / authentication / eKYC purpose for service delivery</p>
-                <p>3) Kindly transfer the fund and service details, if applicable, from the previous PF account as declared above to the present PF account.</p>
-                <p>(The transfer would be possible only if the identified KYC details approved by previous employer has been verified by present employer using his Digital Signature</p>
-                <p>4) In case of changes in above details, the same will be intimated to employer at the earliest.</p>
-              </div>
-
-              <div class="signature-area">
-                <div class="field-row">
-                  <div class="field-group half-width">
-                    <div class="label">Date :</div>
-                    <div class="value">${epfFormData.declarationDate}</div>
-                  </div>
-                  <div class="field-group half-width">
-                    <div class="label">Place :</div>
-                    <div class="value">________________</div>
-                  </div>
-                </div>
-                <div class="field-row">
-                  <div class="field-group full-width">
-                    <div class="label">Signature of Member</div>
-                    <div class="value" style="height: 40px;"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="section-title">DECLARATION BY PRESENT EMPLOYER</div>
-              
-              <div class="field-row">
-                <div class="field-group full-width">
-                  <div class="label">A. The member Mr./Ms./Mrs. ${epfFormData.memberName} has joined on ${epfFormData.enrolledDate} and has been allotted PF Number ${createdEmployeeData?.uanNumber || createdEmployeeData?.uan || "Pending"}</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group full-width">
-                  <div class="label">B. In case the person was earlier not a member of EPF Scheme, 1952 and EPS, 1995: ((Post allotment of UAN) The UAN allotted or the member is) Please Tick the Appropriate Option :</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="checkbox-group">
-                  <input type="checkbox" class="checkbox"> The KYC details of the above member in the JAN database have not been uploaded
-                </div>
+                <div class="label">Name:</div>
+                <div class="value">${epfFormData.memberName}</div>
               </div>
               <div class="field-row">
-                <div class="checkbox-group">
-                  <input type="checkbox" class="checkbox"> Have been uploaded but not approved
-                </div>
+                <div class="label">Father/Spouse Name:</div>
+                <div class="value">${epfFormData.fatherOrSpouseName}</div>
               </div>
               <div class="field-row">
-                <div class="checkbox-group">
-                  <input type="checkbox" class="checkbox"> Have been uploaded and approved with DSC
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field-group full-width">
-                  <div class="label">C. In case the person was earlier a member of EPF Scheme, 1952 and EPS 1995;</div>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="checkbox-group">
-                  <input type="checkbox" class="checkbox"> The KYC details of the above member in the UAN database have been approved with Digital Signature Certificate and transfer request has been generated on portal
-                </div>
+                <div class="label">Date of Birth:</div>
+                <div class="value">${epfFormData.dateOfBirth}</div>
               </div>
               <div class="field-row">
-                <div class="checkbox-group">
-                  <input type="checkbox" class="checkbox"> As the DSC of establishment are not registered with EPFO, the member has been informed to file physical claim (Form-13) for transfer of funds from his previous establishment.
-                </div>
+                <div class="label">Aadhar Number:</div>
+                <div class="value">${epfFormData.aadharNumber}</div>
               </div>
-
-              <div class="signature-area">
-                <div class="field-row">
-                  <div class="field-group half-width">
-                    <div class="label">Date :</div>
-                    <div class="value">${epfFormData.employerDeclarationDate}</div>
-                  </div>
-                </div>
-                <div class="field-row">
-                  <div class="field-group full-width">
-                    <div class="label">Signature of Employer with Seal of Establishment</div>
-                    <div class="value" style="height: 40px;"></div>
-                  </div>
-                </div>
+            </div>
+            <div class="signature-area">
+              <div class="field-row">
+                <div class="label">Date:</div>
+                <div class="value">${epfFormData.declarationDate}</div>
+              </div>
+              <div class="field-row">
+                <div class="label">Place:</div>
+                <div class="value">${epfFormData.declarationPlace}</div>
+              </div>
+              <div class="field-row">
+                <div class="label">Signature:</div>
+                <div class="value"></div>
               </div>
             </div>
           </div>
           <script>
             window.onload = function() {
               window.print();
-              setTimeout(() => {
-                window.close();
-              }, 1000);
+              setTimeout(() => window.close(), 1000);
             };
           </script>
         </body>
@@ -1374,19 +1314,29 @@ const handleAddEmployee = async () => {
     printWindow.document.close();
   };
 
-  // Function to manually open EPF form for an existing employee
-  const handleOpenEPFForm = (employee: Employee) => {
-    initializeEPFForm(employee);
-  };
+  // Calculate onboarding stats
+  const totalSites = sites.length;
+  const sitesWithCapacity = sites.filter(site => getAvailablePositions(site) > 0).length;
+  const totalAvailablePositions = sites.reduce((sum, site) => sum + getAvailablePositions(site), 0);
+  const totalOnboarded = employees.filter(emp => emp.status === "active").length;
 
   return (
     <div className="space-y-6">
+      {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full">
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">Capture Photo</h3>
-              <Button variant="ghost" size="sm" onClick={() => { setShowCamera(false); stopCamera(); }}>
+              <h3 className="text-lg font-semibold">Capture Employee Photo</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => { 
+                  setShowCamera(false); 
+                  stopCamera(); 
+                  setCapturedImage(null);
+                }}
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -1394,37 +1344,58 @@ const handleAddEmployee = async () => {
             <div className="p-4">
               {!capturedImage ? (
                 <>
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted
-                    className="w-full h-64 bg-gray-100 rounded-lg"
-                  />
+                  <div className="relative bg-gray-100 rounded-lg overflow-hidden">
+                    <video 
+                      ref={videoRef} 
+                      autoPlay 
+                      playsInline 
+                      muted
+                      className="w-full h-64 object-cover"
+                    />
+                  </div>
                   <canvas ref={canvasRef} className="hidden" />
                   <div className="flex gap-2 mt-4">
-                    <Button onClick={capturePhoto} className="flex-1">
+                    <Button 
+                      onClick={capturePhoto} 
+                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                    >
                       <Camera className="h-4 w-4 mr-2" />
                       Capture Photo
                     </Button>
-                    <Button variant="outline" onClick={() => { setShowCamera(false); stopCamera(); }}>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => { 
+                        setShowCamera(false); 
+                        stopCamera(); 
+                      }}
+                    >
                       Cancel
                     </Button>
                   </div>
                 </>
               ) : (
                 <>
-                  <img 
-                    src={capturedImage} 
-                    alt="Captured" 
-                    className="w-full h-64 object-cover rounded-lg"
-                  />
+                  <div className="bg-gray-100 rounded-lg overflow-hidden">
+                    <img 
+                      src={capturedImage} 
+                      alt="Captured" 
+                      className="w-full h-64 object-contain"
+                    />
+                  </div>
                   <div className="flex gap-2 mt-4">
-                    <Button onClick={useCapturedPhoto} className="flex-1">
+                    <Button 
+                      onClick={useCapturedPhoto} 
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      <Check className="h-4 w-4 mr-2" />
                       Use This Photo
                     </Button>
-                    <Button variant="outline" onClick={retakePhoto}>
-                      Retake Photo
+                    <Button 
+                      variant="outline" 
+                      onClick={retakePhoto}
+                    >
+                      <Camera className="h-4 w-4 mr-2" />
+                      Retake
                     </Button>
                   </div>
                 </>
@@ -1433,6 +1404,30 @@ const handleAddEmployee = async () => {
           </div>
         </div>
       )}
+
+      {/* Onboarding Stats Card */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-700">{totalSites}</div>
+              <div className="text-sm text-muted-foreground">Your Sites</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-700">{sitesWithCapacity}</div>
+              <div className="text-sm text-muted-foreground">Sites with Openings</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-700">{totalAvailablePositions}</div>
+              <div className="text-sm text-muted-foreground">Available Positions</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-700">{totalOnboarded}</div>
+              <div className="text-sm text-muted-foreground">Total Onboarded</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -1449,7 +1444,12 @@ const handleAddEmployee = async () => {
         <TabsContent value="onboarding">
           <Card>
             <CardHeader>
-              <CardTitle>Digital Onboarding & Document Verification</CardTitle>
+              <CardTitle className="flex justify-between items-center">
+                <span>Digital Onboarding & Document Verification</span>
+                <Badge variant="outline" className="text-sm">
+                  {sitesWithCapacity} sites available for onboarding
+                </Badge>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="border-2 border-gray-300 p-4 md:p-6 mb-6">
@@ -1463,11 +1463,15 @@ const handleAddEmployee = async () => {
                     
                     <div className="flex justify-between items-start flex-col md:flex-row gap-4">
                       <div className="border-2 border-dashed border-gray-400 w-20 h-24 md:w-24 md:h-32 flex items-center justify-center text-xs text-muted-foreground text-center p-2 mx-auto md:mx-0">
-                        {newEmployee.photo ? (
+                        {photoPreview || (newEmployee.photo && typeof newEmployee.photo === 'string') ? (
                           <img 
-                            src={newEmployee.photo instanceof File 
-                              ? URL.createObjectURL(newEmployee.photo) 
-                              : newEmployee.photo} 
+                            src={photoPreview || newEmployee.photo as string} 
+                            alt="Employee" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : newEmployee.photo instanceof File ? (
+                          <img 
+                            src={URL.createObjectURL(newEmployee.photo)} 
                             alt="Employee" 
                             className="w-full h-full object-cover"
                           />
@@ -1530,7 +1534,7 @@ const handleAddEmployee = async () => {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setNewEmployee({...newEmployee, photo: null})}
+                          onClick={handleRemovePhoto}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -1539,34 +1543,17 @@ const handleAddEmployee = async () => {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    {/* UPDATED: Site Name dropdown with sites from props */}
-                    <FormField label="Site Name" id="siteName">
-                      <Select 
-                        value={newEmployee.siteName} 
-                        onValueChange={(value) => setNewEmployee({...newEmployee, siteName: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select site" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sites && sites.length > 0 ? (
-                            sites.map((site) => (
-                              <SelectItem key={site._id} value={site.name}>
-                                {site.name}
-                                {site.clientName && ` - ${site.clientName}`}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-sites" disabled>
-                              No sites assigned
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      {sites && sites.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
+                    <FormField label="Site Name" id="siteName" required>
+                      <SiteDropdown />
+                      {sites.length === 0 && (
+                        <div className="text-xs text-amber-600 mt-1">
                           No sites are assigned to you. Please contact administrator.
-                        </p>
+                        </div>
+                      )}
+                      {sites.length > 0 && sitesWithCapacity === 0 && (
+                        <div className="text-xs text-amber-600 mt-1">
+                          All sites have reached their regular staff capacity.
+                        </div>
                       )}
                     </FormField>
                     
@@ -1607,18 +1594,16 @@ const handleAddEmployee = async () => {
                       />
                     </FormField>
                     
-                    <FormField label="Contact No." id="phone" required>
+                    <FormField label="Contact No." id="phone">
                       <Input
                         id="phone"
                         value={newEmployee.phone}
                         onChange={(e) => setNewEmployee({...newEmployee, phone: e.target.value})}
-                        placeholder="Enter 10-digit phone number"
-                        required
-                        pattern="[0-9]{10}"
+                        placeholder="Enter 10-digit phone number (optional)"
                         maxLength={10}
                       />
                     </FormField>
-        
+
                     <FormField label="Blood Group" id="bloodGroup">
                       <Select 
                         value={newEmployee.bloodGroup || ""} 
@@ -1640,14 +1625,13 @@ const handleAddEmployee = async () => {
                       </Select>
                     </FormField>
                     
-                    <FormField label="Email" id="email" required>
+                    <FormField label="Email" id="email">
                       <Input
                         id="email"
                         type="email"
                         value={newEmployee.email}
                         onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
-                        placeholder="Enter email address"
-                        required
+                        placeholder="Enter email address (optional)"
                       />
                     </FormField>
                     
@@ -1658,7 +1642,6 @@ const handleAddEmployee = async () => {
                         onChange={(e) => setNewEmployee({...newEmployee, aadharNumber: e.target.value})}
                         placeholder="Enter 12-digit Aadhar number"
                         required
-                        pattern="[0-9]{12}"
                         maxLength={12}
                       />
                     </FormField>
@@ -1878,7 +1861,6 @@ const handleAddEmployee = async () => {
                         value={newEmployee.emergencyContactPhone}
                         onChange={(e) => setNewEmployee({...newEmployee, emergencyContactPhone: e.target.value})}
                         placeholder="Enter emergency contact phone"
-                        pattern="[0-9]{10}"
                         maxLength={10}
                       />
                     </FormField>
@@ -2188,7 +2170,7 @@ const handleAddEmployee = async () => {
                 </div>
 
                 <div className="flex gap-4">
-                  <Button onClick={handleAddEmployee} className="flex-1" size="lg" disabled={loading}>
+                  <Button onClick={handleAddEmployee} className="flex-1" size="lg" disabled={loading || !newEmployee.siteName || sitesWithCapacity === 0}>
                     {loading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -2202,6 +2184,13 @@ const handleAddEmployee = async () => {
                     )}
                   </Button>
                 </div>
+                
+                {sitesWithCapacity === 0 && sites.length > 0 && (
+                  <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
+                    <AlertCircle className="h-4 w-4 inline mr-2" />
+                    All sites have reached their regular staff capacity. No more employees can be onboarded.
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -2227,16 +2216,12 @@ const handleAddEmployee = async () => {
                     <h2 className="text-xl font-bold">New Form : 11 - Declaration Form</h2>
                     <p className="text-sm">(To be retained by the employer for future reference)</p>
                     <p className="text-xs font-semibold">EMPLOYEES' PROVIDENT FUND ORGANISATION</p>
-                    <p className="text-xs">Employees' Provident Fund Scheme, 1952 (Paragraph 34 & 57) and Employees' Pension Scheme, 1995 (Paragraph 24)</p>
-                    <p className="text-xs">(Declaration by a person taking up Employment in any Establishment on which EPF Scheme, 1952 and for EPS, 1995 is applicable)</p>
                   </div>
 
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center">
                       <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
+                        <AlertCircle className="h-5 w-5 text-blue-400" />
                       </div>
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-blue-800">Auto-filled from Employee Record</h3>
@@ -2268,14 +2253,34 @@ const handleAddEmployee = async () => {
                         <Input
                           value={epfFormData.fatherOrSpouseName}
                           onChange={(e) => handleEPFFormChange('fatherOrSpouseName', e.target.value)}
-                          placeholder={`Enter ${epfFormData.relationshipType === 'father' ? 'father' : 'spouse'} name`}
-                          className={isAutoFilledField('fatherOrSpouseName') ? "bg-gray-50" : ""}
+                          placeholder="Enter father or spouse name"
+                          className="bg-gray-50"
                         />
-                        {isAutoFilledField('fatherOrSpouseName') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 mt-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            id="father"
+                            name="relationshipType"
+                            checked={epfFormData.relationshipType === "father"}
+                            onChange={() => handleEPFFormChange('relationshipType', 'father')}
+                          />
+                          <Label htmlFor="father" className="text-sm">Father</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            id="spouse"
+                            name="relationshipType"
+                            checked={epfFormData.relationshipType === "spouse"}
+                            onChange={() => handleEPFFormChange('relationshipType', 'spouse')}
+                          />
+                          <Label htmlFor="spouse" className="text-sm">Spouse</Label>
+                        </div>
                       </div>
                     </FormField>
 
@@ -2285,20 +2290,18 @@ const handleAddEmployee = async () => {
                           type="date"
                           value={epfFormData.dateOfBirth}
                           onChange={(e) => handleEPFFormChange('dateOfBirth', e.target.value)}
-                          className={isAutoFilledField('dateOfBirth') ? "bg-gray-50" : ""}
+                          className="bg-gray-50"
                         />
-                        {isAutoFilledField('dateOfBirth') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
                       </div>
                     </FormField>
 
                     <FormField label="4. Gender">
                       <div className="relative">
                         <Select value={epfFormData.gender} onValueChange={(value) => handleEPFFormChange('gender', value)}>
-                          <SelectTrigger className={isAutoFilledField('gender') ? "bg-gray-50" : ""}>
+                          <SelectTrigger className="bg-gray-50">
                             <SelectValue placeholder="Select gender" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2307,18 +2310,16 @@ const handleAddEmployee = async () => {
                             <SelectItem value="Transgender">Transgender</SelectItem>
                           </SelectContent>
                         </Select>
-                        {isAutoFilledField('gender') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
                       </div>
                     </FormField>
 
                     <FormField label="5. Marital Status">
                       <div className="relative">
                         <Select value={epfFormData.maritalStatus} onValueChange={(value) => handleEPFFormChange('maritalStatus', value)}>
-                          <SelectTrigger className={isAutoFilledField('maritalStatus') ? "bg-gray-50" : ""}>
+                          <SelectTrigger className="bg-gray-50">
                             <SelectValue placeholder="Select marital status" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2329,11 +2330,9 @@ const handleAddEmployee = async () => {
                             <SelectItem value="Divorcee">Divorcee</SelectItem>
                           </SelectContent>
                         </Select>
-                        {isAutoFilledField('maritalStatus') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
                       </div>
                     </FormField>
 
@@ -2344,13 +2343,11 @@ const handleAddEmployee = async () => {
                           value={epfFormData.email}
                           onChange={(e) => handleEPFFormChange('email', e.target.value)}
                           placeholder="Enter email address"
-                          className={isAutoFilledField('email') ? "bg-gray-50" : ""}
+                          className="bg-gray-50"
                         />
-                        {isAutoFilledField('email') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
                       </div>
                     </FormField>
 
@@ -2360,304 +2357,35 @@ const handleAddEmployee = async () => {
                           value={epfFormData.mobileNumber}
                           onChange={(e) => handleEPFFormChange('mobileNumber', e.target.value)}
                           placeholder="Enter mobile number"
-                          className={isAutoFilledField('mobileNumber') ? "bg-gray-50" : ""}
+                          className="bg-gray-50"
                         />
-                        {isAutoFilledField('mobileNumber') && (
-                          <div className="absolute right-2 top-2">
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                          </div>
-                        )}
+                        <div className="absolute right-2 top-2">
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
+                        </div>
                       </div>
                     </FormField>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg">
-                    <div className="space-y-2">
-                      <Label>7. Whether earlier member of the Employee's Provident Fund Scheme, 1952 ?</Label>
-                      <div className="flex gap-4">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={epfFormData.previousEPFMember}
-                            onChange={(e) => handleEPFFormChange('previousEPFMember', e.target.checked)}
-                          />
-                          <Label>Yes</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!epfFormData.previousEPFMember}
-                            onChange={(e) => handleEPFFormChange('previousEPFMember', !e.target.checked)}
-                          />
-                          <Label>No</Label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>8. Whether earlier member of the Employee's Pension Scheme, 1995 ?</Label>
-                      <div className="flex gap-4">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={epfFormData.previousPensionMember}
-                            onChange={(e) => handleEPFFormChange('previousPensionMember', e.target.checked)}
-                          />
-                          <Label>Yes</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!epfFormData.previousPensionMember}
-                            onChange={(e) => handleEPFFormChange('previousPensionMember', !e.target.checked)}
-                          />
-                          <Label>No</Label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 p-4 border rounded-lg">
-                    <h4 className="font-semibold">9. Previous Employment details ? (If Yes, 7 & 8 details above)</h4>
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <h4 className="font-semibold border-b pb-2">Previous Membership Details</h4>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField label="a) Universal Account Number (UAN)">
-                        <Input
-                          value={epfFormData.previousUAN}
-                          onChange={(e) => handleEPFFormChange('previousUAN', e.target.value)}
-                          placeholder="Enter previous UAN"
-                        />
-                      </FormField>
-                      <FormField label="b) Previous PF Account Number">
-                        <Input
-                          value={epfFormData.previousPFAccountNumber}
-                          onChange={(e) => handleEPFFormChange('previousPFAccountNumber', e.target.value)}
-                          placeholder="Enter previous PF account number"
-                        />
-                      </FormField>
-                      <FormField label="c) Date of Exit from previous Employment">
-                        <Input
-                          type="date"
-                          value={epfFormData.dateOfExit}
-                          onChange={(e) => handleEPFFormChange('dateOfExit', e.target.value)}
-                        />
-                      </FormField>
-                      <FormField label="d) Scheme Certificate No (If issued)">
-                        <Input
-                          value={epfFormData.schemeCertificateNumber}
-                          onChange={(e) => handleEPFFormChange('schemeCertificateNumber', e.target.value)}
-                          placeholder="Enter scheme certificate number"
-                        />
-                      </FormField>
-                      <FormField label="e) Pension Payment Order (PPO) (If issued)">
-                        <Input
-                          value={epfFormData.pensionPaymentOrder}
-                          onChange={(e) => handleEPFFormChange('pensionPaymentOrder', e.target.value)}
-                          placeholder="Enter PPO number"
-                        />
-                      </FormField>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 p-4 border rounded-lg">
-                    <h4 className="font-semibold">10. International Worker Details</h4>
-                    <div className="space-y-2">
-                      <Label>a) International Worker</Label>
-                      <div className="flex gap-4">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={epfFormData.internationalWorker}
-                            onChange={(e) => handleEPFFormChange('internationalWorker', e.target.checked)}
-                          />
-                          <Label>Yes</Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!epfFormData.internationalWorker}
-                            onChange={(e) => handleEPFFormChange('internationalWorker', !e.target.checked)}
-                          />
-                          <Label>No</Label>
-                        </div>
-                      </div>
-                    </div>
-
-                    {epfFormData.internationalWorker && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <FormField label="b) Country of origin">
-                          <Input
-                            value={epfFormData.countryOfOrigin}
-                            onChange={(e) => handleEPFFormChange('countryOfOrigin', e.target.value)}
-                            placeholder="Enter country name"
-                          />
-                        </FormField>
-                        <FormField label="c) Passport No.">
-                          <Input
-                            value={epfFormData.passportNumber}
-                            onChange={(e) => handleEPFFormChange('passportNumber', e.target.value)}
-                            placeholder="Enter passport number"
-                          />
-                        </FormField>
-                        <FormField label="d) Passport Validity From">
-                          <Input
-                            type="date"
-                            value={epfFormData.passportValidityFrom}
-                            onChange={(e) => handleEPFFormChange('passportValidityFrom', e.target.value)}
-                          />
-                        </FormField>
-                        <FormField label="d) Passport Validity To">
-                          <Input
-                            type="date"
-                            value={epfFormData.passportValidityTo}
-                            onChange={(e) => handleEPFFormChange('passportValidityTo', e.target.value)}
-                          />
-                        </FormField>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4 p-4 border rounded-lg">
-                    <h4 className="font-semibold">11. KYC Details : (attach self attested copies of following KYC's)</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField label="a) Bank Account No. & IFSC Code">
-                        <div className="relative">
-                          <Input
-                            value={epfFormData.bankAccountNumber}
-                            onChange={(e) => handleEPFFormChange('bankAccountNumber', e.target.value)}
-                            placeholder="Enter bank account number"
-                            className={isAutoFilledField('bankAccountNumber') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('bankAccountNumber') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-                      <FormField label="IFSC Code">
-                        <div className="relative">
-                          <Input
-                            value={epfFormData.ifscCode}
-                            onChange={(e) => handleEPFFormChange('ifscCode', e.target.value)}
-                            placeholder="Enter IFSC code"
-                            className={isAutoFilledField('ifscCode') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('ifscCode') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-                      <FormField label="b) AADHAR Number" required>
-                        <div className="relative">
-                          <Input
-                            value={epfFormData.aadharNumber}
-                            onChange={(e) => handleEPFFormChange('aadharNumber', e.target.value)}
-                            placeholder="Enter Aadhar number"
-                            required
-                            className={isAutoFilledField('aadharNumber') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('aadharNumber') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-                      <FormField label="c) Permanent Account Number (PAN)">
-                        <div className="relative">
-                          <Input
-                            value={epfFormData.panNumber}
-                            onChange={(e) => handleEPFFormChange('panNumber', e.target.value)}
-                            placeholder="Enter PAN number"
-                            className={isAutoFilledField('panNumber') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('panNumber') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 p-4 border rounded-lg">
-                    <h4 className="font-semibold">12. Declaration Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="space-y-2">
-                        <Label>First EPF Member</Label>
+                        <Label>7. Whether earlier member of EPF Scheme, 1952 ?</Label>
                         <div className="flex gap-4">
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              checked={epfFormData.firstEPFMember}
-                              onChange={(e) => handleEPFFormChange('firstEPFMember', e.target.checked)}
+                              checked={epfFormData.previousEPFMember}
+                              onChange={(e) => handleEPFFormChange('previousEPFMember', e.target.checked)}
                             />
                             <Label>Yes</Label>
                           </div>
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              checked={!epfFormData.firstEPFMember}
-                              onChange={(e) => handleEPFFormChange('firstEPFMember', !e.target.checked)}
-                            />
-                            <Label>No</Label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <FormField label="Enrolled Date">
-                        <div className="relative">
-                          <Input
-                            type="date"
-                            value={epfFormData.enrolledDate}
-                            onChange={(e) => handleEPFFormChange('enrolledDate', e.target.value)}
-                            className={isAutoFilledField('enrolledDate') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('enrolledDate') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-
-                      <FormField label="First Employment EPF Wages">
-                        <div className="relative">
-                          <Input
-                            value={epfFormData.firstEmploymentWages}
-                            onChange={(e) => handleEPFFormChange('firstEmploymentWages', e.target.value)}
-                            placeholder="Enter wages"
-                            className={isAutoFilledField('firstEmploymentWages') ? "bg-gray-50" : ""}
-                          />
-                          {isAutoFilledField('firstEmploymentWages') && (
-                            <div className="absolute right-2 top-2">
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Auto-filled</span>
-                            </div>
-                          )}
-                        </div>
-                      </FormField>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                      <div className="space-y-2">
-                        <Label className="text-sm">EPF Member before 01/09/2014</Label>
-                        <div className="flex gap-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={epfFormData.epfMemberBeforeSep2014}
-                              onChange={(e) => handleEPFFormChange('epfMemberBeforeSep2014', e.target.checked)}
-                            />
-                            <Label>Yes</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!epfFormData.epfMemberBeforeSep2014}
-                              onChange={(e) => handleEPFFormChange('epfMemberBeforeSep2014', !e.target.checked)}
+                              checked={!epfFormData.previousEPFMember}
+                              onChange={(e) => handleEPFFormChange('previousEPFMember', !e.target.checked)}
                             />
                             <Label>No</Label>
                           </div>
@@ -2665,65 +2393,21 @@ const handleAddEmployee = async () => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-sm">EPF Amount Withdrawn?</Label>
+                        <Label>8. Whether earlier member of EPS, 1995 ?</Label>
                         <div className="flex gap-4">
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              checked={epfFormData.epfAmountWithdrawn}
-                              onChange={(e) => handleEPFFormChange('epfAmountWithdrawn', e.target.checked)}
+                              checked={epfFormData.previousPensionMember}
+                              onChange={(e) => handleEPFFormChange('previousPensionMember', e.target.checked)}
                             />
                             <Label>Yes</Label>
                           </div>
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
-                              checked={!epfFormData.epfAmountWithdrawn}
-                              onChange={(e) => handleEPFFormChange('epfAmountWithdrawn', !e.target.checked)}
-                            />
-                            <Label>No</Label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm">EPS Amount Withdrawn?</Label>
-                        <div className="flex gap-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={epfFormData.epsAmountWithdrawn}
-                              onChange={(e) => handleEPFFormChange('epsAmountWithdrawn', e.target.checked)}
-                            />
-                            <Label>Yes</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!epfFormData.epsAmountWithdrawn}
-                              onChange={(e) => handleEPFFormChange('epsAmountWithdrawn', !e.target.checked)}
-                            />
-                            <Label>No</Label>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm">EPS Amount Withdrawn after Sep 2014?</Label>
-                        <div className="flex gap-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={epfFormData.epsAmountWithdrawnAfterSep2014}
-                              onChange={(e) => handleEPFFormChange('epsAmountWithdrawnAfterSep2014', e.target.checked)}
-                            />
-                            <Label>Yes</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!epfFormData.epsAmountWithdrawnAfterSep2014}
-                              onChange={(e) => handleEPFFormChange('epsAmountWithdrawnAfterSep2014', !e.target.checked)}
+                              checked={!epfFormData.previousPensionMember}
+                              onChange={(e) => handleEPFFormChange('previousPensionMember', !e.target.checked)}
                             />
                             <Label>No</Label>
                           </div>
@@ -2732,69 +2416,18 @@ const handleAddEmployee = async () => {
                     </div>
                   </div>
 
-                  <div className="p-4 border rounded-lg bg-gray-50">
-                    <h4 className="font-semibold mb-2">UNDERTAKING</h4>
-                    <p className="text-sm">1) Certified that the particulars are true to the best of my knowledge</p>
-                    <p className="text-sm">2) I authorise EPFO to use my Aadhar for verification / authentication / eKYC purpose for service delivery</p>
-                    <p className="text-sm">3) Kindly transfer the fund and service details, if applicable, from the previous PF account as declared above to the present PF account.</p>
-                    <p className="text-sm">(The transfer would be possible only if the identified KYC details approved by previous employer has been verified by present employer using his Digital Signature</p>
-                    <p className="text-sm">4) In case of changes in above details, the same will be intimated to employer at the earliest.</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg">
-                    <div className="space-y-4">
-                      <h4 className="font-semibold">Employee Declaration</h4>
-                      <FormField label="Date">
-                        <Input
-                          type="date"
-                          value={epfFormData.declarationDate}
-                          onChange={(e) => handleEPFFormChange('declarationDate', e.target.value)}
-                        />
-                      </FormField>
-                      <FormField label="Place">
-                        <Input
-                          value={epfFormData.declarationPlace}
-                          onChange={(e) => handleEPFFormChange('declarationPlace', e.target.value)}
-                          placeholder="Enter place"
-                        />
-                      </FormField>
-                      <FormField label="Signature of Member">
-                        <div className="border-2 border-dashed rounded-lg p-4 text-center h-20 flex items-center justify-center">
-                          <span className="text-muted-foreground">Employee Signature</span>
-                        </div>
-                      </FormField>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="font-semibold">Employer Declaration</h4>
-                      <FormField label="Date">
-                        <Input
-                          type="date"
-                          value={epfFormData.employerDeclarationDate}
-                          onChange={(e) => handleEPFFormChange('employerDeclarationDate', e.target.value)}
-                        />
-                      </FormField>
-                      <FormField label="Signature of Employer with Seal">
-                        <div className="border-2 border-dashed rounded-lg p-4 text-center h-20 flex items-center justify-center">
-                          <span className="text-muted-foreground">Employer Signature & Seal</span>
-                        </div>
-                      </FormField>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 justify-between pt-4 border-t">
-                    <div className="flex gap-4">
-                      <Button onClick={handleSaveEPFForm} className="flex items-center gap-2">
+                  <div className="flex gap-4 justify-end pt-4 border-t">
+                    <Button onClick={handleSaveEPFForm} className="flex items-center gap-2" disabled={isSavingEPF}>
+                      {isSavingEPF ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
                         <Save className="h-4 w-4" />
-                        Save EPF Form
-                      </Button>
-                      <Button onClick={handlePrintEPFForm} variant="outline" className="flex items-center gap-2">
-                        <Download className="h-4 w-4" />
-                        Print Form
-                      </Button>
-                    </div>
-                    <Button variant="outline" onClick={() => setActiveTab("onboarding")}>
-                      Back to Onboarding
+                      )}
+                      {isSavingEPF ? "Saving..." : "Save Form"}
+                    </Button>
+                    <Button onClick={handlePrintEPFForm} variant="outline" className="flex items-center gap-2">
+                      <Download className="h-4 w-4" />
+                      Print Form
                     </Button>
                   </div>
                 </div>
@@ -2822,4 +2455,4 @@ const handleAddEmployee = async () => {
   );
 };
 
-export default OnboardingTab;
+export default SupervisorOnboardingTab;

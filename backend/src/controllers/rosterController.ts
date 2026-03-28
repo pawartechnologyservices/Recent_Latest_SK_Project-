@@ -1,3 +1,4 @@
+// controllers/rosterController.ts
 import { Request, Response } from "express";
 import Roster, { IRoster } from "../models/Roster";
 
@@ -13,7 +14,7 @@ export const getRosterEntries = async (req: Request, res: Response) => {
       employeeId,
       page = "1",
       limit = "50",
-      createdBy, // Add createdBy filter
+      createdBy,
     } = req.query;
 
     const filter: any = {};
@@ -38,7 +39,7 @@ export const getRosterEntries = async (req: Request, res: Response) => {
     }
 
     if (createdBy) {
-      filter.createdBy = createdBy; // Add createdBy to filter
+      filter.createdBy = createdBy;
     }
 
     const pageNum = parseInt(page as string);
@@ -74,12 +75,15 @@ export const getRosterEntries = async (req: Request, res: Response) => {
       shift: entry.shift,
       shiftTiming: entry.shiftTiming,
       assignedTask: entry.assignedTask,
+      assignedTaskId: entry.assignedTaskId,
       hours: entry.hours,
       remark: entry.remark,
       type: entry.type,
       siteClient: entry.siteClient,
-      supervisor: entry.supervisor,
-      createdBy: entry.createdBy || "superadmin", // Add createdBy with default
+      siteId: entry.siteId,
+      supervisors: entry.supervisors || [],
+      managers: entry.managers || [],
+      createdBy: entry.createdBy || "superadmin",
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     }));
@@ -138,12 +142,15 @@ export const getRosterById = async (req: Request, res: Response) => {
       shift: roster.shift,
       shiftTiming: roster.shiftTiming,
       assignedTask: roster.assignedTask,
+      assignedTaskId: roster.assignedTaskId,
       hours: roster.hours,
       remark: roster.remark,
       type: roster.type,
       siteClient: roster.siteClient,
-      supervisor: roster.supervisor,
-      createdBy: roster.createdBy || "superadmin", // Add createdBy with default
+      siteId: roster.siteId,
+      supervisors: roster.supervisors || [],
+      managers: roster.managers || [],
+      createdBy: roster.createdBy || "superadmin",
       createdAt: roster.createdAt,
       updatedAt: roster.updatedAt,
     };
@@ -185,7 +192,7 @@ export const createRosterEntry = async (req: Request, res: Response) => {
       "hours",
       "type",
       "siteClient",
-      "supervisor",
+      "siteId"
     ];
 
     const missingFields = requiredFields.filter((field) => !rosterData[field]);
@@ -198,9 +205,22 @@ export const createRosterEntry = async (req: Request, res: Response) => {
       });
     }
 
+    // Validate supervisors and managers (at least one of each required)
+    if ((!rosterData.supervisors || rosterData.supervisors.length === 0) && !rosterData.supervisor) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one supervisor is required",
+      });
+    }
+
+    if ((!rosterData.managers || rosterData.managers.length === 0) && !rosterData.manager) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one manager is required",
+      });
+    }
+
     // Check if entry already exists for same employee on same date and shift
-    // For admin users, we allow same entry if created by different users
-    // For superadmin, we maintain strict duplicate check
     let existingEntry;
     if (userType === 'superadmin') {
       existingEntry = await Roster.findOne({
@@ -232,9 +252,23 @@ export const createRosterEntry = async (req: Request, res: Response) => {
       });
     }
 
+    // Handle supervisors and managers (support both old single and new multiple format)
+    let supervisors = rosterData.supervisors || [];
+    let managers = rosterData.managers || [];
+
+    // If old format with single supervisor/manager is used, convert to array
+    if (rosterData.supervisor && !rosterData.supervisors) {
+      supervisors = [{ id: rosterData.supervisorId, name: rosterData.supervisor }];
+    }
+    if (rosterData.manager && !rosterData.managers) {
+      managers = [{ id: rosterData.managerId, name: rosterData.manager }];
+    }
+
     // Add createdBy field to roster data
     const rosterWithCreator = {
       ...rosterData,
+      supervisors,
+      managers,
       createdBy: userType
     };
 
@@ -252,11 +286,14 @@ export const createRosterEntry = async (req: Request, res: Response) => {
       shift: roster.shift,
       shiftTiming: roster.shiftTiming,
       assignedTask: roster.assignedTask,
+      assignedTaskId: roster.assignedTaskId,
       hours: roster.hours,
       remark: roster.remark,
       type: roster.type,
       siteClient: roster.siteClient,
-      supervisor: roster.supervisor,
+      siteId: roster.siteId,
+      supervisors: roster.supervisors || [],
+      managers: roster.managers || [],
       createdBy: roster.createdBy,
       createdAt: roster.createdAt,
       updatedAt: roster.updatedAt,
@@ -289,7 +326,7 @@ export const createRosterEntry = async (req: Request, res: Response) => {
   }
 };
 
-// Add this new endpoint for duplicate check (optional)
+// Check duplicate entry endpoint
 export const checkDuplicateEntry = async (req: Request, res: Response) => {
   try {
     const { employeeId, date, shift, userType = 'superadmin' } = req.query;
@@ -355,7 +392,6 @@ export const updateRosterEntry = async (req: Request, res: Response) => {
     }
 
     // Check if user has permission to update
-    // Superadmin can update any entry, admin can only update their own entries
     if (userType === 'admin' && existingRoster.createdBy !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -363,9 +399,26 @@ export const updateRosterEntry = async (req: Request, res: Response) => {
       });
     }
 
+    // Handle supervisors and managers
+    let supervisors = updates.supervisors;
+    let managers = updates.managers;
+
+    // If old format is used, convert to array
+    if (updates.supervisor && !updates.supervisors) {
+      supervisors = [{ id: updates.supervisorId, name: updates.supervisor }];
+    }
+    if (updates.manager && !updates.managers) {
+      managers = [{ id: updates.managerId, name: updates.manager }];
+    }
+
     const roster = await Roster.findByIdAndUpdate(
       id,
-      { ...updates, updatedAt: new Date() },
+      { 
+        ...updates, 
+        supervisors: supervisors || existingRoster.supervisors,
+        managers: managers || existingRoster.managers,
+        updatedAt: new Date() 
+      },
       { new: true, runValidators: true }
     );
 
@@ -387,11 +440,14 @@ export const updateRosterEntry = async (req: Request, res: Response) => {
       shift: roster.shift,
       shiftTiming: roster.shiftTiming,
       assignedTask: roster.assignedTask,
+      assignedTaskId: roster.assignedTaskId,
       hours: roster.hours,
       remark: roster.remark,
       type: roster.type,
       siteClient: roster.siteClient,
-      supervisor: roster.supervisor,
+      siteId: roster.siteId,
+      supervisors: roster.supervisors || [],
+      managers: roster.managers || [],
       createdBy: roster.createdBy,
       createdAt: roster.createdAt,
       updatedAt: roster.updatedAt,
@@ -430,7 +486,6 @@ export const deleteRosterEntry = async (req: Request, res: Response) => {
     }
 
     // Check if user has permission to delete
-    // Superadmin can delete any entry, admin can only delete their own entries
     if (userType === 'admin' && existingRoster.createdBy !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -438,7 +493,7 @@ export const deleteRosterEntry = async (req: Request, res: Response) => {
       });
     }
 
-    const roster = await Roster.findByIdAndDelete(req.params.id);
+    await Roster.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
@@ -570,6 +625,8 @@ export const getCalendarView = async (req: Request, res: Response) => {
         employeeName: entry.employeeName,
         shift: entry.shift,
         hours: entry.hours,
+        supervisors: entry.supervisors || [],
+        managers: entry.managers || [],
         createdBy: entry.createdBy || 'superadmin',
       });
       return acc;
@@ -629,6 +686,29 @@ export const bulkCreateRosterEntries = async (req: Request, res: Response) => {
     const duplicateEntries = [];
 
     for (const entry of entries) {
+      // Check required fields
+      const requiredFields = [
+        "date", "employeeName", "employeeId", "department", "designation",
+        "shift", "shiftTiming", "assignedTask", "hours", "type",
+        "siteClient", "siteId"
+      ];
+      
+      const missingFields = requiredFields.filter(field => !entry[field]);
+      if (missingFields.length > 0) {
+        console.log(`Entry missing fields: ${missingFields.join(", ")}`);
+        continue;
+      }
+
+      // Validate supervisors and managers
+      if ((!entry.supervisors || entry.supervisors.length === 0) && !entry.supervisor) {
+        console.log("Entry missing supervisors");
+        continue;
+      }
+      if ((!entry.managers || entry.managers.length === 0) && !entry.manager) {
+        console.log("Entry missing managers");
+        continue;
+      }
+
       // Check for duplicates based on user type
       let filter: any = {
         employeeId: entry.employeeId,
@@ -643,9 +723,22 @@ export const bulkCreateRosterEntries = async (req: Request, res: Response) => {
       const existing = await Roster.findOne(filter);
 
       if (!existing) {
+        // Handle supervisors and managers
+        let supervisors = entry.supervisors || [];
+        let managers = entry.managers || [];
+
+        if (entry.supervisor && !entry.supervisors) {
+          supervisors = [{ id: entry.supervisorId, name: entry.supervisor }];
+        }
+        if (entry.manager && !entry.managers) {
+          managers = [{ id: entry.managerId, name: entry.manager }];
+        }
+
         // Add createdBy to each entry
         validatedEntries.push({
           ...entry,
+          supervisors,
+          managers,
           createdBy: userType
         });
       } else {
@@ -656,7 +749,7 @@ export const bulkCreateRosterEntries = async (req: Request, res: Response) => {
     if (validatedEntries.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "All entries already exist",
+        message: "All entries already exist or are invalid",
         duplicates: duplicateEntries.length,
       });
     }
@@ -675,11 +768,14 @@ export const bulkCreateRosterEntries = async (req: Request, res: Response) => {
       shift: roster.shift,
       shiftTiming: roster.shiftTiming,
       assignedTask: roster.assignedTask,
+      assignedTaskId: roster.assignedTaskId,
       hours: roster.hours,
       remark: roster.remark,
       type: roster.type,
       siteClient: roster.siteClient,
-      supervisor: roster.supervisor,
+      siteId: roster.siteId,
+      supervisors: roster.supervisors || [],
+      managers: roster.managers || [],
       createdBy: roster.createdBy,
       createdAt: roster.createdAt,
       updatedAt: roster.updatedAt,

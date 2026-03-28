@@ -1,5 +1,15 @@
-// models/Roster.ts - Update the interface and schema
+// models/Roster.ts
 import mongoose, { Schema, Document } from "mongoose";
+
+export interface ISupervisor {
+  id: string;
+  name: string;
+}
+
+export interface IManager {
+  id: string;
+  name: string;
+}
 
 export interface IRoster extends Document {
   date: string;
@@ -14,11 +24,24 @@ export interface IRoster extends Document {
   remark: string;
   type: "daily" | "weekly" | "fortnightly" | "monthly";
   siteClient: string;
-  supervisor: string;
-  createdBy: "superadmin" | "admin"; // Add this field
+  siteId: string;
+  supervisors: ISupervisor[];
+  managers: IManager[];
+  assignedTaskId: string;
+  createdBy: "superadmin" | "admin";
   createdAt: Date;
   updatedAt: Date;
 }
+
+const SupervisorSchema: Schema = new Schema({
+  id: { type: String, required: true },
+  name: { type: String, required: true },
+});
+
+const ManagerSchema: Schema = new Schema({
+  id: { type: String, required: true },
+  name: { type: String, required: true },
+});
 
 const RosterSchema: Schema = new Schema(
   {
@@ -54,6 +77,10 @@ const RosterSchema: Schema = new Schema(
       type: String,
       required: true,
     },
+    assignedTaskId: {
+      type: String,
+      default: "",
+    },
     hours: {
       type: Number,
       required: true,
@@ -73,9 +100,17 @@ const RosterSchema: Schema = new Schema(
       type: String,
       required: true,
     },
-    supervisor: {
+    siteId: {
       type: String,
       required: true,
+    },
+    supervisors: {
+      type: [SupervisorSchema],
+      default: [],
+    },
+    managers: {
+      type: [ManagerSchema],
+      default: [],
     },
     createdBy: {
       type: String,
@@ -89,9 +124,11 @@ const RosterSchema: Schema = new Schema(
   }
 );
 
-// Create index for efficient querying
+// Create indexes for efficient querying
 RosterSchema.index({ date: 1, employeeId: 1 });
 RosterSchema.index({ type: 1, date: 1 });
-RosterSchema.index({ createdBy: 1 }); // Add index for createdBy
+RosterSchema.index({ createdBy: 1 });
+RosterSchema.index({ "supervisors.id": 1 });
+RosterSchema.index({ "managers.id": 1 });
 
 export default mongoose.model<IRoster>("Roster", RosterSchema);

@@ -93,6 +93,10 @@ import AdminAttendanceView from "./pages/admin/AdminAttendanceView";
 import AdminHRMS from "./pages/admin/AdminHRMS";
 import SupervisorAssignTask from "./pages/supervisor/SupervisorAssignTask";
 import ManagerAssignTask from "./pages/manager/ManagerAssignTask";
+import SuperAdminReports from "./pages/superadmin/SuperAdminReports";
+import ManagerSites from "./pages/manager/ManagerSites";
+import SupervisorRosterSection from "./pages/supervisor/SupervisorRosterSection";
+import SupervisorTrainingBriefing from "./pages/supervisor/SupervisorTrainingBriefing";
 //import { AuthProvider } from "./contexts/AuthContext";
 // import AdminCRM from "./pages/admin/AdminCRM";
 
@@ -134,6 +138,7 @@ const App = () => (
               <Route path="notifications" element={<Notifications />} />
               <Route path="crm" element={<CRM />} />
               <Route path="erp" element={<ERP />} />
+               <Route path="site-visits" element={<SuperAdminReports />} />
               <Route path="billing" element={<Billing />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
@@ -187,6 +192,7 @@ const App = () => (
               <Route path="managerattendance" element={<ManagerAttendance />}/>
               <Route path="notifications" element={<ManagerNotifications />} />
               <Route path="settings" element={<ManagerSettings />} />
+                 <Route path="sites" element={<ManagerSites />} />
               <Route path="assigntask" element={<ManagerAssignTask />} />
             </Route>
 
@@ -210,6 +216,8 @@ const App = () => (
               <Route path="reports" element={<SupervisorReports />} />
                <Route path="settings" element={<SupervisorSettings />} />
                <Route path="assigntask" element={<SupervisorAssignTask />}/>
+               <Route path="supervisortraining" element={<SupervisorTrainingBriefing />} />
+               <Route path="supervisorroster" element={<SupervisorRosterSection />} />
             </Route>
 
             {/* Employee Routes */}

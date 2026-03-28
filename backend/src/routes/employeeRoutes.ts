@@ -34,13 +34,32 @@ const documentStorage = multer.memoryStorage();
 const documentUpload = multer({
   storage: documentStorage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+    const allowedMimes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain',
+      'application/rtf'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image and PDF files are allowed!'));
+      const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (allowedExtensions.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only document files (PDF, Word, Excel, PowerPoint, Text, Image) are allowed!'));
+      }
     }
   }
 });
@@ -70,7 +89,7 @@ const excelUpload = multer({
     cb(null, true);
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 10 * 1024 * 1024
   }
 });
 
@@ -107,6 +126,8 @@ router.patch('/bulk/site', async (req: any, res: any) => {
   try {
     const { employeeIds, siteName } = req.body;
     
+    console.log('Bulk site assignment request:', { employeeIds, siteName });
+    
     if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
       return res.status(400).json({ 
         success: false, 
@@ -114,48 +135,67 @@ router.patch('/bulk/site', async (req: any, res: any) => {
       });
     }
     
-    if (!siteName) {
+    if (!siteName || siteName === '') {
       return res.status(400).json({ 
         success: false, 
-        message: 'Please provide a site name' 
+        message: 'Please provide a valid site name' 
       });
     }
     
     const employees = await Employee.find({ _id: { $in: employeeIds } });
     
-    if (employees.length !== employeeIds.length) {
-      const foundIds = employees.map(emp => emp._id.toString());
-      const missingIds = employeeIds.filter(id => !foundIds.includes(id));
+    if (employees.length === 0) {
       return res.status(404).json({ 
         success: false, 
-        message: `Some employees not found: ${missingIds.join(', ')}` 
+        message: 'No employees found with the provided IDs' 
       });
     }
     
     const updatePromises = employees.map(async (employee) => {
       if (employee.siteName !== siteName) {
-        const updatedEmployee = updateSiteHistory(employee, siteName);
+        const today = new Date();
+        const siteHistory = employee.siteHistory || [];
+        
+        if (employee.siteName && employee.siteName !== '') {
+          const lastEntryIndex = siteHistory.findIndex(entry => !entry.leftDate);
+          if (lastEntryIndex !== -1) {
+            const lastEntry = siteHistory[lastEntryIndex];
+            const daysWorked = Math.floor((today.getTime() - new Date(lastEntry.assignedDate).getTime()) / (1000 * 60 * 60 * 24));
+            siteHistory[lastEntryIndex] = {
+              ...lastEntry,
+              leftDate: today,
+              daysWorked: daysWorked > 0 ? daysWorked : 0
+            };
+          }
+        }
+        
+        siteHistory.push({
+          siteName: siteName,
+          assignedDate: today
+        });
+        
         return await Employee.findByIdAndUpdate(
           employee._id,
           { 
             $set: { 
               siteName: siteName,
-              siteHistory: updatedEmployee.siteHistory 
+              siteHistory: siteHistory 
             } 
           },
-          { new: true }
+          { new: true, runValidators: false }
         );
       }
       return employee;
     });
     
     const updatedEmployees = await Promise.all(updatePromises);
+    const updatedCount = updatedEmployees.filter(emp => emp && emp.siteName === siteName).length;
     
     res.status(200).json({
       success: true,
-      message: `Successfully updated ${updatedEmployees.length} employees`,
+      message: `Successfully updated ${updatedCount} employees to site: ${siteName}`,
       data: {
-        modifiedCount: updatedEmployees.length,
+        modifiedCount: updatedCount,
         employees: updatedEmployees
       }
     });
@@ -163,7 +203,7 @@ router.patch('/bulk/site', async (req: any, res: any) => {
     console.error('Error in bulk site assignment:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while updating employees',
+      message: 'Server error while updating employees: ' + error.message,
       error: error.message 
     });
   }
@@ -225,7 +265,8 @@ router.patch('/bulk/status', async (req: any, res: any) => {
     
     const result = await Employee.updateMany(
       { _id: { $in: employeeIds } },
-      { $set: updateData }
+      { $set: updateData },
+      { runValidators: false }
     );
     
     res.status(200).json({
@@ -662,7 +703,6 @@ router.get('/export', async (req: any, res: any) => {
 
 // ==================== SINGLE EMPLOYEE CRUD ROUTES ====================
 
-// GET all employees with pagination and filters
 router.get('/', async (req: any, res: any) => {
   try {
     const { 
@@ -746,7 +786,6 @@ router.get('/', async (req: any, res: any) => {
   }
 });
 
-// CREATE employee with Cloudinary upload
 router.post('/',
   imageUpload.fields([
     { name: 'photo', maxCount: 1 },
@@ -903,7 +942,6 @@ router.post('/',
   }
 );
 
-// GET employee by ID
 router.get('/:id', async (req: any, res: any) => {
   try {
     const employee = await Employee.findById(req.params.id)
@@ -930,7 +968,6 @@ router.get('/:id', async (req: any, res: any) => {
   }
 });
 
-// UPDATE employee handler with Cloudinary upload
 const updateEmployeeHandler = async (req: any, res: any) => {
   try {
     const employeeData = { ...req.body };
@@ -1046,7 +1083,7 @@ const updateEmployeeHandler = async (req: any, res: any) => {
     const updatedEmployee = await Employee.findByIdAndUpdate(
       req.params.id,
       { $set: employeeData },
-      { new: true, runValidators: true }
+      { new: true, runValidators: false }
     ).select('-__v -photoPublicId -employeeSignaturePublicId -authorizedSignaturePublicId');
 
     res.json({
@@ -1089,7 +1126,6 @@ const updateEmployeeHandler = async (req: any, res: any) => {
   }
 };
 
-// Add both PUT and PATCH routes
 router.put('/:id',
   imageUpload.fields([
     { name: 'photo', maxCount: 1 },
@@ -1144,6 +1180,14 @@ router.patch('/:id/status', async (req: any, res: any) => {
       });
     }
 
+    const validStatuses = ['active', 'inactive', 'left'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be one of: active, inactive, left'
+      });
+    }
+
     const updateData: any = { status };
     
     if (status === 'left') {
@@ -1152,8 +1196,8 @@ router.patch('/:id/status', async (req: any, res: any) => {
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
-      updateData,
-      { new: true }
+      { $set: updateData },
+      { new: true, runValidators: false }
     ).select('-__v -photoPublicId -employeeSignaturePublicId -authorizedSignaturePublicId');
 
     if (!employee) {
@@ -1172,7 +1216,7 @@ router.patch('/:id/status', async (req: any, res: any) => {
     console.error('Update status error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Error updating employee status',
+      message: 'Error updating employee status: ' + error.message,
       error: error.message 
     });
   }
@@ -1180,10 +1224,8 @@ router.patch('/:id/status', async (req: any, res: any) => {
 
 // ==================== DOCUMENT MANAGEMENT ROUTES ====================
 
-// Define Document Type Enum
-type DocumentType = 'aadhar' | 'pan' | 'electricity' | 'driving' | 'police' | 'voter' | 'passport' | 'other';
+type DocumentType = 'aadhar' | 'pan' | 'police' | 'driving' | 'electricity' | 'voter' | 'passport' | 'other';
 
-// Interface for KYC document
 interface KYCdocument {
   documentType: DocumentType;
   documentName: string;
@@ -1195,10 +1237,12 @@ interface KYCdocument {
   verifiedAt?: Date;
   verifiedBy?: string;
   expiryDate?: Date;
+  fileType?: string;
+  fileName?: string;
+  fileSize?: number;
+  resourceType?: string;
 }
 
-// Upload document for employee
-// Upload document for employee
 router.post('/:id/documents',
   documentUpload.single('document'),
   async (req: any, res: any) => {
@@ -1206,7 +1250,12 @@ router.post('/:id/documents',
       const { id } = req.params;
       const { documentType, documentName, documentNumber, expiryDate } = req.body;
       
-      console.log('Document upload request received:', { id, documentType, documentName });
+      console.log('Document upload request received:', { id, documentType, documentName, documentNumber });
+      console.log('File info:', req.file ? { 
+        originalname: req.file.originalname, 
+        mimetype: req.file.mimetype, 
+        size: req.file.size 
+      } : 'No file');
       
       if (!req.file) {
         return res.status(400).json({
@@ -1222,12 +1271,11 @@ router.post('/:id/documents',
         });
       }
 
-      // Validate documentType is one of the allowed values
-      const validDocumentTypes: DocumentType[] = ['aadhar', 'pan', 'electricity', 'driving', 'police', 'voter', 'passport', 'other'];
+      const validDocumentTypes: DocumentType[] = ['aadhar', 'pan', 'police', 'driving', 'electricity', 'voter', 'passport', 'other'];
       if (!validDocumentTypes.includes(documentType as DocumentType)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid document type'
+          message: `Invalid document type. Must be one of: ${validDocumentTypes.join(', ')}`
         });
       }
 
@@ -1250,15 +1298,17 @@ router.post('/:id/documents',
       else if (documentType === 'passport') folder = 'employee-documents/passport';
       else folder = 'employee-documents/other';
       
-      // Upload to Cloudinary with original filename
+      console.log('Uploading to Cloudinary folder:', folder);
+      
       const uploadResult = await uploadDocumentToCloudinary(
         req.file.buffer, 
         folder,
         req.file.originalname
       );
       
-      // Create document entry with proper typing
-      const newDocument: KYCdocument = {
+      console.log('Cloudinary upload result:', uploadResult.secure_url);
+      
+      const newDocument = {
         documentType: documentType as DocumentType,
         documentName,
         documentNumber: documentNumber || undefined,
@@ -1266,47 +1316,45 @@ router.post('/:id/documents',
         filePublicId: uploadResult.public_id,
         uploadedAt: new Date(),
         verified: false,
-        expiryDate: expiryDate ? new Date(expiryDate) : undefined
-      };
-
-      if (!employee.kycDocuments) {
-        employee.kycDocuments = [];
-      }
-      
-      employee.kycDocuments.push(newDocument);
-      
-      await employee.save();
-
-      // Create response object without filePublicId
-      const { filePublicId, ...documentResponse } = newDocument;
-
-      // Add file type info to response
-      const responseWithFileInfo = {
-        ...documentResponse,
+        expiryDate: expiryDate ? new Date(expiryDate) : undefined,
         fileType: req.file.mimetype,
         fileName: req.file.originalname,
         fileSize: req.file.size,
         resourceType: uploadResult.resource_type
       };
 
+      const updatedEmployee = await Employee.findByIdAndUpdate(
+        id,
+        { $push: { kycDocuments: newDocument } },
+        { new: true, runValidators: false }
+      );
+
+      if (!updatedEmployee) {
+        return res.status(404).json({
+          success: false,
+          message: 'Employee not found'
+        });
+      }
+
+      const { filePublicId, ...documentResponse } = newDocument;
+
       res.status(201).json({
         success: true,
         message: 'Document uploaded successfully',
-        document: responseWithFileInfo
+        document: documentResponse
       });
 
     } catch (error: any) {
       console.error('Error uploading document:', error);
       res.status(500).json({
         success: false,
-        message: 'Error uploading document',
+        message: 'Error uploading document: ' + error.message,
         error: error.message
       });
     }
   }
 );
 
-// Get all documents for an employee
 router.get('/:id/documents', async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -1340,7 +1388,6 @@ router.get('/:id/documents', async (req: any, res: any) => {
   }
 });
 
-// Delete a document
 router.delete('/:id/documents/:documentIndex', async (req: any, res: any) => {
   try {
     const { id, documentIndex } = req.params;
@@ -1390,7 +1437,6 @@ router.delete('/:id/documents/:documentIndex', async (req: any, res: any) => {
   }
 });
 
-// Verify a document
 router.patch('/:id/documents/:documentIndex/verify', async (req: any, res: any) => {
   try {
     const { id, documentIndex } = req.params;
@@ -1433,7 +1479,6 @@ router.patch('/:id/documents/:documentIndex/verify', async (req: any, res: any) 
   }
 });
 
-// Get document statistics
 router.get('/:id/documents/stats', async (req: any, res: any) => {
   try {
     const { id } = req.params;
