@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Plus, Calendar, Download, Edit, Trash2, ChevronLeft, ChevronRight, Loader2, RefreshCw, User, UserCog, Clock, X, Check, ChevronDown, ChevronUp, MoreVertical, Filter, Users, CalendarDays, CalendarRange, CalendarCheck, Eye, Info, Building } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Calendar, Download, Edit, Trash2, ChevronLeft, ChevronRight, Loader2, RefreshCw, User, UserCog, Clock, X, Check, ChevronDown, ChevronUp, MoreVertical, Filter, Users, CalendarDays, CalendarRange, CalendarCheck, Eye, Info, Building, Menu } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, addDays, differenceInDays, getWeek, getYear } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -23,6 +23,8 @@ import assignTaskService, { AssignTask } from "@/services/assignTaskService";
 import { rosterService, RosterEntryData, GetRosterParams } from "@/services/rosterService";
 import { useRole } from "@/context/RoleContext";
 import axios from "axios";
+import { useOutletContext } from 'react-router-dom';
+import { motion } from "framer-motion";
 
 const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
 
@@ -997,6 +999,7 @@ const RosterDetailDialog = ({ entry, open, onClose }: { entry: RosterEntry | nul
 
 const SupervisorRosterSection = () => {
   const { user: authUser, isAuthenticated } = useRole();
+  const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();
   const [selectedRoster, setSelectedRoster] = useState<"daily" | "weekly" | "fortnightly" | "monthly">("daily");
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [addEntryDialogOpen, setAddEntryDialogOpen] = useState(false);
@@ -3342,331 +3345,362 @@ const SupervisorRosterSection = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="p-4 md:p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 md:h-6 md:w-6" />
-              <CardTitle className="text-lg md:text-xl">Supervisor Roster Management</CardTitle>
-            </div>
-            <div className="flex gap-2">
-              {isMobileView && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowMobileStats(!showMobileStats)}
-                  className="md:hidden"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Stats
-                  {showMobileStats ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
-                </Button>
-              )}
-              <Button 
-                variant="outline" 
-                size={isMobileView ? "sm" : "default"}
-                onClick={() => {
-                  fetchAllData();
-                  fetchRosterEntries();
-                }} 
-                disabled={loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.roster || loadingData.tasks}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${(loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.roster || loadingData.tasks) ? 'animate-spin' : ''}`} />
-                {!isMobileView && "Refresh Data"}
-              </Button>
-              <Button 
-                variant="outline" 
-                size={isMobileView ? "sm" : "default"}
-                onClick={handleExportReport} 
-                disabled={loadingData.roster}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {!isMobileView && "Export Report"}
-              </Button>
+    <div className="min-h-screen bg-background">
+      {/* Header with Hamburger Menu */}
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="bg-card border-b border-border px-4 md:px-6 py-4 sticky top-0 z-40"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Menu for Mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMenuClick}
+              className="lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold">Supervisor Roster Management</h1>
+              <p className="text-xs md:text-sm text-muted-foreground mt-1">
+                Manage daily, weekly, 15-day, and monthly rosters for your assigned sites
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6">
-          <div className="flex flex-wrap gap-2 mb-6">
-            {isMobileView ? (
-              <Select value={selectedRoster} onValueChange={(value: any) => setSelectedRoster(value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select roster type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rosterTypes.map((type) => (
-                    <SelectItem key={type} value={type} className="capitalize">
-                      {type === "fortnightly" ? "15 Days" : `${type} Roster`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              rosterTypes.map((type) => (
+
+          <div className="flex gap-2">
+            {isMobileView && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowMobileStats(!showMobileStats)}
+                className="md:hidden"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Stats
+                {showMobileStats ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size={isMobileView ? "sm" : "default"}
+              onClick={() => {
+                fetchAllData();
+                fetchRosterEntries();
+              }} 
+              disabled={loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.roster || loadingData.tasks}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${(loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.roster || loadingData.tasks) ? 'animate-spin' : ''}`} />
+              {!isMobileView && "Refresh Data"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size={isMobileView ? "sm" : "default"}
+              onClick={handleExportReport} 
+              disabled={loadingData.roster}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {!isMobileView && "Export Report"}
+            </Button>
+          </div>
+        </div>
+      </motion.header>
+
+      <div className="p-4 md:p-6 space-y-6">
+        <Card>
+          <CardHeader className="p-4 md:p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 md:h-6 md:w-6" />
+                <CardTitle className="text-lg md:text-xl">Roster Management</CardTitle>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6">
+            <div className="flex flex-wrap gap-2 mb-6">
+              {isMobileView ? (
+                <Select value={selectedRoster} onValueChange={(value: any) => setSelectedRoster(value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select roster type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rosterTypes.map((type) => (
+                      <SelectItem key={type} value={type} className="capitalize">
+                        {type === "fortnightly" ? "15 Days" : `${type} Roster`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                rosterTypes.map((type) => (
+                  <Button
+                    key={type}
+                    variant={selectedRoster === type ? "default" : "outline"}
+                    onClick={() => setSelectedRoster(type as any)}
+                    className="capitalize"
+                    disabled={loadingData.roster}
+                  >
+                    {type === "fortnightly" ? "15 Days" : `${type} Roster`}
+                  </Button>
+                ))
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 p-4 bg-muted rounded-lg">
+              <div className="flex items-center justify-between sm:justify-start gap-4">
                 <Button
-                  key={type}
-                  variant={selectedRoster === type ? "default" : "outline"}
-                  onClick={() => setSelectedRoster(type as any)}
-                  className="capitalize"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigateDate("prev")}
                   disabled={loadingData.roster}
                 >
-                  {type === "fortnightly" ? "15 Days" : `${type} Roster`}
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
-              ))
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 p-4 bg-muted rounded-lg">
-            <div className="flex items-center justify-between sm:justify-start gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigateDate("prev")}
-                disabled={loadingData.roster}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              {selectedRoster === "daily" && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-[180px] sm:w-[240px] justify-start text-left font-normal"
-                      disabled={loadingData.roster}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{dateRange.label}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <div className="p-3">
-                      <div className="flex justify-between items-center mb-4">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setSelectedDate(subMonths(selectedDate, 1))}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <div className="font-semibold">
-                          {format(selectedDate, "MMMM yyyy")}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setSelectedDate(addMonths(selectedDate, 1))}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-7 gap-1">
-                        {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
-                          <div key={i} className="text-center text-xs font-medium">
-                            {day}
+                
+                {selectedRoster === "daily" && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-[180px] sm:w-[240px] justify-start text-left font-normal"
+                        disabled={loadingData.roster}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">{dateRange.label}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <div className="p-3">
+                        <div className="flex justify-between items-center mb-4">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setSelectedDate(subMonths(selectedDate, 1))}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <div className="font-semibold">
+                            {format(selectedDate, "MMMM yyyy")}
                           </div>
-                        ))}
-                        {eachDayOfInterval({
-                          start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 1 }),
-                          end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 1 })
-                        }).map((day, i) => {
-                          const isCurrentMonth = isSameMonth(day, selectedDate);
-                          const isSelected = format(day, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
-                          return (
-                            <Button
-                              key={i}
-                              variant={isSelected ? "default" : "ghost"}
-                              size="sm"
-                              className={cn(
-                                "h-8 w-8 p-0",
-                                !isCurrentMonth && "text-muted-foreground opacity-50"
-                              )}
-                              onClick={() => setSelectedDate(day)}
-                            >
-                              {format(day, "d")}
-                            </Button>
-                          );
-                        })}
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setSelectedDate(addMonths(selectedDate, 1))}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                          {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
+                            <div key={i} className="text-center text-xs font-medium">
+                              {day}
+                            </div>
+                          ))}
+                          {eachDayOfInterval({
+                            start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 1 }),
+                            end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 1 })
+                          }).map((day, i) => {
+                            const isCurrentMonth = isSameMonth(day, selectedDate);
+                            const isSelected = format(day, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                            return (
+                              <Button
+                                key={i}
+                                variant={isSelected ? "default" : "ghost"}
+                                size="sm"
+                                className={cn(
+                                  "h-8 w-8 p-0",
+                                  !isCurrentMonth && "text-muted-foreground opacity-50"
+                                )}
+                                onClick={() => setSelectedDate(day)}
+                              >
+                                {format(day, "d")}
+                              </Button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
+                    </PopoverContent>
+                  </Popover>
+                )}
 
-              {selectedRoster === "weekly" && (
-                <DateRangePicker
-                  startDate={weeklyStartDate}
-                  endDate={weeklyEndDate}
-                  onStartDateChange={setWeeklyStartDate}
-                  onEndDateChange={setWeeklyEndDate}
-                  label="Select Weekly Range"
-                />
-              )}
+                {selectedRoster === "weekly" && (
+                  <DateRangePicker
+                    startDate={weeklyStartDate}
+                    endDate={weeklyEndDate}
+                    onStartDateChange={setWeeklyStartDate}
+                    onEndDateChange={setWeeklyEndDate}
+                    label="Select Weekly Range"
+                  />
+                )}
 
-              {selectedRoster === "fortnightly" && (
-                <DateRangePicker
-                  startDate={fortnightlyStartDate}
-                  endDate={fortnightlyEndDate}
-                  onStartDateChange={setFortnightlyStartDate}
-                  onEndDateChange={setFortnightlyEndDate}
-                  label="Select 15 Days Range"
-                />
-              )}
+                {selectedRoster === "fortnightly" && (
+                  <DateRangePicker
+                    startDate={fortnightlyStartDate}
+                    endDate={fortnightlyEndDate}
+                    onStartDateChange={setFortnightlyStartDate}
+                    onEndDateChange={setFortnightlyEndDate}
+                    label="Select 15 Days Range"
+                  />
+                )}
 
-              {selectedRoster === "monthly" && (
-                <DateRangePicker
-                  startDate={monthlyStartDate}
-                  endDate={monthlyEndDate}
-                  onStartDateChange={setMonthlyStartDate}
-                  onEndDateChange={setMonthlyEndDate}
-                  label="Select Monthly Range"
-                />
-              )}
-              
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigateDate("next")}
-                disabled={loadingData.roster}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-right">
-              {selectedRoster === "daily" && "Daily View - Single Day"}
-              {selectedRoster === "weekly" && `Weekly View - ${differenceInDays(weeklyEndDate, weeklyStartDate) + 1} Days`}
-              {selectedRoster === "fortnightly" && `15 Days View - ${differenceInDays(fortnightlyEndDate, fortnightlyStartDate) + 1} Days`}
-              {selectedRoster === "monthly" && `Monthly View - ${differenceInDays(monthlyEndDate, monthlyStartDate) + 1} Days`}
-            </div>
-          </div>
-
-          {isMobileView && showMobileStats ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-              <MobileStatCard
-                title="Total Entries"
-                value={filteredRoster.length.toString()}
-                icon={Calendar}
-                color="primary"
-              />
-              <MobileStatCard
-                title="Total Hours"
-                value={`${filteredRoster.reduce((sum, entry) => sum + entry.hours, 0)}h`}
-                icon={Clock}
-                color="success"
-              />
-              <MobileStatCard
-                title="Unique Employees"
-                value={new Set(filteredRoster.map(entry => entry.employeeId)).size.toString()}
-                icon={User}
-                color="warning"
-              />
-            </div>
-          ) : !isMobileView ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{filteredRoster.length}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Across {Object.keys(groupedRoster).length} days
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-primary">
-                    {filteredRoster.reduce((sum, entry) => sum + entry.hours, 0)}h
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Average: {(filteredRoster.reduce((sum, entry) => sum + entry.hours, 0) / (filteredRoster.length || 1)).toFixed(1)}h per entry
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Unique Employees</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
-                    {new Set(filteredRoster.map(entry => entry.employeeId)).size}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Out of {employees.length} total employees
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-4 mb-6">
-            <Dialog open={addEntryDialogOpen} onOpenChange={setAddEntryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button 
-                  disabled={loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.tasks || sites.length === 0}
-                  className="w-full sm:w-auto"
-                  size={isMobileView ? "default" : "default"}
+                {selectedRoster === "monthly" && (
+                  <DateRangePicker
+                    startDate={monthlyStartDate}
+                    endDate={monthlyEndDate}
+                    onStartDateChange={setMonthlyStartDate}
+                    onEndDateChange={setMonthlyEndDate}
+                    label="Select Monthly Range"
+                  />
+                )}
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => navigateDate("next")}
+                  disabled={loadingData.roster}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Entry
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    Add Roster Entry - {addEntryFormType === "fortnightly" ? "15 DAYS" : addEntryFormType.toUpperCase()} ROSTER
-                  </DialogTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Fill in the details below to create a new roster entry
-                  </p>
-                </DialogHeader>
-                <AddEntryForm />
-              </DialogContent>
-            </Dialog>
+              </div>
+              
+              <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-right">
+                {selectedRoster === "daily" && "Daily View - Single Day"}
+                {selectedRoster === "weekly" && `Weekly View - ${differenceInDays(weeklyEndDate, weeklyStartDate) + 1} Days`}
+                {selectedRoster === "fortnightly" && `15 Days View - ${differenceInDays(fortnightlyEndDate, fortnightlyStartDate) + 1} Days`}
+                {selectedRoster === "monthly" && `Monthly View - ${differenceInDays(monthlyEndDate, monthlyStartDate) + 1} Days`}
+              </div>
+            </div>
 
-            <Dialog open={editEntryDialogOpen} onOpenChange={setEditEntryDialogOpen}>
-              <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    Edit Roster Entry
-                  </DialogTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Update the details below to modify the roster entry
-                  </p>
-                </DialogHeader>
-                <EditEntryForm />
-              </DialogContent>
-            </Dialog>
-          </div>
+            {isMobileView && showMobileStats ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                <MobileStatCard
+                  title="Total Entries"
+                  value={filteredRoster.length.toString()}
+                  icon={Calendar}
+                  color="primary"
+                />
+                <MobileStatCard
+                  title="Total Hours"
+                  value={`${filteredRoster.reduce((sum, entry) => sum + entry.hours, 0)}h`}
+                  icon={Clock}
+                  color="success"
+                />
+                <MobileStatCard
+                  title="Unique Employees"
+                  value={new Set(filteredRoster.map(entry => entry.employeeId)).size.toString()}
+                  icon={User}
+                  color="warning"
+                />
+              </div>
+            ) : !isMobileView ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{filteredRoster.length}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Across {Object.keys(groupedRoster).length} days
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-primary">
+                      {filteredRoster.reduce((sum, entry) => sum + entry.hours, 0)}h
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Average: {(filteredRoster.reduce((sum, entry) => sum + entry.hours, 0) / (filteredRoster.length || 1)).toFixed(1)}h per entry
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Unique Employees</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {new Set(filteredRoster.map(entry => entry.employeeId)).size}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Out of {employees.length} total employees
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
 
-          {selectedRoster === "monthly" ? (
-            <MonthlyCalendarView />
-          ) : (
-            <DailyRosterTable 
-              roster={filteredRoster} 
-              onDelete={handleDeleteRoster}
-              onUpdate={openEditDialog}
-              onViewDetails={handleViewDetails}
-            />
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex flex-wrap gap-4 mb-6">
+              <Dialog open={addEntryDialogOpen} onOpenChange={setAddEntryDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    disabled={loadingData.sites || loadingData.supervisors || loadingData.managers || loadingData.employees || loadingData.tasks || sites.length === 0}
+                    className="w-full sm:w-auto"
+                    size={isMobileView ? "default" : "default"}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Entry
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>
+                      Add Roster Entry - {addEntryFormType === "fortnightly" ? "15 DAYS" : addEntryFormType.toUpperCase()} ROSTER
+                    </DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Fill in the details below to create a new roster entry
+                    </p>
+                  </DialogHeader>
+                  <AddEntryForm />
+                </DialogContent>
+              </Dialog>
 
-      {/* View Details Dialog */}
-      <RosterDetailDialog 
-        entry={selectedEntryForDetails}
-        open={viewDetailsDialogOpen}
-        onClose={() => {
-          setViewDetailsDialogOpen(false);
-          setSelectedEntryForDetails(null);
-        }}
-      />
+              <Dialog open={editEntryDialogOpen} onOpenChange={setEditEntryDialogOpen}>
+                <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>
+                      Edit Roster Entry
+                    </DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Update the details below to modify the roster entry
+                    </p>
+                  </DialogHeader>
+                  <EditEntryForm />
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {selectedRoster === "monthly" ? (
+              <MonthlyCalendarView />
+            ) : (
+              <DailyRosterTable 
+                roster={filteredRoster} 
+                onDelete={handleDeleteRoster}
+                onUpdate={openEditDialog}
+                onViewDetails={handleViewDetails}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* View Details Dialog */}
+        <RosterDetailDialog 
+          entry={selectedEntryForDetails}
+          open={viewDetailsDialogOpen}
+          onClose={() => {
+            setViewDetailsDialogOpen(false);
+            setSelectedEntryForDetails(null);
+          }}
+        />
+      </div>
     </div>
   );
 };

@@ -23,7 +23,8 @@ import {
   Plus, Search, Filter, Download, Eye, Edit, Trash2, Upload, CalendarDays,
   User, Building, Target, MessageSquare, AlertCircle, ChevronRight, ChevronLeft,
   CheckSquare, Square, X, RefreshCw, MoreVertical, ChevronDown, ChevronUp, List,
-  UserCheck, UserCog, Loader2, ExternalLink, Download as DownloadIcon
+  UserCheck, UserCog, Loader2, ExternalLink, Download as DownloadIcon,
+  Menu
 } from "lucide-react";
 import { format } from 'date-fns';
 import { useRole } from "@/context/RoleContext";
@@ -32,6 +33,7 @@ import { briefingApi } from '@/api/briefingApi';
 import { siteService, Site } from '@/services/SiteService';
 import assignTaskService, { AssignTask } from '@/services/assignTaskService';
 import axios from "axios";
+import { useOutletContext } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
 
@@ -407,6 +409,7 @@ const MobileStatCard = ({ title, value, subValue, icon: Icon, color = "blue" }: 
 
 const SupervisorTrainingBriefingSection: React.FC = () => {
   const { user: authUser, isAuthenticated } = useRole();
+  const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();
   const [activeTab, setActiveTab] = useState<'training' | 'briefing'>('training');
   const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([]);
   const [staffBriefings, setStaffBriefings] = useState<StaffBriefing[]>([]);
@@ -974,67 +977,95 @@ const SupervisorTrainingBriefingSection: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Training & Staff Briefing</h1>
-            <p className="text-sm text-gray-600 mt-1">Manage training sessions and daily staff briefings for your assigned sites</p>
-            <div className="flex flex-wrap gap-2 mt-2"><Badge variant="outline" className="bg-blue-50"><Building className="h-3 w-3 mr-1" />Your Sites: {supervisorAssignedSiteNames.length > 0 ? supervisorAssignedSiteNames.join(', ') : 'Loading...'}</Badge></div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}><CalendarDays className="h-4 w-4 mr-2" />{viewMode === 'list' ? 'Calendar' : 'List'}</Button>
-            <Button variant="outline" onClick={handleRefresh}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
-            <Dialog open={showAddTraining} onOpenChange={setShowAddTraining}><DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Add Training</Button></DialogTrigger>
-              <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Add New Training Session</DialogTitle><DialogDescription>Schedule a new training session</DialogDescription></DialogHeader>
-                <AddTrainingForm />
-                <SupervisorsMultiSelect selected={selectedSupervisors} onToggle={handleSupervisorToggle} searchQuery={supervisorSearchQuery} setSearchQuery={setSupervisorSearchQuery} disabled={!trainingForm.site} />
-                <ManagersMultiSelect selected={selectedManagers} onToggle={handleManagerToggle} searchQuery={managerSearchQuery} setSearchQuery={setManagerSearchQuery} disabled={!trainingForm.site} />
-                <EmployeesMultiSelect selected={selectedEmployees} onToggle={handleEmployeeToggle} searchQuery={employeeSearchQuery} setSearchQuery={setEmployeeSearchQuery} disabled={!trainingForm.site} />
-                <AttachmentsSection attachments={trainingAttachments} onUpload={handleTrainingFileUpload} onRemove={removeTrainingAttachment} fileInputRef={fileInputRef} title="Training Attachments" />
-                <DialogFooter><Button onClick={handleAddTraining}>Add Training</Button><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose></DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <Dialog open={showAddBriefing} onOpenChange={setShowAddBriefing}><DialogTrigger asChild><Button variant="secondary"><Plus className="h-4 w-4 mr-2" />Add Briefing</Button></DialogTrigger>
-              <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Add New Staff Briefing</DialogTitle><DialogDescription>Record daily staff briefing details</DialogDescription></DialogHeader>
-                <AddBriefingForm />
-                <SupervisorsMultiSelect selected={selectedSupervisors} onToggle={handleSupervisorToggle} searchQuery={supervisorSearchQuery} setSearchQuery={setSupervisorSearchQuery} disabled={!briefingForm.site} />
-                <ManagersMultiSelect selected={selectedManagers} onToggle={handleManagerToggle} searchQuery={managerSearchQuery} setSearchQuery={setManagerSearchQuery} disabled={!briefingForm.site} />
-                <ActionItemsSection actionItems={briefingForm.actionItems} onAdd={addActionItem} onRemove={removeActionItem} onUpdate={updateActionItem} />
-                <AttachmentsSection attachments={briefingAttachments} onUpload={handleBriefingFileUpload} onRemove={removeBriefingAttachment} fileInputRef={fileInputRef} title="Briefing Attachments" />
-                <DialogFooter><Button onClick={handleAddBriefing}>Add Briefing</Button><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose></DialogFooter>
-              </DialogContent>
-            </Dialog>
+    <div className="min-h-screen bg-background">
+      {/* Header with Hamburger Menu */}
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="bg-card border-b border-border px-4 md:px-6 py-4 sticky top-0 z-40"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Menu for Mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMenuClick}
+              className="lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold">Training & Staff Briefing</h1>
+              <p className="text-xs md:text-sm text-muted-foreground mt-1">
+                Manage training sessions and daily staff briefings for your assigned sites
+              </p>
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MobileStatCard title="Total Trainings" value={totalTrainings} icon={Calendar} color="blue" />
-          <MobileStatCard title="Staff Briefings" value={totalBriefings} icon={Users} color="green" />
-          <MobileStatCard title="Completed" value={completedTrainings} icon={CheckCircle} color="purple" />
-          <MobileStatCard title="Pending Actions" value={pendingActions} icon={AlertCircle} color="red" />
-        </div>
-      </motion.div>
+      </motion.header>
 
-      {loadingData.trainings && loadingData.briefings ? (<div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : viewMode === 'list' ? (
-        <>
-          <Tabs defaultValue="training" onValueChange={(v: any) => setActiveTab(v)}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="training">Training</TabsTrigger><TabsTrigger value="briefing">Briefings</TabsTrigger></TabsList></Tabs>
-          <Card className="mt-4"><CardContent className="p-4"><div className="flex flex-col sm:flex-row gap-3"><div className="flex items-center gap-2 flex-1"><Search className="h-4 w-4" /><Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><div className="flex gap-2"><Select value={filterDepartment} onValueChange={setFilterDepartment}><SelectTrigger className="w-32"><SelectValue placeholder="Department" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{departments.map(d => (<SelectItem key={d} value={d}>{d}</SelectItem>))}</SelectContent></Select>{activeTab === 'training' && (<Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="scheduled">Scheduled</SelectItem><SelectItem value="ongoing">Ongoing</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>)}</div></div></CardContent></Card>
-          <AnimatePresence mode="wait">{activeTab === 'training' ? (
-            <motion.div key="training"><Card className="mt-4"><CardHeader><CardTitle>Training Sessions</CardTitle></CardHeader><CardContent>{trainingSessions.length === 0 ? (<div className="text-center py-12"><Calendar className="h-12 w-12 mx-auto text-gray-300" /><p>No training sessions found</p><Button onClick={() => setShowAddTraining(true)} className="mt-4">Add Training</Button></div>) : isMobileView ? (<div className="space-y-3">{trainingSessions.map(s => (<MobileTrainingCard key={s._id} session={s} onView={setSelectedTraining} onUpdateStatus={updateTrainingStatus} onDelete={deleteTraining} getTypeColor={getTypeColor} getStatusBadge={getStatusBadge} formatDate={formatDate} trainingTypes={trainingTypes} loading={loading} canEdit={s.createdBy === supervisorId} />))}</div>) : (<div className="space-y-4">{trainingSessions.map(s => (<Card key={s._id}><CardContent className="p-4"><div className="flex justify-between"><div><h3 className="font-semibold">{s.title}</h3><p className="text-sm text-gray-600">{s.trainer}</p></div><div className="flex gap-2"><Badge className={getTypeColor(s.type)}>{trainingTypes.find(t => t.value === s.type)?.label}</Badge><Badge className={getStatusBadge(s.status)}>{s.status}</Badge></div></div><div className="grid grid-cols-4 gap-4 mt-4"><div className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="text-xs">{formatDate(s.date)}</span></div><div className="flex items-center gap-1"><Clock className="h-3 w-3" /><span className="text-xs">{s.time}</span></div><div className="flex items-center gap-1"><Building className="h-3 w-3" /><span className="text-xs">{s.site}</span></div><div className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="text-xs">{s.attendees?.length}/{s.maxAttendees}</span></div></div><div className="flex justify-end gap-2 mt-4"><Button variant="outline" size="sm" onClick={() => setSelectedTraining(s)}><Eye className="h-4 w-4 mr-1" />View</Button>{s.createdBy === supervisorId && (<><Button variant="outline" size="sm" onClick={() => openEditTrainingDialog(s)}><Edit className="h-4 w-4 mr-1" />Edit</Button><Button variant="destructive" size="sm" onClick={() => deleteTraining(s._id)}><Trash2 className="h-4 w-4" /></Button></>)}</div></CardContent></Card>))}</div>)}</CardContent></Card></motion.div>
-          ) : (
-            <motion.div key="briefing"><Card className="mt-4"><CardHeader><CardTitle>Staff Briefings</CardTitle></CardHeader><CardContent>{staffBriefings.length === 0 ? (<div className="text-center py-12"><MessageSquare className="h-12 w-12 mx-auto text-gray-300" /><p>No staff briefings found</p><Button onClick={() => setShowAddBriefing(true)} className="mt-4">Add Briefing</Button></div>) : isMobileView ? (<div className="space-y-3">{staffBriefings.map(b => (<MobileBriefingCard key={b._id} briefing={b} onView={setSelectedBriefing} onDelete={deleteBriefing} onUpdateAction={updateActionItemStatus} getShiftBadge={getShiftBadge} getPriorityBadge={getPriorityBadge} formatDate={formatDate} loading={loading} canEdit={b.createdBy === supervisorId} />))}</div>) : (<div className="space-y-4">{staffBriefings.map(b => (<Card key={b._id}><CardContent className="p-4"><div className="flex justify-between"><div><h3 className="font-semibold">{b.site}</h3><p className="text-sm text-gray-600">by {b.conductedBy}</p></div><Badge className={getShiftBadge(b.shift)}>{b.shift}</Badge></div><div className="grid grid-cols-3 gap-4 mt-4"><div className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="text-xs">{formatDate(b.date)}</span></div><div className="flex items-center gap-1"><Clock className="h-3 w-3" /><span className="text-xs">{b.time}</span></div><div className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="text-xs">{b.attendeesCount} attendees</span></div></div><div className="flex justify-end gap-2 mt-4"><Button variant="outline" size="sm" onClick={() => setSelectedBriefing(b)}><Eye className="h-4 w-4 mr-1" />View</Button>{b.createdBy === supervisorId && (<><Button variant="outline" size="sm" onClick={() => openEditBriefingDialog(b)}><Edit className="h-4 w-4 mr-1" />Edit</Button><Button variant="destructive" size="sm" onClick={() => deleteBriefing(b._id)}><Trash2 className="h-4 w-4" /></Button></>)}</div></CardContent></Card>))}</div>)}</CardContent></Card></motion.div>
-          )}</AnimatePresence>
-        </>
-      ) : (
-        <Card><CardHeader><CardTitle>Calendar View</CardTitle></CardHeader><CardContent><div className="grid grid-cols-7 gap-1 mb-4">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (<div key={i} className="text-center font-medium py-2 text-xs">{d}</div>))}{[...Array(35)].map((_, i) => (<div key={i} className="aspect-square border rounded p-1 text-xs hover:bg-gray-50 cursor-pointer"><div className="text-right text-gray-600">{i + 1}</div></div>))}</div><div className="space-y-3"><h4 className="font-semibold">Upcoming Events</h4>{calendarEvents.filter(e => new Date(e.date) >= new Date()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 5).map(e => (<div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded"><div className={`h-2 w-2 rounded-full ${e.color}`}></div><div><p className="text-sm font-medium">{e.title}</p><p className="text-xs text-gray-600">{formatDate(e.date)} • {e.type === 'training' ? 'Training' : 'Briefing'}</p></div><Button variant="ghost" size="sm" className="ml-auto" onClick={() => e.type === 'training' ? setSelectedTraining(e.session) : setSelectedBriefing(e.briefing)}>View</Button></div>))}</div></CardContent></Card>
-      )}
+      <div className="p-3 sm:p-4 md:p-6">
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="bg-blue-50"><Building className="h-3 w-3 mr-1" />Your Sites: {supervisorAssignedSiteNames.length > 0 ? supervisorAssignedSiteNames.join(', ') : 'Loading...'}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}><CalendarDays className="h-4 w-4 mr-2" />{viewMode === 'list' ? 'Calendar' : 'List'}</Button>
+              <Button variant="outline" onClick={handleRefresh}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
+              <Dialog open={showAddTraining} onOpenChange={setShowAddTraining}><DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Add Training</Button></DialogTrigger>
+                <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Add New Training Session</DialogTitle><DialogDescription>Schedule a new training session</DialogDescription></DialogHeader>
+                  <AddTrainingForm />
+                  <SupervisorsMultiSelect selected={selectedSupervisors} onToggle={handleSupervisorToggle} searchQuery={supervisorSearchQuery} setSearchQuery={setSupervisorSearchQuery} disabled={!trainingForm.site} />
+                  <ManagersMultiSelect selected={selectedManagers} onToggle={handleManagerToggle} searchQuery={managerSearchQuery} setSearchQuery={setManagerSearchQuery} disabled={!trainingForm.site} />
+                  <EmployeesMultiSelect selected={selectedEmployees} onToggle={handleEmployeeToggle} searchQuery={employeeSearchQuery} setSearchQuery={setEmployeeSearchQuery} disabled={!trainingForm.site} />
+                  <AttachmentsSection attachments={trainingAttachments} onUpload={handleTrainingFileUpload} onRemove={removeTrainingAttachment} fileInputRef={fileInputRef} title="Training Attachments" />
+                  <DialogFooter><Button onClick={handleAddTraining}>Add Training</Button><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose></DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={showAddBriefing} onOpenChange={setShowAddBriefing}><DialogTrigger asChild><Button variant="secondary"><Plus className="h-4 w-4 mr-2" />Add Briefing</Button></DialogTrigger>
+                <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Add New Staff Briefing</DialogTitle><DialogDescription>Record daily staff briefing details</DialogDescription></DialogHeader>
+                  <AddBriefingForm />
+                  <SupervisorsMultiSelect selected={selectedSupervisors} onToggle={handleSupervisorToggle} searchQuery={supervisorSearchQuery} setSearchQuery={setSupervisorSearchQuery} disabled={!briefingForm.site} />
+                  <ManagersMultiSelect selected={selectedManagers} onToggle={handleManagerToggle} searchQuery={managerSearchQuery} setSearchQuery={setManagerSearchQuery} disabled={!briefingForm.site} />
+                  <ActionItemsSection actionItems={briefingForm.actionItems} onAdd={addActionItem} onRemove={removeActionItem} onUpdate={updateActionItem} />
+                  <AttachmentsSection attachments={briefingAttachments} onUpload={handleBriefingFileUpload} onRemove={removeBriefingAttachment} fileInputRef={fileInputRef} title="Briefing Attachments" />
+                  <DialogFooter><Button onClick={handleAddBriefing}>Add Briefing</Button><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose></DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MobileStatCard title="Total Trainings" value={totalTrainings} icon={Calendar} color="blue" />
+            <MobileStatCard title="Staff Briefings" value={totalBriefings} icon={Users} color="green" />
+            <MobileStatCard title="Completed" value={completedTrainings} icon={CheckCircle} color="purple" />
+            <MobileStatCard title="Pending Actions" value={pendingActions} icon={AlertCircle} color="red" />
+          </div>
+        </motion.div>
 
-      <TrainingDetailDialog training={selectedTraining} open={!!selectedTraining} onClose={() => setSelectedTraining(null)} onEdit={openEditTrainingDialog} onUpdateStatus={updateTrainingStatus} getStatusBadge={getStatusBadge} getTypeColor={getTypeColor} formatDate={formatDate} trainingTypes={trainingTypes} />
-      <BriefingDetailDialog briefing={selectedBriefing} open={!!selectedBriefing} onClose={() => setSelectedBriefing(null)} onEdit={openEditBriefingDialog} onUpdateAction={updateActionItemStatus} getShiftBadge={getShiftBadge} getPriorityBadge={getPriorityBadge} formatDate={formatDate} />
-      
-      <Dialog open={showEditTrainingDialog} onOpenChange={setShowEditTrainingDialog}><DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Edit Training Session</DialogTitle></DialogHeader><EditTrainingFormComponent /><SupervisorsMultiSelect selected={editSelectedSupervisors} onToggle={handleEditSupervisorToggle} searchQuery={editSupervisorSearchQuery} setSearchQuery={setEditSupervisorSearchQuery} disabled={!editTrainingForm.site} /><ManagersMultiSelect selected={editSelectedManagers} onToggle={handleEditManagerToggle} searchQuery={editManagerSearchQuery} setSearchQuery={setEditManagerSearchQuery} disabled={!editTrainingForm.site} /><AttachmentsSection attachments={editTrainingAttachments} onUpload={handleEditTrainingFileUpload} onRemove={removeEditTrainingAttachment} fileInputRef={editTrainingFileInputRef} title="Attachments" /><DialogFooter><Button onClick={handleUpdateTraining}>Update Training</Button><Button variant="outline" onClick={() => setShowEditTrainingDialog(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
-      
-      <Dialog open={showEditBriefingDialog} onOpenChange={setShowEditBriefingDialog}><DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Edit Staff Briefing</DialogTitle></DialogHeader><EditBriefingFormComponent /><SupervisorsMultiSelect selected={editSelectedSupervisors} onToggle={handleEditSupervisorToggle} searchQuery={editSupervisorSearchQuery} setSearchQuery={setEditSupervisorSearchQuery} disabled={!editBriefingForm.site} /><ManagersMultiSelect selected={editSelectedManagers} onToggle={handleEditManagerToggle} searchQuery={editManagerSearchQuery} setSearchQuery={setEditManagerSearchQuery} disabled={!editBriefingForm.site} /><ActionItemsSection actionItems={editBriefingForm.actionItems} onAdd={addEditActionItem} onRemove={removeEditActionItem} onUpdate={updateEditActionItem} /><AttachmentsSection attachments={editBriefingAttachments} onUpload={handleEditBriefingFileUpload} onRemove={removeEditBriefingAttachment} fileInputRef={editBriefingFileInputRef} title="Attachments" /><DialogFooter><Button onClick={handleUpdateBriefing}>Update Briefing</Button><Button variant="outline" onClick={() => setShowEditBriefingDialog(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
+        {loadingData.trainings && loadingData.briefings ? (<div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : viewMode === 'list' ? (
+          <>
+            <Tabs defaultValue="training" onValueChange={(v: any) => setActiveTab(v)}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="training">Training</TabsTrigger><TabsTrigger value="briefing">Briefings</TabsTrigger></TabsList></Tabs>
+            <Card className="mt-4"><CardContent className="p-4"><div className="flex flex-col sm:flex-row gap-3"><div className="flex items-center gap-2 flex-1"><Search className="h-4 w-4" /><Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><div className="flex gap-2"><Select value={filterDepartment} onValueChange={setFilterDepartment}><SelectTrigger className="w-32"><SelectValue placeholder="Department" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem>{departments.map(d => (<SelectItem key={d} value={d}>{d}</SelectItem>))}</SelectContent></Select>{activeTab === 'training' && (<Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="scheduled">Scheduled</SelectItem><SelectItem value="ongoing">Ongoing</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>)}</div></div></CardContent></Card>
+            <AnimatePresence mode="wait">{activeTab === 'training' ? (
+              <motion.div key="training"><Card className="mt-4"><CardHeader><CardTitle>Training Sessions</CardTitle></CardHeader><CardContent>{trainingSessions.length === 0 ? (<div className="text-center py-12"><Calendar className="h-12 w-12 mx-auto text-gray-300" /><p>No training sessions found</p><Button onClick={() => setShowAddTraining(true)} className="mt-4">Add Training</Button></div>) : isMobileView ? (<div className="space-y-3">{trainingSessions.map(s => (<MobileTrainingCard key={s._id} session={s} onView={setSelectedTraining} onUpdateStatus={updateTrainingStatus} onDelete={deleteTraining} getTypeColor={getTypeColor} getStatusBadge={getStatusBadge} formatDate={formatDate} trainingTypes={trainingTypes} loading={loading} canEdit={s.createdBy === supervisorId} />))}</div>) : (<div className="space-y-4">{trainingSessions.map(s => (<Card key={s._id}><CardContent className="p-4"><div className="flex justify-between"><div><h3 className="font-semibold">{s.title}</h3><p className="text-sm text-gray-600">{s.trainer}</p></div><div className="flex gap-2"><Badge className={getTypeColor(s.type)}>{trainingTypes.find(t => t.value === s.type)?.label}</Badge><Badge className={getStatusBadge(s.status)}>{s.status}</Badge></div></div><div className="grid grid-cols-4 gap-4 mt-4"><div className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="text-xs">{formatDate(s.date)}</span></div><div className="flex items-center gap-1"><Clock className="h-3 w-3" /><span className="text-xs">{s.time}</span></div><div className="flex items-center gap-1"><Building className="h-3 w-3" /><span className="text-xs">{s.site}</span></div><div className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="text-xs">{s.attendees?.length}/{s.maxAttendees}</span></div></div><div className="flex justify-end gap-2 mt-4"><Button variant="outline" size="sm" onClick={() => setSelectedTraining(s)}><Eye className="h-4 w-4 mr-1" />View</Button>{s.createdBy === supervisorId && (<><Button variant="outline" size="sm" onClick={() => openEditTrainingDialog(s)}><Edit className="h-4 w-4 mr-1" />Edit</Button><Button variant="destructive" size="sm" onClick={() => deleteTraining(s._id)}><Trash2 className="h-4 w-4" /></Button></>)}</div></CardContent></Card>))}</div>)}</CardContent></Card></motion.div>
+            ) : (
+              <motion.div key="briefing"><Card className="mt-4"><CardHeader><CardTitle>Staff Briefings</CardTitle></CardHeader><CardContent>{staffBriefings.length === 0 ? (<div className="text-center py-12"><MessageSquare className="h-12 w-12 mx-auto text-gray-300" /><p>No staff briefings found</p><Button onClick={() => setShowAddBriefing(true)} className="mt-4">Add Briefing</Button></div>) : isMobileView ? (<div className="space-y-3">{staffBriefings.map(b => (<MobileBriefingCard key={b._id} briefing={b} onView={setSelectedBriefing} onDelete={deleteBriefing} onUpdateAction={updateActionItemStatus} getShiftBadge={getShiftBadge} getPriorityBadge={getPriorityBadge} formatDate={formatDate} loading={loading} canEdit={b.createdBy === supervisorId} />))}</div>) : (<div className="space-y-4">{staffBriefings.map(b => (<Card key={b._id}><CardContent className="p-4"><div className="flex justify-between"><div><h3 className="font-semibold">{b.site}</h3><p className="text-sm text-gray-600">by {b.conductedBy}</p></div><Badge className={getShiftBadge(b.shift)}>{b.shift}</Badge></div><div className="grid grid-cols-3 gap-4 mt-4"><div className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span className="text-xs">{formatDate(b.date)}</span></div><div className="flex items-center gap-1"><Clock className="h-3 w-3" /><span className="text-xs">{b.time}</span></div><div className="flex items-center gap-1"><Users className="h-3 w-3" /><span className="text-xs">{b.attendeesCount} attendees</span></div></div><div className="flex justify-end gap-2 mt-4"><Button variant="outline" size="sm" onClick={() => setSelectedBriefing(b)}><Eye className="h-4 w-4 mr-1" />View</Button>{b.createdBy === supervisorId && (<><Button variant="outline" size="sm" onClick={() => openEditBriefingDialog(b)}><Edit className="h-4 w-4 mr-1" />Edit</Button><Button variant="destructive" size="sm" onClick={() => deleteBriefing(b._id)}><Trash2 className="h-4 w-4" /></Button></>)}</div></CardContent></Card>))}</div>)}</CardContent></Card></motion.div>
+            )}</AnimatePresence>
+          </>
+        ) : (
+          <Card><CardHeader><CardTitle>Calendar View</CardTitle></CardHeader><CardContent><div className="grid grid-cols-7 gap-1 mb-4">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (<div key={i} className="text-center font-medium py-2 text-xs">{d}</div>))}{[...Array(35)].map((_, i) => (<div key={i} className="aspect-square border rounded p-1 text-xs hover:bg-gray-50 cursor-pointer"><div className="text-right text-gray-600">{i + 1}</div></div>))}</div><div className="space-y-3"><h4 className="font-semibold">Upcoming Events</h4>{calendarEvents.filter(e => new Date(e.date) >= new Date()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 5).map(e => (<div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded"><div className={`h-2 w-2 rounded-full ${e.color}`}></div><div><p className="text-sm font-medium">{e.title}</p><p className="text-xs text-gray-600">{formatDate(e.date)} • {e.type === 'training' ? 'Training' : 'Briefing'}</p></div><Button variant="ghost" size="sm" className="ml-auto" onClick={() => e.type === 'training' ? setSelectedTraining(e.session) : setSelectedBriefing(e.briefing)}>View</Button></div>))}</div></CardContent></Card>
+        )}
+
+        <TrainingDetailDialog training={selectedTraining} open={!!selectedTraining} onClose={() => setSelectedTraining(null)} onEdit={openEditTrainingDialog} onUpdateStatus={updateTrainingStatus} getStatusBadge={getStatusBadge} getTypeColor={getTypeColor} formatDate={formatDate} trainingTypes={trainingTypes} />
+        <BriefingDetailDialog briefing={selectedBriefing} open={!!selectedBriefing} onClose={() => setSelectedBriefing(null)} onEdit={openEditBriefingDialog} onUpdateAction={updateActionItemStatus} getShiftBadge={getShiftBadge} getPriorityBadge={getPriorityBadge} formatDate={formatDate} />
+        
+        <Dialog open={showEditTrainingDialog} onOpenChange={setShowEditTrainingDialog}><DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Edit Training Session</DialogTitle></DialogHeader><EditTrainingFormComponent /><SupervisorsMultiSelect selected={editSelectedSupervisors} onToggle={handleEditSupervisorToggle} searchQuery={editSupervisorSearchQuery} setSearchQuery={setEditSupervisorSearchQuery} disabled={!editTrainingForm.site} /><ManagersMultiSelect selected={editSelectedManagers} onToggle={handleEditManagerToggle} searchQuery={editManagerSearchQuery} setSearchQuery={setEditManagerSearchQuery} disabled={!editTrainingForm.site} /><AttachmentsSection attachments={editTrainingAttachments} onUpload={handleEditTrainingFileUpload} onRemove={removeEditTrainingAttachment} fileInputRef={editTrainingFileInputRef} title="Attachments" /><DialogFooter><Button onClick={handleUpdateTraining}>Update Training</Button><Button variant="outline" onClick={() => setShowEditTrainingDialog(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
+        
+        <Dialog open={showEditBriefingDialog} onOpenChange={setShowEditBriefingDialog}><DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Edit Staff Briefing</DialogTitle></DialogHeader><EditBriefingFormComponent /><SupervisorsMultiSelect selected={editSelectedSupervisors} onToggle={handleEditSupervisorToggle} searchQuery={editSupervisorSearchQuery} setSearchQuery={setEditSupervisorSearchQuery} disabled={!editBriefingForm.site} /><ManagersMultiSelect selected={editSelectedManagers} onToggle={handleEditManagerToggle} searchQuery={editManagerSearchQuery} setSearchQuery={setEditManagerSearchQuery} disabled={!editBriefingForm.site} /><ActionItemsSection actionItems={editBriefingForm.actionItems} onAdd={addEditActionItem} onRemove={removeEditActionItem} onUpdate={updateEditActionItem} /><AttachmentsSection attachments={editBriefingAttachments} onUpload={handleEditBriefingFileUpload} onRemove={removeEditBriefingAttachment} fileInputRef={editBriefingFileInputRef} title="Attachments" /><DialogFooter><Button onClick={handleUpdateBriefing}>Update Briefing</Button><Button variant="outline" onClick={() => setShowEditBriefingDialog(false)}>Cancel</Button></DialogFooter></DialogContent></Dialog>
+      </div>
     </div>
   );
 };

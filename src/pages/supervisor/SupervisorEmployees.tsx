@@ -1080,58 +1080,65 @@ const SupervisorEmployees = () => {
   };
 
   // Handle import employees
-  const handleImportEmployees = async (file: File) => {
-    try {
-      setIsImporting(true);
-      setImportProgress({ current: 0, total: 0 });
-      
-      if (!file) {
-        toast.error("Please select a file to import");
-        return;
-      }
+ // Replace the handleImportEmployees function in SupervisorEmployees with this:
 
-      const toastId = toast.loading(
+const handleImportEmployees = async (file: File) => {
+  try {
+    setIsImporting(true);
+    setImportProgress({ current: 0, total: 0 });
+    
+    if (!file) {
+      toast.error("Please select a file to import");
+      return;
+    }
+
+    const toastId = toast.loading(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Database className="h-4 w-4" />
+          <span className="font-medium">Reading Excel file...</span>
+        </div>
+      </div>
+    );
+
+    // Get fresh sites from supervisor's task-assigned sites
+    let freshSites: Site[] = supervisorSites;
+    
+    if (freshSites.length === 0) {
+      toast.error(
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            <span className="font-medium">Reading Excel file...</span>
+            <XCircle className="h-4 w-4 text-red-500" />
+            <span className="font-medium">No Sites Found</span>
           </div>
-        </div>
+          <div className="text-sm text-red-600">
+            You don't have any task-assigned sites. Please contact your administrator.
+          </div>
+        </div>,
+        { id: toastId, duration: 10000 }
       );
+      return;
+    }
 
-      let freshSites: Site[] = supervisorSites;
-      
-      if (freshSites.length === 0) {
-        toast.error(
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <span className="font-medium">No Sites Found</span>
-            </div>
-            <div className="text-sm text-red-600">
-              You don't have any task-assigned sites. Please contact your administrator.
-            </div>
-          </div>,
-          { id: toastId, duration: 10000 }
-        );
-        return;
-      }
-
-      const existingEmployees = employees;
-      
-      const siteCapacityMap = new Map<string, {
-        name: string;
-        managerRequirement: number;
-        supervisorRequirement: number;
-        staffRequirement: number;
-        currentManagerCount: number;
-        currentSupervisorCount: number;
-        currentStaffCount: number;
-        remainingManagers: number;
-        remainingSupervisors: number;
-        remainingStaff: number;
-      }>();
-      
+    // Get existing employees
+    const existingEmployees = employees;
+    
+    // Create site capacity map - will be updated dynamically during import
+    const siteCapacityMap = new Map<string, {
+      name: string;
+      managerRequirement: number;
+      supervisorRequirement: number;
+      staffRequirement: number;
+      currentManagerCount: number;
+      currentSupervisorCount: number;
+      currentStaffCount: number;
+      remainingManagers: number;
+      remainingSupervisors: number;
+      remainingStaff: number;
+    }>();
+    
+    // Helper function to update site capacity map
+    const updateSiteCapacityMap = () => {
       freshSites.forEach(site => {
         const staffRequirement = Array.isArray(site.staffDeployment) 
           ? site.staffDeployment.reduce((total, item) => {
@@ -1143,8 +1150,9 @@ const SupervisorEmployees = () => {
             }, 0)
           : 0;
         
-        const siteEmployees = existingEmployees.filter(emp => 
-          emp.siteName?.trim() === site.name.trim()
+        // Use the latest employees list (including newly imported ones)
+        const siteEmployees = employees.filter(emp => 
+          emp.siteName?.trim() === site.name.trim() && emp.status === "active"
         );
         
         const managerCount = siteEmployees.filter(emp => 
@@ -1177,404 +1185,563 @@ const SupervisorEmployees = () => {
           remainingStaff: Math.max(0, staffRequirement - staffCount)
         });
       });
+    };
+    
+    // Initial capacity map
+    updateSiteCapacityMap();
 
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { 
-        type: 'array',
-        cellDates: true,
-        cellNF: false
-      });
-      
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-        header: 1, 
-        defval: '',
-        raw: false,
-        dateNF: 'mm/dd/yyyy'
-      });
-      
-      if (jsonData.length < 2) {
-        toast.error(
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <span className="font-medium">Empty File</span>
-            </div>
-            <div className="text-sm text-red-600">
-              The Excel file has no data rows.
-            </div>
-          </div>,
-          { id: toastId, duration: 10000 }
-        );
-        return;
-      }
-      
-      const headers = jsonData[0] as string[];
-      
-      const siteIndex = headers.findIndex(h => h?.toLowerCase().includes('site'));
-      const nameIndex = headers.findIndex(h => h?.toLowerCase().includes('name'));
-      const dobIndex = headers.findIndex(h => h?.toLowerCase().includes('dob') || h?.toLowerCase().includes('birth'));
-      const dojIndex = headers.findIndex(h => h?.toLowerCase().includes('joining') || h?.toLowerCase().includes('join'));
-      const contactIndex = headers.findIndex(h => h?.toLowerCase().includes('phone') || h?.toLowerCase().includes('mobile'));
-      const bloodGroupIndex = headers.findIndex(h => h?.toLowerCase().includes('blood'));
-      const emailIndex = headers.findIndex(h => h?.toLowerCase().includes('email'));
-      const aadharIndex = headers.findIndex(h => h?.toLowerCase().includes('aadhar'));
-      const panIndex = headers.findIndex(h => h?.toLowerCase().includes('pan'));
-      const positionIndex = headers.findIndex(h => h?.toLowerCase().includes('position') || h?.toLowerCase().includes('role'));
-      const salaryIndex = headers.findIndex(h => h?.toLowerCase().includes('salary'));
-      const departmentIndex = headers.findIndex(h => h?.toLowerCase().includes('department'));
-      const accountNumberIndex = headers.findIndex(h => h?.toLowerCase().includes('account'));
-      const ifscIndex = headers.findIndex(h => h?.toLowerCase().includes('ifsc'));
-      const bankNameIndex = headers.findIndex(h => h?.toLowerCase().includes('bank'));
-      const fatherNameIndex = headers.findIndex(h => h?.toLowerCase().includes('father'));
-      const motherNameIndex = headers.findIndex(h => h?.toLowerCase().includes('mother'));
-      const spouseNameIndex = headers.findIndex(h => h?.toLowerCase().includes('spouse'));
-      const emergencyContactNameIndex = headers.findIndex(h => h?.toLowerCase().includes('emergency'));
-      const permanentAddressIndex = headers.findIndex(h => h?.toLowerCase().includes('address'));
-      
-      const employeesToImport = [];
-      let processedCount = 0;
-      let skippedCount = 0;
-      const skippedReasons: string[] = [];
-      const invalidSiteNames: Set<string> = new Set();
-      let autoGeneratedCount = 0;
-      
-      for (let i = 1; i < jsonData.length; i++) {
-        const row = jsonData[i] as any[];
-        if (!row || row.length === 0) continue;
-        
-        const hasData = row.some(cell => cell !== undefined && cell !== null && cell.toString().trim() !== '');
-        if (!hasData) continue;
-        
-        let siteName = '';
-        if (siteIndex !== -1 && row[siteIndex] !== undefined && row[siteIndex] !== null) {
-          siteName = String(row[siteIndex]).trim();
-        }
-        
-        const name = nameIndex !== -1 && row[nameIndex] ? String(row[nameIndex]).trim() : '';
-        
-        if (!name) {
-          skippedCount++;
-          skippedReasons.push(`Row ${i + 1}: Missing employee name`);
-          continue;
-        }
-        
-        if (!siteName || !supervisorSiteNames.includes(siteName)) {
-          skippedCount++;
-          if (siteName && !supervisorSiteNames.includes(siteName)) {
-            invalidSiteNames.add(siteName);
-          }
-          skippedReasons.push(`Row ${i + 1}: Site "${siteName}" not in your task-assigned sites`);
-          continue;
-        }
-        
-        let aadhar = '';
-        if (aadharIndex !== -1 && row[aadharIndex] !== undefined && row[aadharIndex] !== null) {
-          aadhar = String(row[aadharIndex]).trim().replace(/\s/g, '');
-          
-          if (aadhar.length === 11) {
-            skippedReasons.push(`Row ${i + 1}: Aadhar has 11 digits (${aadhar}) - fixed to 12 digits by adding leading zero`);
-            aadhar = '0' + aadhar;
-          } else if (aadhar.length === 10) {
-            skippedReasons.push(`Row ${i + 1}: Aadhar has 10 digits (${aadhar}) - fixed to 12 digits by adding leading zeros`);
-            aadhar = '00' + aadhar;
-          } else if (aadhar.length > 12) {
-            const original = aadhar;
-            aadhar = aadhar.slice(-12);
-            skippedReasons.push(`Row ${i + 1}: Aadhar had ${original.length} digits, using last 12 digits`);
-          }
-        }
-        
-        if (!aadhar || aadhar.length !== 12 || !/^\d+$/.test(aadhar)) {
-          const randomAadhar = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-          aadhar = randomAadhar;
-          autoGeneratedCount++;
-          skippedReasons.push(`Row ${i + 1}: Invalid/missing Aadhar - auto-generated: ${randomAadhar}`);
-        }
-        
-        const position = positionIndex !== -1 && row[positionIndex] ? String(row[positionIndex]).trim() : '';
-        const department = departmentIndex !== -1 && row[departmentIndex] ? String(row[departmentIndex]).trim() : '';
-        
-        const siteCapacity = siteCapacityMap.get(siteName);
-        const isManager = position.toLowerCase().includes('manager') || department.toLowerCase().includes('manager');
-        const isSupervisor = position.toLowerCase().includes('supervisor') || department.toLowerCase().includes('supervisor');
-        
-        if (siteCapacity) {
-          if (isManager && siteCapacity.remainingManagers <= 0) {
-            skippedCount++;
-            skippedReasons.push(`Row ${i + 1}: Manager position full for ${siteName}`);
-            continue;
-          }
-          if (isSupervisor && siteCapacity.remainingSupervisors <= 0) {
-            skippedCount++;
-            skippedReasons.push(`Row ${i + 1}: Supervisor position full for ${siteName}`);
-            continue;
-          }
-          if (!isManager && !isSupervisor && siteCapacity.remainingStaff <= 0) {
-            skippedCount++;
-            skippedReasons.push(`Row ${i + 1}: Staff position full for ${siteName}`);
-            continue;
-          }
-          
-          if (isManager) siteCapacity.remainingManagers--;
-          else if (isSupervisor) siteCapacity.remainingSupervisors--;
-          else siteCapacity.remainingStaff--;
-        }
-        
-        let dateOfBirth: Date | null = null;
-        let dateOfJoining: Date = new Date();
-        
-        if (dojIndex !== -1 && row[dojIndex] !== undefined && row[dojIndex] !== null && row[dojIndex] !== '') {
-          try {
-            if (row[dojIndex] instanceof Date) {
-              dateOfJoining = row[dojIndex];
-            } else if (typeof row[dojIndex] === 'number') {
-              dateOfJoining = excelSerialToDate(row[dojIndex]);
-            } else if (typeof row[dojIndex] === 'string') {
-              const parsed = parseDateString(row[dojIndex]);
-              if (parsed) {
-                dateOfJoining = parsed;
-              }
-            }
-          } catch (error) {
-            console.warn(`Row ${i + 1}: Error parsing DOJ:`, error);
-          }
-        }
-        
-        if (dobIndex !== -1 && row[dobIndex] !== undefined && row[dobIndex] !== null && row[dobIndex] !== '') {
-          try {
-            if (row[dobIndex] instanceof Date) {
-              dateOfBirth = row[dobIndex];
-            } else if (typeof row[dobIndex] === 'number') {
-              dateOfBirth = excelSerialToDate(row[dobIndex]);
-            } else if (typeof row[dobIndex] === 'string') {
-              const parsed = parseDateString(row[dobIndex]);
-              if (parsed) dateOfBirth = parsed;
-            }
-          } catch (error) {
-            console.warn(`Row ${i + 1}: Error parsing DOB:`, error);
-          }
-        }
-        
-        let phone = '';
-        if (contactIndex !== -1 && row[contactIndex] !== undefined && row[contactIndex] !== null) {
-          const digits = String(row[contactIndex]).replace(/\D/g, '');
-          if (digits.length === 10) {
-            phone = digits;
-          } else if (digits.length > 10) {
-            phone = digits.slice(-10);
-          } else if (digits.length > 0) {
-            phone = digits.padStart(10, '9');
-          }
-        }
-        
-        if (!phone) {
-          phone = '99' + Math.floor(10000000 + Math.random() * 90000000).toString();
-          autoGeneratedCount++;
-        }
-        
-        let email = '';
-        if (emailIndex !== -1 && row[emailIndex] !== undefined && row[emailIndex] !== null) {
-          email = String(row[emailIndex]).trim();
-        }
-        
-        if (!email) {
-          const nameParts = name.toLowerCase().split(' ');
-          const firstName = nameParts[0]?.replace(/[^a-z]/g, '') || 'employee';
-          const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].replace(/[^a-z]/g, '') : '';
-          const randomNum = Math.floor(100 + Math.random() * 900);
-          email = `${firstName}${lastName ? '.' + lastName : ''}${randomNum}@skenterprises.com`.toLowerCase();
-          autoGeneratedCount++;
-        }
-        
-        let salary = 15000;
-        if (salaryIndex !== -1 && row[salaryIndex] !== undefined && row[salaryIndex] !== null) {
-          const cleaned = String(row[salaryIndex]).replace(/[^0-9.]/g, '');
-          const parsed = parseFloat(cleaned);
-          if (!isNaN(parsed) && parsed > 0) {
-            salary = parsed;
-          }
-        }
-        
-        let bloodGroup = null;
-        if (bloodGroupIndex !== -1 && row[bloodGroupIndex] !== undefined && row[bloodGroupIndex] !== null) {
-          const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
-          const bgUpper = String(row[bloodGroupIndex]).trim().toUpperCase();
-          if (validBloodGroups.includes(bgUpper)) {
-            bloodGroup = bgUpper;
-          }
-        }
-        
-        const employeeData = {
-          name: name,
-          email: email,
-          phone: phone,
-          aadharNumber: aadhar,
-          dateOfJoining: dateOfJoining,
-          department: department || 'General Staff',
-          position: position || 'Employee',
-          salary: salary,
-          status: 'active',
-          role: 'employee',
-          siteName: siteName,
-          dateOfBirth: dateOfBirth,
-          bloodGroup: bloodGroup,
-          panNumber: panIndex !== -1 && row[panIndex] ? String(row[panIndex]).trim() : null,
-          gender: null,
-          maritalStatus: null,
-          bankName: bankNameIndex !== -1 && row[bankNameIndex] ? String(row[bankNameIndex]).trim() : null,
-          accountNumber: accountNumberIndex !== -1 && row[accountNumberIndex] ? String(row[accountNumberIndex]).trim() : null,
-          ifscCode: ifscIndex !== -1 && row[ifscIndex] ? String(row[ifscIndex]).trim().toUpperCase() : null,
-          fatherName: fatherNameIndex !== -1 && row[fatherNameIndex] ? String(row[fatherNameIndex]).trim() : null,
-          motherName: motherNameIndex !== -1 && row[motherNameIndex] ? String(row[motherNameIndex]).trim() : null,
-          spouseName: spouseNameIndex !== -1 && row[spouseNameIndex] ? String(row[spouseNameIndex]).trim() : null,
-          emergencyContactName: emergencyContactNameIndex !== -1 && row[emergencyContactNameIndex] ? String(row[emergencyContactNameIndex]).trim() : null,
-          permanentAddress: permanentAddressIndex !== -1 && row[permanentAddressIndex] ? String(row[permanentAddressIndex]).trim() : null,
-          siteHistory: [{
-            siteName: siteName,
-            assignedDate: dateOfJoining instanceof Date ? dateOfJoining.toISOString().split('T')[0] : dateOfJoining
-          }]
-        };
-        
-        employeesToImport.push(employeeData);
-        processedCount++;
-        
-        setImportProgress({ current: i, total: jsonData.length - 1 });
-      }
-      
-      if (employeesToImport.length === 0) {
-        let errorMessage = "No valid employees found to import.";
-        if (invalidSiteNames.size > 0) {
-          errorMessage += ` The following sites are not in your task-assigned sites: ${Array.from(invalidSiteNames).join(', ')}.`;
-        }
-        
-        toast.error(
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <span className="font-medium">No Valid Employees Found</span>
-            </div>
-            <div className="text-sm text-red-600">
-              {errorMessage}
-            </div>
-          </div>,
-          { id: toastId, duration: 10000 }
-        );
-        return;
-      }
-      
-      toast.loading(
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Cloud className="h-4 w-4" />
-            <span className="font-medium">Importing {employeesToImport.length} employees...</span>
-          </div>
-        </div>,
-        { id: toastId }
-      );
-      
-      let successCount = 0;
-      let duplicateCount = 0;
-      let errorCount = 0;
-      const errorMessages: string[] = [];
-      const importedSites: Set<string> = new Set();
-      
-      const batchSize = 20;
-      for (let batchStart = 0; batchStart < employeesToImport.length; batchStart += batchSize) {
-        const batch = employeesToImport.slice(batchStart, batchStart + batchSize);
-        
-        for (let i = 0; i < batch.length; i++) {
-          const employee = batch[i];
-          
-          try {
-            const response = await axios.post(`${API_URL}/employees`, employee, {
-              timeout: 15000
-            });
-            
-            if (response.data.success) {
-              successCount++;
-              importedSites.add(employee.siteName);
-            } else {
-              errorCount++;
-              const errorMsg = response.data.message || 'Unknown error';
-              errorMessages.push(`${employee.name}: ${errorMsg}`);
-              
-              if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
-                duplicateCount++;
-              }
-            }
-          } catch (error: any) {
-            errorCount++;
-            const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
-            errorMessages.push(`${employee.name}: ${errorMsg}`);
-            
-            if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
-              duplicateCount++;
-            }
-          }
-          
-          setImportProgress({ 
-            current: batchStart + i + 1, 
-            total: employeesToImport.length 
-          });
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
-      const actualNewImports = successCount;
-      
-      let resultMessage = '';
-      if (actualNewImports > 0) {
-        resultMessage = `✅ ${actualNewImports} employees imported successfully`;
-        if (duplicateCount > 0) {
-          resultMessage += `, ⚠️ ${duplicateCount} already existed (skipped)`;
-        }
-        if (errorCount > duplicateCount) {
-          const otherErrors = errorCount - duplicateCount;
-          resultMessage += `, ❌ ${otherErrors} failed`;
-        }
-      } else {
-        resultMessage = `❌ No new employees imported. ${duplicateCount} already exist, ${errorCount - duplicateCount} failed.`;
-      }
-      
-      toast.success(
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <span className="font-medium">Import Complete</span>
-          </div>
-          <div className="text-sm">
-            {resultMessage}
-          </div>
-        </div>,
-        { id: toastId, duration: 10000 }
-      );
-      
-      await fetchEmployees();
-      
-      setImportDialogOpen(false);
-      
-    } catch (error: any) {
-      console.error("Import process failed:", error);
+    // Read Excel file
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { 
+      type: 'array',
+      cellDates: true,
+      cellNF: false
+    });
+    
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1, 
+      defval: '',
+      raw: false,
+      dateNF: 'mm/dd/yyyy'
+    });
+    
+    if (jsonData.length < 2) {
       toast.error(
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <XCircle className="h-4 w-4 text-red-500" />
-            <span className="font-medium">Import Failed</span>
+            <span className="font-medium">Empty File</span>
           </div>
           <div className="text-sm text-red-600">
-            {error.message || "Error processing the file"}
+            The Excel file has no data rows.
           </div>
-        </div>
+        </div>,
+        { id: toastId, duration: 10000 }
       );
-    } finally {
-      setIsImporting(false);
-      setImportProgress({ current: 0, total: 0 });
+      return;
     }
-  };
+    
+    // Use fixed column indices (same as superadmin EmployeesTab)
+    const siteIndex = 0;
+    const nameIndex = 1;
+    const dobIndex = 3;
+    const dojIndex = 4;
+    const contactIndex = 6;
+    const bloodGroupIndex = 7;
+    const emailIndex = 8;
+    const aadharIndex = 9;
+    const panIndex = 10;
+    const positionIndex = 36;
+    const salaryIndex = 37;
+    const departmentIndex = 35;
+    const accountNumberIndex = 18;
+    const ifscIndex = 19;
+    const bankNameIndex = 17;
+    const fatherNameIndex = 20;
+    const motherNameIndex = 21;
+    const spouseNameIndex = 22;
+    const emergencyContactNameIndex = 23;
+    const emergencyContactPhoneIndex = 24;
+    const permanentAddressIndex = 13;
+    
+    // First pass: Validate all rows and prepare import list with capacity check
+    const employeesToImport = [];
+    let skippedCount = 0;
+    const skippedReasons: string[] = [];
+    const invalidSiteNames: Set<string> = new Set();
+    
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i] as any[];
+      if (!row || row.length === 0) continue;
+      
+      const hasData = row.some(cell => cell !== undefined && cell !== null && cell.toString().trim() !== '');
+      if (!hasData) continue;
+      
+      let siteName = '';
+      if (row[siteIndex] !== undefined && row[siteIndex] !== null) {
+        siteName = String(row[siteIndex]).trim();
+        siteName = siteName.replace(/[^\x20-\x7E]/g, '').trim();
+      }
+      
+      const name = row[nameIndex] ? String(row[nameIndex]).trim() : '';
+      const aadhar = row[aadharIndex] ? String(row[aadharIndex]).trim().replace(/\s/g, '') : '';
+      const position = row[positionIndex] ? String(row[positionIndex]).trim() : '';
+      const department = row[departmentIndex] ? String(row[departmentIndex]).trim() : '';
+      
+      if (!siteName) {
+        skippedCount++;
+        skippedReasons.push(`Row ${i}: Missing site name`);
+        continue;
+      }
+      
+      // Validate site exists in supervisor's sites
+      if (!supervisorSiteNames.includes(siteName)) {
+        skippedCount++;
+        invalidSiteNames.add(siteName);
+        skippedReasons.push(`Row ${i}: Site "${siteName}" not in your task-assigned sites`);
+        continue;
+      }
+      
+      if (!name) {
+        skippedCount++;
+        skippedReasons.push(`Row ${i}: Missing name`);
+        continue;
+      }
+      
+      if (!aadhar) {
+        skippedCount++;
+        skippedReasons.push(`Row ${i}: Missing Aadhar number`);
+        continue;
+      }
+      
+      if (!/^\d{12}$/.test(aadhar)) {
+        skippedCount++;
+        skippedReasons.push(`Row ${i}: Invalid Aadhar format (${aadhar.length} digits, expected 12 digits)`);
+        continue;
+      }
+      
+      employeesToImport.push({
+        rowIndex: i,
+        row,
+        siteName,
+        name,
+        aadhar,
+        position,
+        department
+      });
+    }
+    
+    if (employeesToImport.length === 0) {
+      let errorMessage = "No valid employees found to import.";
+      if (invalidSiteNames.size > 0) {
+        errorMessage += ` The following sites are not in your task-assigned sites: ${Array.from(invalidSiteNames).join(', ')}.`;
+        errorMessage += ` Available sites: ${supervisorSiteNames.join(', ')}`;
+      }
+      
+      toast.error(
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-red-500" />
+            <span className="font-medium">No Valid Employees Found</span>
+          </div>
+          <div className="text-sm text-red-600">
+            {errorMessage}
+          </div>
+          {skippedReasons.length > 0 && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                View skipped rows details ({skippedReasons.length})
+              </summary>
+              <div className="mt-2 p-2 bg-red-50 rounded max-h-32 overflow-y-auto">
+                {skippedReasons.slice(0, 30).map((reason, idx) => (
+                  <div key={idx} className="text-red-600 truncate">{reason}</div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>,
+        { id: toastId, duration: 10000 }
+      );
+      return;
+    }
+    
+    toast.loading(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Cloud className="h-4 w-4" />
+          <span className="font-medium">Importing {employeesToImport.length} employees...</span>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          This may take a few moments...
+        </div>
+      </div>,
+      { id: toastId }
+    );
+    
+    let successCount = 0;
+    let duplicateCount = 0;
+    let errorCount = 0;
+    let capacityErrorCount = 0;
+    const errorMessages: string[] = [];
+    const importedSites: Set<string> = new Set();
+    const newlyImportedEmployees: Employee[] = [];
+    
+    // Import employees one by one with real-time capacity check
+    for (let i = 0; i < employeesToImport.length; i++) {
+      const emp = employeesToImport[i];
+      const row = emp.row;
+      
+      // Get latest capacity for this site
+      const siteCapacity = siteCapacityMap.get(emp.siteName);
+      
+      const position = row[positionIndex] ? String(row[positionIndex]).trim() : '';
+      const department = row[departmentIndex] ? String(row[departmentIndex]).trim() : '';
+      
+      const isManager = position.toLowerCase().includes('manager') || department.toLowerCase().includes('manager');
+      const isSupervisor = position.toLowerCase().includes('supervisor') || department.toLowerCase().includes('supervisor');
+      
+      // Check capacity before importing
+      if (siteCapacity) {
+        if (isManager && siteCapacity.remainingManagers <= 0) {
+          capacityErrorCount++;
+          errorMessages.push(`${emp.name}: Manager position full for ${emp.siteName}`);
+          setImportProgress({ current: i + 1, total: employeesToImport.length });
+          continue;
+        }
+        if (isSupervisor && siteCapacity.remainingSupervisors <= 0) {
+          capacityErrorCount++;
+          errorMessages.push(`${emp.name}: Supervisor position full for ${emp.siteName}`);
+          setImportProgress({ current: i + 1, total: employeesToImport.length });
+          continue;
+        }
+        if (!isManager && !isSupervisor && siteCapacity.remainingStaff <= 0) {
+          capacityErrorCount++;
+          errorMessages.push(`${emp.name}: Staff position full for ${emp.siteName}`);
+          setImportProgress({ current: i + 1, total: employeesToImport.length });
+          continue;
+        }
+      }
+      
+      // Parse dates
+      const dobRaw = row[dobIndex];
+      const dojRaw = row[dojIndex];
+      
+      let dateOfBirth: Date | null = null;
+      let dateOfJoining: Date = new Date();
+      
+      if (dojRaw !== undefined && dojRaw !== null && dojRaw !== '') {
+        try {
+          if (dojRaw instanceof Date) {
+            dateOfJoining = dojRaw;
+          } else if (typeof dojRaw === 'number') {
+            dateOfJoining = excelSerialToDate(dojRaw);
+          } else if (typeof dojRaw === 'string') {
+            const parsed = parseDateString(dojRaw);
+            if (parsed) {
+              dateOfJoining = parsed;
+            }
+          }
+        } catch (error) {
+          dateOfJoining = new Date();
+        }
+      }
+      
+      if (dobRaw !== undefined && dobRaw !== null && dobRaw !== '') {
+        try {
+          if (dobRaw instanceof Date) {
+            dateOfBirth = dobRaw;
+          } else if (typeof dobRaw === 'number') {
+            dateOfBirth = excelSerialToDate(dobRaw);
+          } else if (typeof dobRaw === 'string') {
+            const parsed = parseDateString(dobRaw);
+            if (parsed) dateOfBirth = parsed;
+          }
+        } catch (error) {
+          console.warn(`Row ${emp.rowIndex}: Error parsing DOB:`, error);
+        }
+      }
+      
+      // Process other fields
+      const contact = row[contactIndex] ? String(row[contactIndex]).trim() : '';
+      const bloodGroup = row[bloodGroupIndex] ? String(row[bloodGroupIndex]).trim() : '';
+      const email = row[emailIndex] ? String(row[emailIndex]).trim() : '';
+      const pan = row[panIndex] ? String(row[panIndex]).trim().toUpperCase() : '';
+      const salaryStr = row[salaryIndex] ? String(row[salaryIndex]).trim() : '';
+      const accountNumber = row[accountNumberIndex] ? String(row[accountNumberIndex]).trim() : '';
+      const ifscCode = row[ifscIndex] ? String(row[ifscIndex]).trim().toUpperCase() : '';
+      const bankName = row[bankNameIndex] ? String(row[bankNameIndex]).trim() : '';
+      const fatherName = row[fatherNameIndex] ? String(row[fatherNameIndex]).trim() : '';
+      const motherName = row[motherNameIndex] ? String(row[motherNameIndex]).trim() : '';
+      const spouseName = row[spouseNameIndex] ? String(row[spouseNameIndex]).trim() : '';
+      const emergencyContactName = row[emergencyContactNameIndex] ? String(row[emergencyContactNameIndex]).trim() : '';
+      const emergencyContactPhone = row[emergencyContactPhoneIndex] ? String(row[emergencyContactPhoneIndex]).trim() : '';
+      const permanentAddress = row[permanentAddressIndex] ? String(row[permanentAddressIndex]).trim() : '';
+      
+      // Map position to department
+      const positionToDepartmentMap: Record<string, string> = {
+        'ACCOUNTANT': 'Finance',
+        'OWC OPERATOR': 'Operations',
+        'Security Guard': 'Security',
+        'HK STAFF': 'Housekeeping',
+        'HK Supervisor': 'Housekeeping',
+        'Supervisor': 'Supervisor',
+        'Driver': 'Driver',
+        'DRIVER': 'Driver',
+        'Parking Attendent': 'Parking Management',
+        'GATE ATTENDANT': 'Security',
+        'PARKING': 'Parking Management',
+        'MANAGER': 'Administration',
+        'RECEPTIONIST': 'Administration',
+        'Bouncer': 'Security',
+        'Security SUP': 'Security',
+        'Manager': 'Administration',
+        'OFFICE STAFF': 'Administration',
+        'Admin': 'Administration',
+        'HR': 'HR',
+        'ACCOUNDEND': 'Finance',
+        'OWC Opreter': 'Operations',
+        'HK SUPERVISOR': 'Housekeeping',
+        'CLEANER': 'Housekeeping',
+        'HOUSEKEEPING': 'Housekeeping',
+        'SECURITY': 'Security',
+        'MAINTENANCE': 'Maintenance',
+        'IT STAFF': 'IT',
+        'SALES': 'Sales'
+      };
+      
+      let finalDepartment = department || 'General Staff';
+      if (position) {
+        const posUpper = position.toUpperCase();
+        if (positionToDepartmentMap[posUpper]) {
+          finalDepartment = positionToDepartmentMap[posUpper];
+        }
+      }
+      
+      // Handle email
+      let finalEmail = email;
+      if (!email && emp.name) {
+        const nameParts = emp.name.toLowerCase().split(' ');
+        const firstName = nameParts[0]?.replace(/[^a-z]/g, '') || 'employee';
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1].replace(/[^a-z]/g, '') : '';
+        const randomNum = Math.floor(100 + Math.random() * 900);
+        finalEmail = `${firstName}${lastName ? '.' + lastName : ''}${randomNum}@skenterprises.com`.toLowerCase();
+      }
+      
+      // Handle phone
+      let finalPhone = contact;
+      if (finalPhone) {
+        const digits = finalPhone.replace(/\D/g, '');
+        if (digits.length === 10) {
+          finalPhone = digits;
+        } else if (digits.length > 10) {
+          finalPhone = digits.slice(-10);
+        } else {
+          finalPhone = '98' + Math.floor(10000000 + Math.random() * 90000000).toString();
+        }
+      } else {
+        finalPhone = '98' + Math.floor(10000000 + Math.random() * 90000000).toString();
+      }
+      
+      // Handle salary
+      let salary = 15000;
+      if (salaryStr) {
+        const cleaned = salaryStr.replace(/[^0-9.]/g, '');
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed) && parsed > 0) {
+          salary = parsed;
+        }
+      }
+      
+      // Handle blood group
+      let finalBloodGroup = null;
+      if (bloodGroup) {
+        const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+        const bgUpper = bloodGroup.trim().toUpperCase();
+        if (validBloodGroups.includes(bgUpper)) {
+          finalBloodGroup = bgUpper;
+        }
+      }
+      
+      const employeeData = {
+        name: emp.name,
+        email: finalEmail,
+        phone: finalPhone,
+        aadharNumber: emp.aadhar,
+        dateOfJoining: dateOfJoining,
+        department: finalDepartment,
+        position: position || 'Employee',
+        salary: salary,
+        status: 'active',
+        role: 'employee',
+        siteName: emp.siteName,
+        dateOfBirth: dateOfBirth,
+        bloodGroup: finalBloodGroup,
+        panNumber: pan || null,
+        gender: null,
+        maritalStatus: null,
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        branchName: null,
+        bankBranch: null,
+        permanentAddress: permanentAddress || null,
+        permanentPincode: null,
+        localAddress: null,
+        localPincode: null,
+        fatherName: fatherName || null,
+        motherName: motherName || null,
+        spouseName: spouseName || null,
+        numberOfChildren: 0,
+        emergencyContactName: emergencyContactName || null,
+        emergencyContactPhone: emergencyContactPhone || null,
+        emergencyContactRelation: null,
+        nomineeName: null,
+        nomineeRelation: null,
+        esicNumber: null,
+        uanNumber: null,
+        dateOfExit: null,
+        pantSize: null,
+        shirtSize: null,
+        capSize: null,
+        idCardIssued: false,
+        westcoatIssued: false,
+        apronIssued: false,
+        photo: null,
+        photoPublicId: null,
+        employeeSignature: null,
+        employeeSignaturePublicId: null,
+        authorizedSignature: null,
+        authorizedSignaturePublicId: null,
+        siteHistory: [{
+          siteName: emp.siteName,
+          assignedDate: dateOfJoining instanceof Date ? dateOfJoining.toISOString().split('T')[0] : dateOfJoining
+        }],
+        kycDocuments: []
+      };
+      
+      try {
+        const response = await axios.post(`${API_URL}/employees`, employeeData, {
+          timeout: 15000
+        });
+        
+        if (response.data.success) {
+          successCount++;
+          importedSites.add(emp.siteName);
+          
+          // Add to employees list immediately for capacity update
+          const newEmployee = response.data.employee || response.data.data;
+          if (newEmployee) {
+            newlyImportedEmployees.push(newEmployee);
+            // Update local employees state for capacity calculation
+            setEmployees(prev => [...prev, newEmployee]);
+            
+            // Update capacity map for this site
+            if (siteCapacity) {
+              if (isManager) {
+                siteCapacity.remainingManagers--;
+                siteCapacity.currentManagerCount++;
+              } else if (isSupervisor) {
+                siteCapacity.remainingSupervisors--;
+                siteCapacity.currentSupervisorCount++;
+              } else {
+                siteCapacity.remainingStaff--;
+                siteCapacity.currentStaffCount++;
+              }
+            }
+          }
+        } else {
+          errorCount++;
+          const errorMsg = response.data.message || 'Unknown error';
+          errorMessages.push(`${emp.name}: ${errorMsg}`);
+          
+          if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
+            duplicateCount++;
+          }
+        }
+      } catch (error: any) {
+        errorCount++;
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error';
+        errorMessages.push(`${emp.name}: ${errorMsg}`);
+        
+        if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
+          duplicateCount++;
+        }
+      }
+      
+      setImportProgress({ 
+        current: i + 1, 
+        total: employeesToImport.length 
+      });
+      
+      // Small delay to avoid overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Refresh employees list to get the latest data
+    await fetchEmployees();
+    
+    const actualNewImports = successCount;
+    
+    let resultMessage = '';
+    if (actualNewImports > 0) {
+      resultMessage = `✅ ${actualNewImports} employees imported successfully`;
+      if (duplicateCount > 0) {
+        resultMessage += `, ⚠️ ${duplicateCount} already existed (skipped)`;
+      }
+      if (capacityErrorCount > 0) {
+        resultMessage += `, ⚠️ ${capacityErrorCount} skipped due to site capacity`;
+      }
+      if (errorCount > 0) {
+        resultMessage += `, ❌ ${errorCount - duplicateCount} failed`;
+      }
+    } else {
+      resultMessage = `❌ No new employees imported. ${duplicateCount} already exist, ${capacityErrorCount} capacity full, ${errorCount - duplicateCount - capacityErrorCount} failed.`;
+    }
+    
+    let siteSummary = '';
+    if (importedSites.size > 0) {
+      siteSummary = `\nImported to sites: ${Array.from(importedSites).join(', ')}`;
+    }
+    
+    toast.success(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <span className="font-medium">Import Complete</span>
+        </div>
+        <div className="text-sm">
+          {resultMessage}
+          {siteSummary && <div className="text-xs mt-1 text-muted-foreground">{siteSummary}</div>}
+        </div>
+        {skippedCount > 0 && (
+          <div className="text-xs text-muted-foreground">
+            {skippedCount} rows were skipped due to missing required data
+          </div>
+        )}
+        {invalidSiteNames.size > 0 && (
+          <div className="text-xs text-amber-600">
+            Invalid sites found: {Array.from(invalidSiteNames).join(', ')}
+          </div>
+        )}
+        {errorMessages.length > 0 && errorMessages.length <= 10 && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">
+              View error details ({errorMessages.length})
+            </summary>
+            <div className="mt-2 p-2 bg-red-50 rounded max-h-32 overflow-y-auto">
+              {errorMessages.map((msg, idx) => (
+                <div key={idx} className="text-red-600 truncate">{msg}</div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>,
+      { id: toastId, duration: 10000 }
+    );
+    
+    setImportDialogOpen(false);
+    
+  } catch (error: any) {
+    console.error("Import process failed:", error);
+    toast.error(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <XCircle className="h-4 w-4 text-red-500" />
+          <span className="font-medium">Import Failed</span>
+        </div>
+        <div className="text-sm text-red-600">
+          {error.message || "Error processing the file"}
+        </div>
+      </div>
+    );
+  } finally {
+    setIsImporting(false);
+    setImportProgress({ current: 0, total: 0 });
+  }
+};
 
   // Fetch employees from API
   const fetchEmployees = useCallback(async () => {
