@@ -1,4 +1,4 @@
-// src/components/Manager/ManagerSites.tsx (Updated with Camera)
+// src/components/Manager/ManagerSites.tsx (Updated with Camera and Responsive Design)
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useRole } from "@/context/RoleContext";
 import taskService from "@/services/TaskService";
-import siteVisitService, { Site, SiteVisitReport, WorkQuery } from "../../../services/SiteVisitService";
+import siteVisitService, { Site, SiteVisitReport, WorkQuery } from "@/services/SiteVisitService";
+import { motion } from "framer-motion";
 
 // Camera Component
 interface CameraComponentProps {
@@ -478,48 +479,53 @@ const ManagerSites = () => {
   }
   
   return (
-    <div className="space-y-6">
-      {/* Header with stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      {/* Header with stats - Responsive Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Assigned Sites</p>
-                <p className="text-2xl font-bold">{sites.length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Assigned Sites</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-700">{sites.length}</p>
               </div>
-              <Building className="h-8 w-8 text-blue-500" />
+              <Building className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
+        <Card className="border-l-4 border-l-green-500">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Visited Sites</p>
-                <p className="text-2xl font-bold">{sites.filter(s => s.visitCount > 0).length}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Visited Sites</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-700">{sites.filter(s => s.visitCount > 0).length}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
+              <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
+        <Card className="border-l-4 border-l-purple-500">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Visits</p>
-                <p className="text-2xl font-bold">{sites.reduce((sum, s) => sum + s.visitCount, 0)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Visits</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-700">{sites.reduce((sum, s) => sum + s.visitCount, 0)}</p>
               </div>
-              <Calendar className="h-8 w-8 text-purple-500" />
+              <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
       </div>
       
-      {/* Search and Filter */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      {/* Search and Filter - Responsive */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -527,7 +533,7 @@ const ManagerSites = () => {
               placeholder="Search by site name or client..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-9 sm:h-10 text-sm"
             />
           </div>
         </div>
@@ -535,7 +541,7 @@ const ManagerSites = () => {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 rounded-md border border-input bg-background text-sm"
+            className="px-3 py-1.5 sm:py-2 rounded-md border border-input bg-background text-sm h-9 sm:h-10"
           >
             <option value="all">All Sites</option>
             <option value="visited">Visited Sites</option>
@@ -544,13 +550,13 @@ const ManagerSites = () => {
         </div>
       </div>
       
-      {/* Sites Grid */}
+      {/* Sites Grid - Responsive */}
       {filteredSites.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="p-12 text-center">
-            <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Sites Found</h3>
-            <p className="text-muted-foreground">
+          <CardContent className="p-8 sm:p-12 text-center">
+            <Building className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold mb-2">No Sites Found</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground px-4">
               {searchQuery || filterStatus !== "all" 
                 ? "No sites match your search criteria." 
                 : "You haven't been assigned to any sites yet. Contact your supervisor for assignments."}
@@ -558,90 +564,96 @@ const ManagerSites = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredSites.map((site) => (
-            <Card key={site._id} className="hover:shadow-lg transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg truncate">{site.name}</h3>
-                    <p className="text-sm text-muted-foreground truncate">{site.clientName}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {filteredSites.map((site, index) => (
+            <motion.div
+              key={site._id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <Card className="hover:shadow-lg transition-all duration-200 hover:scale-[1.02]">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm sm:text-base truncate">{site.name}</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{site.clientName}</p>
+                    </div>
+                    <Badge variant={site.status === 'active' ? 'default' : 'secondary'} className="ml-2 text-xs whitespace-nowrap">
+                      {site.status}
+                    </Badge>
                   </div>
-                  <Badge variant={site.status === 'active' ? 'default' : 'secondary'} className="ml-2">
-                    {site.status}
-                  </Badge>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                  {site.location && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="truncate">{site.location}</span>
+                  
+                  <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
+                    {site.location && (
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                        <MapPin className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="truncate">{site.location}</span>
+                      </div>
+                    )}
+                    {site.lastVisited ? (
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                        <span>Last visited: {format(new Date(site.lastVisited), 'dd MMM yyyy')}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-amber-600">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                        <span>Not visited yet</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                      <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <span>Total visits: {site.visitCount}</span>
                     </div>
-                  )}
-                  {site.lastVisited ? (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span>Last visited: {format(new Date(site.lastVisited), 'dd MMM yyyy')}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm text-amber-600">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span>Not visited yet</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span>Total visits: {site.visitCount}</span>
                   </div>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    className="flex-1"
-                    onClick={() => {
-                      setSelectedSite(site);
-                      setReportDialogOpen(true);
-                    }}
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Start Visit
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={() => {
-                      // View site reports - could show reports for this specific site
-                      const siteReports = reports.filter(r => r.siteId === site._id);
-                      if (siteReports.length > 0) {
-                        setSelectedReport(siteReports[0]);
-                        setViewReportDialogOpen(true);
-                      } else {
-                        toast.info("No reports found for this site");
-                      }
-                    }}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Reports
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      className="flex-1 h-8 sm:h-9 text-xs sm:text-sm"
+                      onClick={() => {
+                        setSelectedSite(site);
+                        setReportDialogOpen(true);
+                      }}
+                    >
+                      <Camera className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      Start Visit
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 h-8 sm:h-9 text-xs sm:text-sm"
+                      onClick={() => {
+                        const siteReports = reports.filter(r => r.siteId === site._id);
+                        if (siteReports.length > 0) {
+                          setSelectedReport(siteReports[0]);
+                          setViewReportDialogOpen(true);
+                        } else {
+                          toast.info("No reports found for this site");
+                        }
+                      }}
+                    >
+                      <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      View Reports
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
       )}
       
-      {/* My Reports Section */}
+      {/* My Reports Section - Responsive */}
       {reports.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
               My Recent Reports
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="space-y-2 sm:space-y-3">
               {reports.slice(0, 5).map((report) => (
                 <Card 
                   key={report._id} 
@@ -651,22 +663,25 @@ const ManagerSites = () => {
                     setViewReportDialogOpen(true);
                   }}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <Building className="h-4 w-4" />
-                          <h3 className="font-medium">{report.siteName}</h3>
+                          <Building className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                          <h3 className="font-medium text-sm sm:text-base truncate">{report.siteName}</h3>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{format(new Date(report.visitDate), 'dd MMM yyyy, hh:mm a')}</span>
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(report.visitDate), 'dd MMM yyyy, hh:mm a')}
+                          </span>
                           <span>📸 {report.photos?.length || 0} photos</span>
                           <span>📝 {report.workQueries?.length || 0} queries</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {getStatusBadge(report.status)}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       </div>
                     </div>
                   </CardContent>
@@ -679,45 +694,44 @@ const ManagerSites = () => {
       
       {/* Start Visit Dialog */}
       <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
               Site Visit Report - {selectedSite?.name}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               Document your site visit with photos and work queries. Your report will be reviewed by Super Admin.
             </DialogDescription>
           </DialogHeader>
           
           <Tabs defaultValue="photos" className="mt-4">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="photos">
-                <Camera className="h-4 w-4 mr-2" />
+            <TabsList className="grid w-full grid-cols-3 h-auto p-1">
+              <TabsTrigger value="photos" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <Camera className="h-3 w-3 sm:h-4 sm:w-4" />
                 Photos
               </TabsTrigger>
-              <TabsTrigger value="queries">
-                <AlertCircle className="h-4 w-4 mr-2" />
+              <TabsTrigger value="queries" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                 Work Queries
               </TabsTrigger>
-              <TabsTrigger value="review">
-                <CheckCircle className="h-4 w-4 mr-2" />
+              <TabsTrigger value="review" className="flex items-center gap-1 sm:gap-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                 Review & Submit
               </TabsTrigger>
             </TabsList>
             
             <TabsContent value="photos" className="space-y-4 mt-4">
-              {/* Camera Button */}
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
                   variant="outline" 
-                  className="flex-1"
+                  className="flex-1 h-9 sm:h-10 text-sm"
                   onClick={() => setShowCameraDialog(true)}
                 >
                   <Camera className="h-4 w-4 mr-2" />
                   Take Photo with Camera
                 </Button>
                 <label className="flex-1">
-                  <Button variant="outline" asChild className="w-full">
+                  <Button variant="outline" asChild className="w-full h-9 sm:h-10 text-sm">
                     <div className="flex items-center justify-center gap-2 cursor-pointer">
                       <Upload className="h-4 w-4" />
                       Upload from Gallery
@@ -733,21 +747,20 @@ const ManagerSites = () => {
                 </label>
               </div>
               
-              {/* Photo Previews */}
               {photoPreviews.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3 mt-4">
                   {photoPreviews.map((preview, index) => (
                     <div key={index} className="relative group">
                       <img 
                         src={preview} 
                         alt={`Site photo ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
+                        className="w-full h-24 sm:h-32 object-cover rounded-lg"
                       />
                       <button
                         onClick={() => removePhoto(index)}
                         className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <XCircle className="h-4 w-4" />
+                        <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                       </button>
                     </div>
                   ))}
@@ -755,7 +768,7 @@ const ManagerSites = () => {
               )}
               
               {photos.length === 0 && (
-                <div className="text-center py-4 text-amber-600 bg-amber-50 rounded-lg">
+                <div className="text-center py-4 text-amber-600 bg-amber-50 rounded-lg text-sm">
                   <AlertCircle className="h-4 w-4 inline mr-2" />
                   Please add at least one photo before submitting
                 </div>
@@ -763,21 +776,23 @@ const ManagerSites = () => {
             </TabsContent>
             
             <TabsContent value="queries" className="space-y-4 mt-4">
-              <div className="border rounded-lg p-4">
-                <h4 className="font-medium mb-3">Add Work Query</h4>
+              <div className="border rounded-lg p-3 sm:p-4">
+                <h4 className="font-medium text-sm sm:text-base mb-3">Add Work Query</h4>
                 <div className="space-y-3">
                   <Input
                     placeholder="Query title"
                     value={currentQuery.title || ''}
                     onChange={(e) => setCurrentQuery({ ...currentQuery, title: e.target.value })}
+                    className="text-sm"
                   />
                   <Textarea
                     placeholder="Describe the issue or work needed"
                     rows={3}
                     value={currentQuery.description || ''}
                     onChange={(e) => setCurrentQuery({ ...currentQuery, description: e.target.value })}
+                    className="text-sm"
                   />
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <select
                       className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={currentQuery.priority || 'medium'}
@@ -787,7 +802,7 @@ const ManagerSites = () => {
                       <option value="medium">Medium Priority</option>
                       <option value="high">High Priority</option>
                     </select>
-                    <Button onClick={addWorkQuery}>
+                    <Button onClick={addWorkQuery} className="h-9 sm:h-10">
                       <Plus className="h-4 w-4 mr-2" />
                       Add
                     </Button>
@@ -797,17 +812,17 @@ const ManagerSites = () => {
               
               {workQueries.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="font-medium">Work Queries ({workQueries.length})</h4>
+                  <h4 className="font-medium text-sm sm:text-base">Work Queries ({workQueries.length})</h4>
                   {workQueries.map((query, index) => (
                     <div key={index} className="border rounded-lg p-3 bg-gray-50">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="font-medium">{query.title}</div>
-                          <div className="text-sm text-muted-foreground mt-1">{query.description}</div>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{query.title}</div>
+                          <div className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">{query.description}</div>
                           <Badge variant={
                             query.priority === 'high' ? 'destructive' :
                             query.priority === 'medium' ? 'default' : 'secondary'
-                          } className="mt-2">
+                          } className="mt-2 text-xs">
                             {query.priority} priority
                           </Badge>
                         </div>
@@ -815,6 +830,7 @@ const ManagerSites = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => removeWorkQuery(index)}
+                          className="h-7 w-7 p-0 flex-shrink-0"
                         >
                           <XCircle className="h-4 w-4 text-red-500" />
                         </Button>
@@ -827,21 +843,21 @@ const ManagerSites = () => {
             
             <TabsContent value="review" className="space-y-4 mt-4">
               <div className="space-y-3">
-                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg text-sm">
                   <span className="font-medium">Site:</span>
-                  <span>{selectedSite?.name}</span>
+                  <span className="text-right break-words ml-2">{selectedSite?.name}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg text-sm">
                   <span className="font-medium">Photos:</span>
                   <span>{photos.length} photo(s)</span>
                 </div>
-                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg text-sm">
                   <span className="font-medium">Work Queries:</span>
                   <span>{workQueries.length} query(s)</span>
                 </div>
                 
                 {photos.length === 0 && (
-                  <div className="p-3 bg-red-50 text-red-700 rounded-lg">
+                  <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
                     <AlertCircle className="h-4 w-4 inline mr-2" />
                     Please add at least one photo before submitting
                   </div>
@@ -849,7 +865,7 @@ const ManagerSites = () => {
               </div>
               
               <Button 
-                className="w-full" 
+                className="w-full h-9 sm:h-10" 
                 onClick={submitReport}
                 disabled={photos.length === 0 || isSubmitting}
               >
@@ -879,11 +895,11 @@ const ManagerSites = () => {
       }}>
         <DialogContent className="max-w-md p-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="flex items-center gap-2 text-lg">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Camera className="h-5 w-5" />
               Take Photo for Site Visit
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               Capture a photo of the site condition. Ensure good lighting for clear photos.
             </DialogDescription>
           </DialogHeader>
@@ -900,7 +916,7 @@ const ManagerSites = () => {
                   <img 
                     src={capturedImage} 
                     alt="Captured" 
-                    className="w-full h-80 object-contain"
+                    className="w-full h-64 sm:h-80 object-contain"
                   />
                 </div>
                 <div className="flex gap-2 mt-4">
@@ -918,7 +934,7 @@ const ManagerSites = () => {
                           toast.success("Photo captured successfully!");
                         });
                     }}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-green-600 hover:bg-green-700 h-9 sm:h-10"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Use This Photo
@@ -928,6 +944,7 @@ const ManagerSites = () => {
                     onClick={() => {
                       setCapturedImage(null);
                     }}
+                    className="h-9 sm:h-10"
                   >
                     <Camera className="h-4 w-4 mr-2" />
                     Retake
@@ -945,37 +962,36 @@ const ManagerSites = () => {
       
       {/* View Report Dialog */}
       <Dialog open={viewReportDialogOpen} onOpenChange={setViewReportDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
               Site Visit Report - {selectedReport?.siteName}
             </DialogTitle>
           </DialogHeader>
           
           {selectedReport && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2">
+            <div className="space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4" />
                   <span>{format(new Date(selectedReport.visitDate), 'dd MMM yyyy, hh:mm a')}</span>
                 </div>
                 {getStatusBadge(selectedReport.status)}
               </div>
               
-              {/* Photos Section */}
               {selectedReport.photos && selectedReport.photos.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base">
                     <Image className="h-4 w-4" />
                     Site Photos ({selectedReport.photos.length})
                   </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                     {selectedReport.photos.map((photo, index) => (
                       <div key={index} className="relative group">
                         <img
                           src={photo.url}
                           alt={`Site photo ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90"
+                          className="w-full h-24 sm:h-32 object-cover rounded-lg cursor-pointer hover:opacity-90"
                           onClick={() => window.open(photo.url, '_blank')}
                         />
                         <div className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
@@ -987,32 +1003,31 @@ const ManagerSites = () => {
                 </div>
               )}
               
-              {/* Work Queries Section */}
               {selectedReport.workQueries && selectedReport.workQueries.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base">
                     <AlertCircle className="h-4 w-4" />
                     Work Queries ({selectedReport.workQueries.length})
                   </h3>
                   <div className="space-y-3">
                     {selectedReport.workQueries.map((query) => (
                       <Card key={query._id}>
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-medium">{query.title}</h4>
+                        <CardContent className="p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-2">
+                            <h4 className="font-medium text-sm">{query.title}</h4>
                             <Badge variant={
                               query.priority === 'high' ? 'destructive' :
                               query.priority === 'medium' ? 'default' : 'secondary'
-                            }>
+                            } className="text-xs whitespace-nowrap">
                               {query.priority}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2">{query.description}</p>
-                          <div className="flex justify-between items-center text-sm">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-2 break-words">{query.description}</p>
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm">
                             <Badge variant={
                               query.status === 'completed' ? 'default' :
                               query.status === 'in-progress' ? 'secondary' : 'outline'
-                            }>
+                            } className="text-xs">
                               {query.status}
                             </Badge>
                             {query.createdAt && (
@@ -1022,7 +1037,7 @@ const ManagerSites = () => {
                             )}
                           </div>
                           {query.resolution && (
-                            <div className="mt-2 p-2 bg-green-50 rounded text-sm">
+                            <div className="mt-2 p-2 bg-green-50 rounded text-xs sm:text-sm">
                               <span className="font-medium">Resolution:</span> {query.resolution}
                             </div>
                           )}
@@ -1033,21 +1048,20 @@ const ManagerSites = () => {
                 </div>
               )}
               
-              {/* Updates Timeline */}
               {selectedReport.updates && selectedReport.updates.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base">
                     <Clock className="h-4 w-4" />
                     Activity Timeline
                   </h3>
                   <div className="space-y-2">
                     {selectedReport.updates.map((update, index) => (
-                      <div key={index} className="flex items-start gap-3 p-3 border-l-2 border-primary">
+                      <div key={index} className="flex flex-col sm:flex-row items-start gap-2 sm:gap-3 p-3 border-l-2 border-primary">
                         <div className="text-xs text-muted-foreground min-w-[100px]">
                           {format(new Date(update.timestamp), 'dd MMM, hh:mm a')}
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm">{update.content}</p>
+                          <p className="text-xs sm:text-sm">{update.content}</p>
                           <Badge variant="outline" className="mt-1 text-xs">
                             {update.type}
                           </Badge>
@@ -1058,18 +1072,17 @@ const ManagerSites = () => {
                 </div>
               )}
               
-              {/* Rejection Reason */}
               {selectedReport.status === 'rejected' && selectedReport.rejectionReason && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <h4 className="font-semibold text-red-800 mb-1">Rejection Reason</h4>
-                  <p className="text-sm text-red-700">{selectedReport.rejectionReason}</p>
+                  <h4 className="font-semibold text-red-800 mb-1 text-sm">Rejection Reason</h4>
+                  <p className="text-xs sm:text-sm text-red-700">{selectedReport.rejectionReason}</p>
                 </div>
               )}
             </div>
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 };
 

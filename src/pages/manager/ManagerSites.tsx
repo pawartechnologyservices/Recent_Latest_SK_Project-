@@ -1,17 +1,25 @@
-// src/pages/manager/ManagerSites.tsx
+import { useOutletContext } from "react-router-dom";
 import ManagerSitesComponent from "@/pages/manager/components/ManagerSites";
+import { DashboardHeader } from "@/components/shared/DashboardHeader";
+
+interface OutletContext {
+  onMenuClick: () => void;
+}
 
 const ManagerSites = () => {
+  const { onMenuClick } = useOutletContext<OutletContext>();
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Assigned Sites</h1>
-        <p className="text-muted-foreground mt-1">
-          View and manage sites assigned to you. Take photos, add work queries, and submit visit reports for review.
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <DashboardHeader 
+        title="My Assigned Sites" 
+        subtitle="View and manage sites assigned to you. Take photos, add work queries, and submit visit reports for review."
+        onMenuClick={onMenuClick}
+      />
       
-      <ManagerSitesComponent />
+      <div className="p-4 sm:p-6">
+        <ManagerSitesComponent />
+      </div>
     </div>
   );
 };

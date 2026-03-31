@@ -1,5 +1,5 @@
 // src/services/SiteVisitService.ts
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://${window.location.hostname}:5001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
 
 export interface Site {
   _id: string;
