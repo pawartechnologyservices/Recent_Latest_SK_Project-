@@ -1,7 +1,7 @@
 // src/services/machineService.ts
 import axios from 'axios';
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 export interface FrontendMachine {
   id: string;

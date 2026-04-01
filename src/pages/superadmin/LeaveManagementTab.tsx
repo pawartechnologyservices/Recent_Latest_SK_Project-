@@ -175,7 +175,7 @@ interface SuperAdminInfo {
   superAdminContact: string;
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 const LeaveManagementTab = ({ leaveRequests, setLeaveRequests }: LeaveManagementTabProps) => {
   const { user } = useRole();

@@ -29,7 +29,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Interface for real API response
 interface ApiNotification {

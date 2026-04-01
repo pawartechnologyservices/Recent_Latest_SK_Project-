@@ -1,7 +1,7 @@
 // src/services/inventoryService.ts
 import axios from 'axios';
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // InventoryItem Interface - matches backend model
 export interface InventoryItem {

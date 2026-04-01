@@ -81,7 +81,7 @@ export interface UpdateAssignTaskRequest {
   status?: 'pending' | 'in-progress' | 'completed' | 'cancelled';
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 class AssignTaskService {
   async createAssignTask(taskData: CreateAssignTaskRequest): Promise<AssignTask> {

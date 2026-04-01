@@ -21,7 +21,7 @@ const ServicesSection = () => {
   const [loading, setLoading] = useState(true);
 
   // API Base URL
-  const API_URL = `http://${window.location.hostname}:5001/api`;
+  const API_URL = `https://${window.location.hostname}:5001/api`;
   // Fetch services from backend
   const fetchServices = async () => {
     try {

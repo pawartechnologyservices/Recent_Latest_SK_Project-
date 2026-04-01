@@ -54,7 +54,7 @@ import axios from "axios";
 
 // API URL
 const API_URL = process.env.NODE_ENV === 'development' 
-  ? `http://${window.location.hostname}:5001/api` 
+  ? `https://${window.location.hostname}:5001/api` 
   : '/api';
 
 // Department data matching the dashboard

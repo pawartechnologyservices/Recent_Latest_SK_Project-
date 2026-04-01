@@ -89,7 +89,7 @@ const ExcelImportDialog = ({
   const downloadTemplate = async () => {
     try {
       // Try to download from backend first
-      const response = await fetch(`http://${window.location.hostname}:5001/api/employees/template`);
+      const response = await fetch(`https://${window.location.hostname}:5001/api/employees/template`);
       
       if (response.ok) {
         const blob = await response.blob();

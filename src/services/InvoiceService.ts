@@ -1,8 +1,8 @@
 // services/InvoiceService.ts
 // Use a relative URL for API calls - this works for both development and production
-// For development: http://localhost:5001/api
+// For development: https://localhost:5001/api
 // For production: /api (if using proxy) or full URL if deployed separately
-const API_URL = `http://${window.location.hostname}:5001/api`; // Change this to your actual backend URL
+const API_URL = `https://${window.location.hostname}:5001/api`; // Change this to your actual backend URL
 // OR use relative URL if backend is served from same origin:
 // const API_URL = '/api';
 

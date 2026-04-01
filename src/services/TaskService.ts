@@ -183,7 +183,7 @@ export interface StaffWithTaskCount {
   taskCount: number;
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 class TaskService {
   // Sites

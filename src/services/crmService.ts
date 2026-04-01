@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 
 // Base URL for your backend
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Interfaces
 export interface Client {

@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 
 
 // Define the API Base URL
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Types
 interface Employee {

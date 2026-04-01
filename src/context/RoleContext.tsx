@@ -28,7 +28,7 @@ interface RoleContextType {
 }
 
 // Use your actual backend URL
-const API_URL = `http://${window.location.hostname}:5001/api/auth`;
+const API_URL = `https://${window.location.hostname}:5001/api/auth`;
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 

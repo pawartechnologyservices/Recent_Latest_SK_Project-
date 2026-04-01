@@ -26,7 +26,7 @@ import axios from "axios";
 import { useOutletContext } from 'react-router-dom';
 import { motion } from "framer-motion";
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
 
 // Define interfaces
 interface RosterEntry {

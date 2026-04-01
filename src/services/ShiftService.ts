@@ -1,6 +1,6 @@
 // import { Shift, Employee, ApiResponse, AssignEmployeeRequest } from '../types/apiTypes';
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Define interfaces if not already in a separate file
 export interface Shift {

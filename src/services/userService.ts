@@ -63,7 +63,7 @@ export interface UsersResponse {
 
 export type UserRole = 'superadmin' | 'admin' | 'manager' | 'supervisor' | 'employee';
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Create axios instance with auth interceptor
 const api: AxiosInstance = axios.create({

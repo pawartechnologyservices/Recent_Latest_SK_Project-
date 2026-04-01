@@ -15,9 +15,9 @@ import { motion } from "framer-motion";
 
 const getApiUrl = () => {
   if (typeof window === 'undefined') {
-    return 'http://localhost:5001/api';
+    return 'https://localhost:5001/api';
   }
-  return `http://${window.location.hostname}:5001/api`;
+  return `https://${window.location.hostname}:5001/api`;
 };
 
 const API_BASE = getApiUrl();

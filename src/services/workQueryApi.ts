@@ -144,7 +144,7 @@ export interface ApiResponse<T> {
 /* =========================
    AXIOS SETUP
 ========================= */
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,

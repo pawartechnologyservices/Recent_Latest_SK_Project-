@@ -64,7 +64,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import taskService, { type Task } from "@/services/TaskService";
 import * as XLSX from 'xlsx';
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Interfaces (same as before)
 interface LeaveData {

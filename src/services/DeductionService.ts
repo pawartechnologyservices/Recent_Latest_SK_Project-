@@ -99,7 +99,7 @@ export interface EmployeeResponse {
   message?: string;
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 class DeductionService {
   // Cache implementation

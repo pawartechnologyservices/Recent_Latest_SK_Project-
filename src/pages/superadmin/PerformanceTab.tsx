@@ -179,7 +179,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
 
         // Direct API call with correct endpoint
         const response = await fetch(
-          `http://${window.location.hostname}:5001/api/deductions/deductions?${new URLSearchParams(
+          `https://${window.location.hostname}:5001/api/deductions/deductions?${new URLSearchParams(
             params
           ).toString()}`
         );
@@ -256,7 +256,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       console.log("Fetching employees from API...");
       
       // Try just one reliable endpoint first
-      const endpoint = `http://${window.location.hostname}:5001/api/employees`;
+      const endpoint = `https://${window.location.hostname}:5001/api/employees`;
       console.log(`Using endpoint: ${endpoint}`);
       
       const response = await fetch(endpoint);
@@ -351,7 +351,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
   const fetchDeductionStats = useCallback(async () => {
     try {
       // Try to get stats from a dedicated API endpoint
-      const response = await fetch(`http://${window.location.hostname}:5001/api/deductions/stats`);
+      const response = await fetch(`https://${window.location.hostname}:5001/api/deductions/stats`);
       
       if (response.ok) {
         const data = await response.json();
@@ -365,7 +365,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Fallback: If no dedicated stats endpoint, fetch ALL deductions for stats
       console.log("Fetching all deductions for stats calculation...");
       const allDeductionsResponse = await fetch(
-        `http://${window.location.hostname}:5001/api/deductions/deductions?limit=1000`
+        `https://${window.location.hostname}:5001/api/deductions/deductions?limit=1000`
       );
       
       if (allDeductionsResponse.ok) {
@@ -561,7 +561,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
 
       // Direct API call to create deduction
       const response = await fetch(
-        `http://${window.location.hostname}:5001/api/deductions/deductions`,
+        `https://${window.location.hostname}:5001/api/deductions/deductions`,
         {
           method: "POST",
           headers: {
@@ -674,7 +674,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Check what endpoint your backend uses for updating
       // Try both possibilities
       const response = await fetch(
-        `http://${window.location.hostname}:5001/api/deductions/deductions/${editingDeduction.id}`,
+        `https://${window.location.hostname}:5001/api/deductions/deductions/${editingDeduction.id}`,
         {
           method: "PUT",
           headers: {
@@ -687,7 +687,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       if (!response.ok) {
         // Try alternative endpoint
         const altResponse = await fetch(
-          `http://${window.location.hostname}:5001/api/deductions/${editingDeduction.id}`,
+          `https://${window.location.hostname}:5001/api/deductions/${editingDeduction.id}`,
           {
             method: "PUT",
             headers: {
@@ -801,7 +801,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Check what endpoint your backend uses for deleting
       // Try both possibilities
       const response = await fetch(
-        `http://${window.location.hostname}:5001/api/deductions/deductions/${id}`,
+        `https://${window.location.hostname}:5001/api/deductions/deductions/${id}`,
         {
           method: "DELETE",
         }
@@ -810,7 +810,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       if (!response.ok) {
         // Try alternative endpoint
         const altResponse = await fetch(
-          `http://${window.location.hostname}:5001/api/deductions/${id}`,
+          `https://${window.location.hostname}:5001/api/deductions/${id}`,
           {
             method: "DELETE",
           }

@@ -778,7 +778,7 @@ const compareSiteIds = (id1: string | null, id2: string | null): boolean => {
   return id1.toString().toLowerCase().trim() === id2.toString().toLowerCase().trim();
 };
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
 
 const Leave = () => {
   const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();

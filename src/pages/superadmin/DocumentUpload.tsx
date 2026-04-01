@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 export const DOCUMENT_TYPES = [
   { value: 'aadhar', label: 'Aadhaar Card', icon: '🆔', required: true, pattern: '^[0-9]{12}$', patternMessage: 'Enter 12-digit Aadhar number' },

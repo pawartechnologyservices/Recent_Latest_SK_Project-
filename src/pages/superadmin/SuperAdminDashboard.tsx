@@ -69,7 +69,7 @@ import { siteService, Site } from "@/services/SiteService";
 
 // API URL
 const API_URL = process.env.NODE_ENV === 'development' 
-  ? `http://${window.location.hostname}:5001/api` 
+  ? `https://${window.location.hostname}:5001/api` 
   : '/api';
 
 // Chart color constants

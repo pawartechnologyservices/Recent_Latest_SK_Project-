@@ -73,7 +73,7 @@ interface AssignTaskWithDerivedStatus extends AssignTask {
   derivedStatus?: 'pending' | 'in-progress' | 'completed' | 'cancelled';
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 const AssignTaskPage: React.FC = () => {
   const [showPopup, setShowPopup] = useState(false);

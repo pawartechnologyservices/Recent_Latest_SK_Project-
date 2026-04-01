@@ -91,7 +91,7 @@ class ApiError extends Error {
   }
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 // Default stats
 const defaultStats: SiteStats = {

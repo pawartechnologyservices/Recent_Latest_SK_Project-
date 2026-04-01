@@ -36,7 +36,7 @@ interface SiteStaff {
   supervisors: StaffWithTaskCount[];
 }
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 const ManagerAssignTaskPopup: React.FC<ManagerAssignTaskPopupProps> = ({
   open,

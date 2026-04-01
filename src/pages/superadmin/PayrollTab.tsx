@@ -374,7 +374,7 @@ const PayrollTab = ({ selectedMonth, setSelectedMonth }: PayrollTabProps) => {
       // Fetch all data with simple fetch calls
       const [employeesRes, payrollRes, structuresRes] = await Promise.all([
         // Employees
-        fetch(`http://${window.location.hostname}:5001/api/employees?status=active`)
+        fetch(`https://${window.location.hostname}:5001/api/employees?status=active`)
           .then(res => {
             if (!res.ok) throw new Error(`Employees API error: ${res.status}`);
             return res.json();
@@ -385,7 +385,7 @@ const PayrollTab = ({ selectedMonth, setSelectedMonth }: PayrollTabProps) => {
           }),
         
         // Payroll for selected month
-        fetch(`http://${window.location.hostname}:5001/api/payroll?month=${selectedMonth}`)
+        fetch(`https://${window.location.hostname}:5001/api/payroll?month=${selectedMonth}`)
           .then(res => {
             if (!res.ok) throw new Error(`Payroll API error: ${res.status}`);
             return res.json();
@@ -396,7 +396,7 @@ const PayrollTab = ({ selectedMonth, setSelectedMonth }: PayrollTabProps) => {
           }),
         
         // Salary structures
-        fetch(`http://${window.location.hostname}:5001/api/salary-structures?isActive=true`)
+        fetch(`https://${window.location.hostname}:5001/api/salary-structures?isActive=true`)
           .then(res => {
             if (!res.ok) throw new Error(`Structures API error: ${res.status}`);
             return res.json();

@@ -28,7 +28,7 @@ interface EmployeesTabProps {
 }
 
 const API_URL = process.env.NODE_ENV === 'development' 
-  ? `http://${window.location.hostname}:5001/api` 
+  ? `https://${window.location.hostname}:5001/api` 
   : '/api';
 
 interface SiteAssignmentHistory {
@@ -2513,12 +2513,12 @@ const EmployeesTab = ({
         return employee.photo;
       }
       
-      if (employee.photo.startsWith('http')) {
+      if (employee.photo.startsWith('https')) {
         return employee.photo;
       }
       
       if (employee.photo.startsWith('/')) {
-        return `http://${window.location.hostname}:5001${employee.photo}`;
+        return `https://${window.location.hostname}:5001${employee.photo}`;
       }
       
       return employee.photo;
@@ -4807,7 +4807,7 @@ const EmployeesTab = ({
                       alt={selectedEmployeeForDocuments.name}
                       className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-200"
                       onError={(e) => {
-                        e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+                        e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='https://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
                       }}
                     />
                     <p className="text-sm text-muted-foreground mt-2">Employee Photo</p>
@@ -4861,7 +4861,7 @@ const EmployeesTab = ({
                         className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
                         onError={(e) => {
                           console.log('Image failed to load:', employee.photo);
-                          e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+                          e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='https://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
                         }}
                       />
                     ) : (
@@ -5005,7 +5005,7 @@ const EmployeesTab = ({
                                   alt={employee.name}
                                   className="w-32 h-32 rounded-full object-cover border-4 border-gray-200"
                                   onError={(e) => {
-                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='https://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
                                   }}
                                 />
                                 <p className="text-xs text-muted-foreground mt-1">Stored in Cloudinary</p>
