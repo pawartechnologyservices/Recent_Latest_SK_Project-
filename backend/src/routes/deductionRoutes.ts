@@ -1,8 +1,11 @@
+// backend/src/routes/deductionRoutes.ts
 import express from 'express';
 import deductionController from '../controllers/deductionController';
+import advanceRoutes from './advanceRoutes';
 
 const router = express.Router();
 
+// Health check
 router.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
 
 // Deduction CRUD routes
@@ -19,5 +22,8 @@ router.get('/employees/:employeeId/deductions', deductionController.getDeduction
 
 // Monthly reports
 router.get('/deductions/month/:year/:month', deductionController.getDeductionsByMonth);
+
+// Mount advance routes
+router.use(advanceRoutes);
 
 export default router;

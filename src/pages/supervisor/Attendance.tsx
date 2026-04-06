@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import axios from "axios";
 import CameraCapture from "./CameraCapture";
+import AttendanceDetailsDialog from "./AttendanceDetailsDialog";
 
 // API URL
 const API_URL = process.env.NODE_ENV === 'development' 
@@ -674,6 +675,10 @@ const Attendance = () => {
     remarks: ''
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Attendance details dialog state
+  const [attendanceDetailsOpen, setAttendanceDetailsOpen] = useState(false);
+  const [attendanceDetailsType, setAttendanceDetailsType] = useState<'present' | 'absent' | 'half-day' | 'leave' | 'weekly-off'>('present');
 
   // Attendance summary state
   const [summary, setSummary] = useState<AttendanceSummary>({
@@ -3132,7 +3137,8 @@ const Attendance = () => {
                 className={summary.presentCount > 0 ? "cursor-pointer" : "cursor-default opacity-75"}
                 onClick={() => {
                   if (summary.presentCount > 0) {
-                    toast.info(`Showing ${summary.presentCount} present employees`);
+                    setAttendanceDetailsType('present');
+                    setAttendanceDetailsOpen(true);
                   }
                 }}
               >
@@ -3155,7 +3161,8 @@ const Attendance = () => {
                 className={summary.absentCount > 0 ? "cursor-pointer" : "cursor-default opacity-75"}
                 onClick={() => {
                   if (summary.absentCount > 0) {
-                    toast.info(`Showing ${summary.absentCount} absent employees`);
+                    setAttendanceDetailsType('absent');
+                    setAttendanceDetailsOpen(true);
                   }
                 }}
               >
@@ -3187,7 +3194,15 @@ const Attendance = () => {
 
             {/* Additional Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-              <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+              <Card 
+                className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  if (summary.halfDayCount > 0) {
+                    setAttendanceDetailsType('half-day');
+                    setAttendanceDetailsOpen(true);
+                  }
+                }}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -3204,7 +3219,15 @@ const Attendance = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+              <Card 
+                className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  if (summary.leaveCount > 0) {
+                    setAttendanceDetailsType('leave');
+                    setAttendanceDetailsOpen(true);
+                  }
+                }}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -3221,7 +3244,15 @@ const Attendance = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
+              <Card 
+                className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  if (summary.weeklyOffCount > 0) {
+                    setAttendanceDetailsType('weekly-off');
+                    setAttendanceDetailsOpen(true);
+                  }
+                }}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -4036,6 +4067,28 @@ const Attendance = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Attendance Details Dialog */}
+      <AttendanceDetailsDialog
+        open={attendanceDetailsOpen}
+        onOpenChange={setAttendanceDetailsOpen}
+        type={attendanceDetailsType}
+        date={selectedDate}
+        employees={filteredEmployees}
+        attendanceRecords={attendanceRecords}
+        onRefresh={async () => {
+          await loadAttendanceRecords(selectedDate);
+          const weekDates = getWeekDates(selectedYear, selectedMonth, selectedWeek);
+          const weekStart = formatDate(weekDates[0]);
+          const weekEnd = formatDate(weekDates[6]);
+          await loadWeeklySummaries(weekStart, weekEnd);
+        }}
+        supervisorId={currentSupervisor.supervisorId}
+        getStatusBadge={getStatusBadge}
+        getStatusIcon={getStatusIcon}
+        formatTimeForDisplay={formatTimeForDisplay}
+        formatHours={formatHours}
+      />
 
       {/* Camera Capture Dialog */}
       <CameraCapture

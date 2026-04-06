@@ -62,12 +62,17 @@ import {
   UserX as UserXIcon,
   Calendar as CalendarIcon,
   Filter,
-  Camera
+  Camera,
+  Paperclip
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import axios from "axios";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format } from "date-fns";
 import CameraCapture from "./CameraCapture";
 
 // API URL
@@ -112,6 +117,7 @@ interface AttendanceRecord {
 
 interface LeaveRequest {
   _id: string;
+  id?: string;
   employeeId: string;
   employeeName: string;
   department: string;
@@ -163,6 +169,42 @@ interface Task {
   }>;
   assignedTo?: string;
   assignedToName?: string;
+  assignedSupervisors?: Array<{
+    userId: string;
+    name: string;
+    role: string;
+    assignedAt: string;
+    status: string;
+  }>;
+  taskTitle?: string;
+  taskType?: string;
+  startDate?: string;
+  endDate?: string;
+  siteLocation?: string;
+  hourlyUpdates?: Array<{
+    id: string;
+    content: string;
+    timestamp: string;
+    submittedBy: string;
+    submittedByName: string;
+  }>;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    uploadedAt: string;
+    uploadedBy: string;
+    uploadedByName: string;
+    size: number;
+    type: string;
+  }>;
+  createdByName?: string;
+  createdAt?: string;
+}
+
+interface TaskWithPersonalStatus extends Task {
+  personalStatus: string;
+  myAssignedAt?: string;
 }
 
 interface DashboardStats {
@@ -344,6 +386,16 @@ const isDateInLeaveRange = (date: string, fromDate: string, toDate: string): boo
   return checkDate >= start && checkDate <= end;
 };
 
+// Format date time helper
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(new Date(dateString), 'MMM dd, yyyy h:mm a');
+  } catch {
+    return dateString;
+  }
+};
+
 // Get current supervisor from localStorage
 const getCurrentSupervisor = () => {
   const storedUser = localStorage.getItem("sk_user");
@@ -387,90 +439,12 @@ const generateMockStats = (totalEmployees: number, assignedTasks: number, comple
   pendingRequests: 0
 });
 
-const generateMockActivities = (): Activity[] => [
-  {
-    id: '1',
-    type: 'task',
-    message: 'Completed monthly sales report',
-    employee: 'John Doe',
-    priority: 'high',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString()
-  },
-  {
-    id: '2',
-    type: 'approval',
-    message: 'Requested leave approval',
-    employee: 'Sarah Smith',
-    priority: 'medium',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-  },
-  {
-    id: '3',
-    type: 'completion',
-    message: 'Finished project documentation',
-    employee: 'Mike Johnson',
-    priority: 'low',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString()
-  }
-];
-
 const generateMockTeam = (): TeamMember[] => [
   { id: '1', name: 'John Doe', role: 'Senior Developer', status: 'active' },
   { id: '2', name: 'Sarah Smith', role: 'QA Engineer', status: 'active' },
   { id: '3', name: 'Mike Johnson', role: 'Frontend Developer', status: 'remote' },
   { id: '4', name: 'Emily Brown', role: 'Backend Developer', status: 'on leave' },
   { id: '5', name: 'David Wilson', role: 'DevOps Engineer', status: 'active' }
-];
-
-const generateMockTasks = (): Task[] => [
-  {
-    _id: '1',
-    title: 'Update project documentation',
-    description: 'Update the project documentation with latest changes',
-    priority: 'high',
-    status: 'in-progress',
-    deadline: '2024-01-15',
-    siteId: 'site1',
-    siteName: 'Main Office',
-    clientName: 'Internal',
-    assignedUsers: [{ userId: '1', name: 'John Doe', role: 'Developer', assignedAt: new Date().toISOString(), status: 'assigned' }]
-  },
-  {
-    _id: '2',
-    title: 'Fix login authentication bug',
-    description: 'Fix the login authentication bug reported by users',
-    priority: 'high',
-    status: 'in-progress',
-    deadline: '2024-01-12',
-    siteId: 'site1',
-    siteName: 'Main Office',
-    clientName: 'Internal',
-    assignedUsers: [{ userId: '2', name: 'Sarah Smith', role: 'QA', assignedAt: new Date().toISOString(), status: 'assigned' }]
-  },
-  {
-    _id: '3',
-    title: 'Design new dashboard layout',
-    description: 'Create new dashboard layout designs',
-    priority: 'medium',
-    status: 'pending',
-    deadline: '2024-01-20',
-    siteId: 'site2',
-    siteName: 'Branch Office',
-    clientName: 'Client A',
-    assignedUsers: [{ userId: '3', name: 'Mike Johnson', role: 'Designer', assignedAt: new Date().toISOString(), status: 'assigned' }]
-  },
-  {
-    _id: '4',
-    title: 'Performance optimization',
-    description: 'Optimize application performance',
-    priority: 'low',
-    status: 'pending',
-    deadline: '2024-01-18',
-    siteId: 'site2',
-    siteName: 'Branch Office',
-    clientName: 'Client A',
-    assignedUsers: [{ userId: '4', name: 'Emily Brown', role: 'Developer', assignedAt: new Date().toISOString(), status: 'assigned' }]
-  }
 ];
 
 const SupervisorDashboard = () => {
@@ -501,7 +475,8 @@ const SupervisorDashboard = () => {
   
   const [activities, setActivities] = useState<Activity[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskWithPersonalStatus[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<TaskWithPersonalStatus[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [apiStatus, setApiStatus] = useState<string>('');
@@ -552,11 +527,14 @@ const SupervisorDashboard = () => {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [todayLeaveCount, setTodayLeaveCount] = useState(0);
   const [loadingLeaves, setLoadingLeaves] = useState(false);
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
+  const [recentLeaves, setRecentLeaves] = useState<LeaveRequest[]>([]);
   
   // Task tracking state
   const [assignedTasksCount, setAssignedTasksCount] = useState(0);
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [updatingTaskStatus, setUpdatingTaskStatus] = useState<string | null>(null);
   
   // Loading states for data fetching
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -575,6 +553,15 @@ const SupervisorDashboard = () => {
 
   // Date selection
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Task stats
+  const [taskStats, setTaskStats] = useState({
+    totalTasks: 0,
+    completedTasks: 0,
+    pendingTasks: 0,
+    inProgressTasks: 0,
+    overdueTasks: 0
+  });
 
   // Handle view photo
   const handleViewPhoto = (photoUrl: string | null | undefined, type: 'checkin' | 'checkout') => {
@@ -765,13 +752,13 @@ const SupervisorDashboard = () => {
     }
   };
 
-  // Fetch leave requests and count today's leaves
-  const fetchTodayLeaveCount = useCallback(async () => {
-    if (!currentSupervisor) return 0;
+  // Fetch all leave requests (similar to Leave component)
+  const fetchAllLeaveRequests = useCallback(async () => {
+    if (!currentSupervisor) return;
     
     try {
       setLoadingLeaves(true);
-      console.log("🔍 Fetching leave requests for today:", selectedDate);
+      console.log("🔍 Fetching all leave requests for dashboard...");
       
       const response = await axios.get(`${API_URL}/leaves`, {
         params: { limit: 1000 }
@@ -790,6 +777,18 @@ const SupervisorDashboard = () => {
       
       console.log(`📊 Total leaves from API: ${allLeaves.length}`);
       
+      // Count pending leaves
+      const pendingCount = allLeaves.filter(leave => leave.status === 'pending').length;
+      setPendingLeaveCount(pendingCount);
+      
+      // Get recent leaves (last 5, sorted by createdAt desc)
+      const sortedLeaves = [...allLeaves].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const recent = sortedLeaves.slice(0, 5);
+      setRecentLeaves(recent);
+      
+      // Count today's leaves
       const today = selectedDate;
       const approvedLeavesToday = allLeaves.filter(leave => {
         if (leave.status !== 'approved') return false;
@@ -797,23 +796,45 @@ const SupervisorDashboard = () => {
       });
       
       console.log(`✅ Found ${approvedLeavesToday.length} employees on leave today`);
+      console.log(`📋 Pending leaves: ${pendingCount}`);
       
       setLeaveRequests(allLeaves);
       setTodayLeaveCount(approvedLeavesToday.length);
       
-      return approvedLeavesToday.length;
+      // Update summary leave count
+      setSummary(prev => ({
+        ...prev,
+        leaveCount: approvedLeavesToday.length
+      }));
+      
+      // Update stats pending requests
+      setStats(prev => ({
+        ...prev,
+        pendingRequests: pendingCount
+      }));
+      
+      // Create activity for each pending leave (optional - for recent activities)
+      if (pendingCount > 0 && recent.length > 0) {
+        const pendingLeaves = allLeaves.filter(l => l.status === 'pending');
+        if (pendingLeaves.length > 0 && activities.length === 0) {
+          // Add one activity for pending leaves
+          addActivity('approval', `${pendingLeaves.length} pending leave request${pendingLeaves.length !== 1 ? 's' : ''} awaiting approval`, 'system');
+        }
+      }
       
     } catch (error: any) {
       console.error('❌ Error fetching leave requests:', error);
-      return 0;
+      setLeaveRequests([]);
+      setPendingLeaveCount(0);
+      setRecentLeaves([]);
     } finally {
       setLoadingLeaves(false);
     }
   }, [currentSupervisor, selectedDate]);
 
-  // Fetch tasks assigned to this supervisor
+  // Fetch tasks assigned to this supervisor (similar to SupervisorAssignTask)
   const fetchAssignedTasks = useCallback(async () => {
-    if (!currentSupervisor) return { assigned: 0, completed: 0 };
+    if (!currentSupervisor) return { assigned: 0, completed: 0, tasks: [] };
     
     try {
       setLoadingTasks(true);
@@ -842,6 +863,7 @@ const SupervisorDashboard = () => {
       
       console.log(`📊 Total tasks from assigntasks: ${allTasks.length}`);
       
+      // Filter tasks assigned to this supervisor
       const myTasks = allTasks.filter(task => {
         if (!task.assignedSupervisors || !Array.isArray(task.assignedSupervisors)) {
           return false;
@@ -855,26 +877,155 @@ const SupervisorDashboard = () => {
         });
       });
       
-      const completedCount = myTasks.filter(task => {
+      // Add personal status to each task
+      const tasksWithPersonalStatus: TaskWithPersonalStatus[] = myTasks.map(task => {
         const myInfo = task.assignedSupervisors?.find((supervisor: any) => {
           const matchById = String(supervisor.userId) === String(supervisorId);
           const matchByName = supervisor.name?.toLowerCase().trim() === supervisorName?.toLowerCase().trim();
           return matchById || matchByName;
         });
-        return myInfo?.status === 'completed' || task.status === 'completed';
-      }).length;
+        
+        return {
+          ...task,
+          personalStatus: myInfo?.status || 'pending',
+          myAssignedAt: myInfo?.assignedAt,
+          title: task.taskTitle || task.title,
+          deadline: task.dueDateTime || task.endDate || task.deadline,
+        };
+      });
+      
+      const completedCount = tasksWithPersonalStatus.filter(task => task.personalStatus === 'completed').length;
       
       console.log(`✅ Found ${myTasks.length} tasks assigned to this supervisor (${completedCount} completed)`);
       
-      return { assigned: myTasks.length, completed: completedCount };
+      // Calculate task stats
+      const now = new Date();
+      const statsCalc = {
+        totalTasks: tasksWithPersonalStatus.length,
+        completedTasks: tasksWithPersonalStatus.filter(t => t.personalStatus === 'completed').length,
+        pendingTasks: tasksWithPersonalStatus.filter(t => t.personalStatus === 'pending').length,
+        inProgressTasks: tasksWithPersonalStatus.filter(t => t.personalStatus === 'in-progress').length,
+        overdueTasks: tasksWithPersonalStatus.filter(t => 
+          t.personalStatus !== 'completed' && 
+          t.personalStatus !== 'cancelled' && 
+          new Date(t.dueDateTime || t.deadline || '') < now
+        ).length
+      };
+      setTaskStats(statsCalc);
+      
+      // Sort tasks by due date (upcoming first)
+      const sortedTasks = [...tasksWithPersonalStatus].sort((a, b) => {
+        const dateA = new Date(a.dueDateTime || a.deadline || '');
+        const dateB = new Date(b.dueDateTime || b.deadline || '');
+        return dateA.getTime() - dateB.getTime();
+      });
+      
+      setTasks(sortedTasks);
+      setFilteredTasks(sortedTasks);
+      
+      setAssignedTasksCount(myTasks.length);
+      setCompletedTasksCount(completedCount);
+      
+      setStats(prev => ({
+        ...prev,
+        assignedTasks: myTasks.length,
+        completedTasks: completedCount
+      }));
+      
+      return { 
+        assigned: myTasks.length, 
+        completed: completedCount,
+        tasks: sortedTasks 
+      };
       
     } catch (error: any) {
       console.error('❌ Error fetching assigned tasks:', error);
-      return { assigned: 0, completed: 0 };
+      return { assigned: 0, completed: 0, tasks: [] };
     } finally {
       setLoadingTasks(false);
     }
   }, [currentSupervisor]);
+
+  // Update personal task status
+  const handleUpdatePersonalStatus = async (taskId: string, newStatus: string) => {
+    try {
+      setUpdatingTaskStatus(taskId);
+      
+      const task = tasks.find(t => t._id === taskId);
+      if (!task) {
+        toast.error('Task not found');
+        return;
+      }
+      
+      const supervisorId = currentSupervisor.id;
+      if (!supervisorId) {
+        toast.error('Supervisor ID not found');
+        return;
+      }
+      
+      const supervisorIndex = task.assignedSupervisors?.findIndex(supervisor => {
+        const supervisorUserId = supervisor.userId;
+        const matchById = String(supervisorUserId) === String(supervisorId);
+        const matchByName = supervisor.name?.toLowerCase().trim() === currentSupervisor.name?.toLowerCase().trim();
+        return matchById || matchByName;
+      });
+      
+      if (supervisorIndex === -1 || supervisorIndex === undefined) {
+        toast.error('Could not find your assignment in this task');
+        return;
+      }
+      
+      const updatedSupervisors = [...(task.assignedSupervisors || [])];
+      updatedSupervisors[supervisorIndex] = {
+        ...updatedSupervisors[supervisorIndex],
+        status: newStatus as any
+      };
+      
+      const response = await fetch(`${API_URL}/assigntasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          assignedSupervisors: updatedSupervisors
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+      
+      toast.success(`Task status updated to ${newStatus}`);
+      
+      // Add activity for task status change
+      addActivity('task', `Task "${task.taskTitle || task.title}" marked as ${newStatus}`, 'self');
+      
+      // Refresh tasks
+      await fetchAssignedTasks();
+      
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      toast.error(error.message || 'Failed to update status');
+    } finally {
+      setUpdatingTaskStatus(null);
+    }
+  };
+
+  // Filter tasks based on search
+  useEffect(() => {
+    if (!search.trim()) {
+      setFilteredTasks(tasks);
+    } else {
+      const query = search.toLowerCase();
+      const filtered = tasks.filter(task => 
+        (task.taskTitle || task.title || '').toLowerCase().includes(query) ||
+        (task.description || '').toLowerCase().includes(query) ||
+        (task.siteName || '').toLowerCase().includes(query) ||
+        (task.clientName || '').toLowerCase().includes(query)
+      );
+      setFilteredTasks(filtered);
+    }
+  }, [search, tasks]);
 
   // Fetch tasks where this specific supervisor is assigned (for site filtering)
   const fetchSupervisorSitesFromTasks = useCallback(async () => {
@@ -1753,28 +1904,16 @@ const SupervisorDashboard = () => {
 
   // Add activity
   const addActivity = (type: string, message: string, userType: string = 'self') => {
-    const user = userType === 'manager' ? 'Manager' : 'You';
+    const user = userType === 'manager' ? 'Manager' : (userType === 'system' ? 'System' : 'You');
     const newActivity: Activity = {
       id: Date.now().toString(),
       type,
       message,
       employee: user,
-      priority: 'medium',
+      priority: type === 'approval' ? 'high' : 'medium',
       timestamp: new Date().toISOString()
     };
     setActivities(prev => [newActivity, ...prev.slice(0, 9)]);
-  };
-
-  // Filter data based on search
-  const filteredData = {
-    activities: activities.filter(item => 
-      item.message?.toLowerCase().includes(search.toLowerCase()) ||
-      item.employee?.toLowerCase().includes(search.toLowerCase())
-    ),
-    tasks: tasks.filter(item =>
-      item.title?.toLowerCase().includes(search.toLowerCase()) ||
-      item.assignedToName?.toLowerCase().includes(search.toLowerCase())
-    )
   };
 
   // Handle action
@@ -1786,12 +1925,14 @@ const SupervisorDashboard = () => {
       scheduleMeeting: () => window.location.href = '/supervisor/meetings/schedule',
       performanceReview: () => window.location.href = '/supervisor/performance/reviews',
       exportData: () => alert('Exporting data...'),
-      viewAllActivities: () => window.location.href = '/supervisor/activities',
+      viewAllActivities: () => window.location.href = '/supervisor/assigntask',
       manageEmployees: () => window.location.href = '/supervisor/employees',
       viewTask: (id?: string) => window.location.href = `/supervisor/tasks/${id}`,
       viewEmployee: (id?: string) => window.location.href = `/supervisor/employees/${id}`,
       viewAttendance: () => navigate('/supervisor/attendance'),
-      taskManagement: () => navigate('/supervisor/tasks')
+      taskManagement: () => navigate('/supervisor/tasks'),
+      viewTaskDetails: (taskId?: string) => navigate(`/supervisor/tasks/${taskId}`),
+      viewLeaveRequests: () => navigate('/supervisor/leave')
     };
     
     if (actions[action]) {
@@ -1824,6 +1965,18 @@ const SupervisorDashboard = () => {
         high: 'bg-red-600 dark:bg-red-500',
         medium: 'bg-yellow-500 dark:bg-yellow-400',
         low: 'bg-blue-600 dark:bg-blue-500'
+      },
+      personalStatus: {
+        completed: 'bg-green-100 text-green-800 border-green-200',
+        'in-progress': 'bg-blue-100 text-blue-800 border-blue-200',
+        pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        cancelled: 'bg-red-100 text-red-800 border-red-200'
+      },
+      leaveStatus: {
+        approved: 'bg-green-100 text-green-800 border-green-200',
+        rejected: 'bg-red-100 text-red-800 border-red-200',
+        pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        cancelled: 'bg-gray-100 text-gray-800 border-gray-200'
       }
     };
     
@@ -1860,23 +2013,10 @@ const SupervisorDashboard = () => {
         fetchAllSites();
         fetchEmployees();
         loadAttendanceRecords(selectedDate);
-        updateTaskCounts();
-        fetchTodayLeaveCount();
+        fetchAssignedTasks();
+        fetchAllLeaveRequests();
       }
     });
-  };
-
-  // Update task counts from API
-  const updateTaskCounts = async () => {
-    const { assigned, completed } = await fetchAssignedTasks();
-    setAssignedTasksCount(assigned);
-    setCompletedTasksCount(completed);
-    
-    setStats(prev => ({
-      ...prev,
-      assignedTasks: assigned,
-      completedTasks: completed
-    }));
   };
 
   // Handle refresh
@@ -1891,23 +2031,25 @@ const SupervisorDashboard = () => {
     fetchAllSites();
     fetchEmployees();
     loadAttendanceRecords(selectedDate);
-    updateTaskCounts();
-    fetchTodayLeaveCount();
+    fetchAssignedTasks();
+    fetchAllLeaveRequests();
     
     toast.success("Dashboard data refreshed!");
   };
 
   const loadData = async () => {
-    const { assigned, completed } = await fetchAssignedTasks();
-    setAssignedTasksCount(assigned);
-    setCompletedTasksCount(completed);
+    const result = await fetchAssignedTasks();
+    await fetchAllLeaveRequests();
     
-    await fetchTodayLeaveCount();
-    
-    setStats(generateMockStats(summary.totalEmployees, assigned, completed));
-    setActivities(generateMockActivities());
+    setStats(prev => ({
+      ...prev,
+      totalEmployees: summary.totalEmployees,
+      assignedTasks: result.assigned,
+      completedTasks: result.completed,
+      pendingRequests: pendingLeaveCount
+    }));
+    setActivities(prev => [...prev]);
     setTeam(generateMockTeam());
-    setTasks(generateMockTasks());
   };
 
   // Check if it's a new day
@@ -1939,9 +2081,10 @@ const SupervisorDashboard = () => {
       ...prev,
       totalEmployees: summary.totalEmployees,
       assignedTasks: assignedTasksCount,
-      completedTasks: completedTasksCount
+      completedTasks: completedTasksCount,
+      pendingRequests: pendingLeaveCount
     }));
-  }, [summary.totalEmployees, assignedTasksCount, completedTasksCount]);
+  }, [summary.totalEmployees, assignedTasksCount, completedTasksCount, pendingLeaveCount]);
 
   // Update summary leave count when todayLeaveCount changes
   useEffect(() => {
@@ -1959,12 +2102,12 @@ const SupervisorDashboard = () => {
       await checkBackendConnection();
       await fetchAllSites();
       await fetchEmployees();
-      await fetchTodayLeaveCount();
+      await fetchAllLeaveRequests();
       await loadAttendanceRecords(selectedDate);
       await loadAttendanceStatus();
       await loadManagerAttendanceData();
       await loadSupervisorAttendanceRecords();
-      await updateTaskCounts();
+      await fetchAssignedTasks();
       await loadData();
       setLoading(false);
     };
@@ -2466,7 +2609,7 @@ const SupervisorDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-green-800 dark:text-green-300">Assigned Tasks</p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">{assignedTasksCount}</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">{taskStats.totalTasks}</p>
                   <p className="text-xs text-green-700 dark:text-green-500 mt-1">
                     Tasks assigned to you
                   </p>
@@ -2484,10 +2627,10 @@ const SupervisorDashboard = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-purple-800 dark:text-purple-300">Completed Tasks</p>
-                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{completedTasksCount}</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{taskStats.completedTasks}</p>
                   <p className="text-xs text-purple-700 dark:text-purple-500 mt-1">
-                    {assignedTasksCount > 0 
-                      ? `${Math.round((completedTasksCount / assignedTasksCount) * 100)}% completion rate`
+                    {taskStats.totalTasks > 0 
+                      ? `${Math.round((taskStats.completedTasks / taskStats.totalTasks) * 100)}% completion rate`
                       : 'No tasks assigned'}
                   </p>
                 </div>
@@ -2669,6 +2812,405 @@ const SupervisorDashboard = () => {
           </Card>
         </div>
 
+        {/* Upcoming Tasks Section */}
+        <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <CardHeader>
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-blue-600" />
+                Upcoming Tasks
+                <Badge variant="outline" className="ml-2">
+                  {filteredTasks.length} tasks
+                </Badge>
+              </CardTitle>
+              <div className="relative max-w-md w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Search tasks..."
+                  className="pl-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/supervisor/assigntask')}
+                className="flex items-center gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                View All Tasks
+              </Button>
+            </div>
+            <CardDescription>
+              Tasks assigned to you by Super Admin. Update your status as you make progress.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingTasks ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="text-center py-8">
+                <ClipboardList className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                <p className="text-gray-500">No tasks assigned to you yet</p>
+                {search && (
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    onClick={() => setSearch('')}
+                    className="mt-2"
+                  >
+                    Clear search
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredTasks.slice(0, 5).map((task) => {
+                  const isTaskOverdue = task.personalStatus !== 'completed' && 
+                    task.personalStatus !== 'cancelled' && 
+                    new Date(task.dueDateTime || task.deadline || '') < new Date();
+                  
+                  return (
+                    <div key={task._id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                              {task.taskTitle || task.title}
+                            </h3>
+                            {isTaskOverdue && (
+                              <Badge variant="destructive" className="text-xs">
+                                Overdue
+                              </Badge>
+                            )}
+                            <Badge className={getColor('priority', task.priority)}>
+                              {task.priority}
+                            </Badge>
+                            <Badge className={getColor('personalStatus', task.personalStatus)}>
+                              {task.personalStatus}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                            {task.description}
+                          </p>
+                          <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500">
+                            <div className="flex items-center gap-1">
+                              <Building className="h-3 w-3" />
+                              {task.siteName}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Due: {formatDateTime(task.dueDateTime || task.deadline || '')}
+                            </div>
+                            {task.hourlyUpdates && task.hourlyUpdates.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                <MessageSquare className="h-3 w-3" />
+                                {task.hourlyUpdates.length} update(s)
+                              </div>
+                            )}
+                            {task.attachments && task.attachments.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                <Paperclip className="h-3 w-3" />
+                                {task.attachments.length} file(s)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 self-end sm:self-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAction('viewTaskDetails', task._id)}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          {task.personalStatus === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => handleUpdatePersonalStatus(task._id, 'in-progress')}
+                              disabled={updatingTaskStatus === task._id}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {updatingTaskStatus === task._id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Clock className="h-3 w-3 mr-1" />
+                              )}
+                              Start
+                            </Button>
+                          )}
+                          {task.personalStatus === 'in-progress' && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => handleUpdatePersonalStatus(task._id, 'completed')}
+                              disabled={updatingTaskStatus === task._id}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              {updatingTaskStatus === task._id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                              )}
+                              Complete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {task.personalStatus === 'in-progress' && (
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Progress</span>
+                            <span className="text-gray-700 font-medium">In Progress</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div 
+                              className="bg-blue-600 h-1.5 rounded-full"
+                              style={{ width: '50%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {filteredTasks.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Button 
+                      variant="link" 
+                      onClick={() => navigate('/supervisor/assigntask')}
+                    >
+                      View all {filteredTasks.length} tasks →
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Leave Requests Section */}
+        <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+          <CardHeader>
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-orange-600" />
+                Recent Leave Requests
+                {pendingLeaveCount > 0 && (
+                  <Badge variant="destructive" className="ml-2">
+                    {pendingLeaveCount} Pending
+                  </Badge>
+                )}
+              </CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/supervisor/leave')}
+                className="flex items-center gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                Manage All Leaves
+              </Button>
+            </div>
+            <CardDescription>
+              Recent leave requests from employees and supervisors
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingLeaves ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : recentLeaves.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                <p className="text-gray-500">No leave requests found</p>
+                <Button 
+                  variant="link" 
+                  size="sm" 
+                  onClick={() => navigate('/supervisor/leave')}
+                  className="mt-2"
+                >
+                  Apply for leave →
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentLeaves.map((leave) => {
+                  const isOwnLeave = leave.isSupervisorLeave && leave.supervisorId === currentSupervisor.id;
+                  
+                  return (
+                    <div key={leave._id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                      isOwnLeave ? 'bg-purple-50/50 border-purple-200' : 
+                      leave.isSupervisorLeave ? 'bg-blue-50/50 border-blue-200' : ''
+                    }`}>
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                                <User className="h-4 w-4 text-gray-600" />
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-gray-900 dark:text-white">
+                                  {leave.employeeName}
+                                </h3>
+                                <p className="text-xs text-gray-500">{leave.employeeId}</p>
+                              </div>
+                            </div>
+                            {isOwnLeave && (
+                              <Badge variant="default" className="bg-purple-100 text-purple-800 border-purple-300">
+                                <Crown className="h-3 w-3 mr-1" />
+                                Your Leave
+                              </Badge>
+                            )}
+                            {leave.isSupervisorLeave && !isOwnLeave && (
+                              <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+                                <Shield className="h-3 w-3 mr-1" />
+                                Supervisor
+                              </Badge>
+                            )}
+                            <Badge className={getColor('leaveStatus', leave.status)}>
+                              {leave.status === 'pending' && <Clock className="h-3 w-3 mr-1" />}
+                              {leave.status === 'approved' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                              {leave.status === 'rejected' && <XCircle className="h-3 w-3 mr-1" />}
+                              {leave.status.charAt(0).toUpperCase() + leave.status.slice(1)}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <Briefcase className="h-3 w-3" />
+                              {leave.department}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Building className="h-3 w-3" />
+                              {leave.site}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatDateTime(leave.fromDate)} - {formatDateTime(leave.toDate)}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {leave.totalDays} day(s)
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-2 line-clamp-2">
+                            {leave.reason}
+                          </p>
+                          {leave.remarks && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              Remarks: {leave.remarks}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2 self-end sm:self-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              // Navigate to leave management with this leave selected
+                              navigate('/supervisor/leave');
+                            }}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          {leave.status === 'pending' && !isOwnLeave && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => {
+                                  // Handle approve action
+                                  toast.info(`Approve leave for ${leave.employeeName}`, {
+                                    action: {
+                                      label: "Confirm",
+                                      onClick: async () => {
+                                        try {
+                                          await axios.put(`${API_URL}/leaves/${leave._id}/status`, {
+                                            status: 'approved',
+                                            managerName: currentSupervisor.name,
+                                            remarks: "Approved by supervisor",
+                                            approvedBy: currentSupervisor.name
+                                          });
+                                          toast.success(`Leave approved for ${leave.employeeName}`);
+                                          await fetchAllLeaveRequests();
+                                        } catch (error) {
+                                          console.error('Error approving leave:', error);
+                                          toast.error('Failed to approve leave');
+                                        }
+                                      }
+                                    }
+                                  });
+                                }}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  // Handle reject action
+                                  toast.info(`Reject leave for ${leave.employeeName}`, {
+                                    action: {
+                                      label: "Confirm",
+                                      onClick: async () => {
+                                        try {
+                                          await axios.put(`${API_URL}/leaves/${leave._id}/status`, {
+                                            status: 'rejected',
+                                            managerName: currentSupervisor.name,
+                                            remarks: "Rejected by supervisor",
+                                            rejectedBy: currentSupervisor.name
+                                          });
+                                          toast.success(`Leave rejected for ${leave.employeeName}`);
+                                          await fetchAllLeaveRequests();
+                                        } catch (error) {
+                                          console.error('Error rejecting leave:', error);
+                                          toast.error('Failed to reject leave');
+                                        }
+                                      }
+                                    }
+                                  });
+                                }}
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-t text-xs text-gray-400 flex justify-between">
+                        <span>Applied by: {leave.appliedBy}</span>
+                        <span>{formatDateTime(leave.createdAt)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {recentLeaves.length >= 5 && (
+                  <div className="text-center pt-2">
+                    <Button 
+                      variant="link" 
+                      onClick={() => navigate('/supervisor/leave')}
+                    >
+                      View all {leaveRequests.length} leave requests →
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Summary Footer */}
         <Card>
           <CardContent className="p-4">
@@ -2702,23 +3244,10 @@ const SupervisorDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <input
-            type="text"
-            placeholder="Search activities, tasks..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Main Content */}
+        {/* Activities and Quick Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Activities & Tasks */}
+          {/* Recent Activities */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Recent Activities */}
             <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <CardHeader>
                 <div className="flex justify-between items-center">
@@ -2732,82 +3261,81 @@ const SupervisorDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {filteredData.activities.map(activity => (
-                  <div key={activity.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                    <div className={`p-2 rounded-full ${getColor('icon', activity.type)}`}>
-                      {activity.type === 'task' && <ClipboardList className="h-4 w-4" />}
-                      {activity.type === 'approval' && <FileText className="h-4 w-4" />}
-                      {activity.type === 'completion' && <CheckCircle2 className="h-4 w-4" />}
-                      {activity.type === 'checkin' && <LogIn className="h-4 w-4" />}
-                      {activity.type === 'checkout' && <LogOut className="h-4 w-4" />}
-                      {activity.type === 'break' && <Coffee className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{activity.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatTime(activity.timestamp)} • {activity.employee}
-                      </p>
-                    </div>
-                    <Badge className={getColor('priority', activity.priority)}>
-                      {activity.priority}
-                    </Badge>
+                {activities.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-gray-500">No recent activities</p>
                   </div>
-                ))}
-                {filteredData.activities.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No activities found</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Upcoming Tasks */}
-            <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-green-600" />
-                  Upcoming Tasks
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {filteredData.tasks.map(task => (
-                  <div key={task._id} className="p-3 border rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-medium">{task.title}</p>
-                        <p className="text-sm text-gray-500">
-                          Due: {task.deadline} • {task.assignedToName || 'Unassigned'}
+                ) : (
+                  activities.slice(0, 5).map(activity => (
+                    <div key={activity.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                      <div className={`p-2 rounded-full ${getColor('icon', activity.type)}`}>
+                        {activity.type === 'task' && <ClipboardList className="h-4 w-4" />}
+                        {activity.type === 'approval' && <FileText className="h-4 w-4" />}
+                        {activity.type === 'completion' && <CheckCircle2 className="h-4 w-4" />}
+                        {activity.type === 'checkin' && <LogIn className="h-4 w-4" />}
+                        {activity.type === 'checkout' && <LogOut className="h-4 w-4" />}
+                        {activity.type === 'break' && <Coffee className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{activity.message}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatTime(activity.timestamp)} • {activity.employee}
                         </p>
                       </div>
-                      <Badge className={getColor('priority', task.priority)}>
-                        {task.priority}
+                      <Badge className={getColor('priority', activity.priority)}>
+                        {activity.priority}
                       </Badge>
                     </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${getColor('progress', task.priority)}`}
-                        style={{ width: `${task.status === 'completed' ? 100 : task.status === 'in-progress' ? 50 : 20}%` }}
-                      />
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="w-full mt-3"
-                      onClick={() => handleAction('viewTask', task._id)}
-                    >
-                      View Details
-                    </Button>
-                  </div>
-                ))}
-                {filteredData.tasks.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No tasks found</p>
+                  ))
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Sidebar */}
+          {/* Quick Actions */}
           <div className="space-y-6">
-            {/* Team */}
             <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-orange-600" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/supervisor/leave')}>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Manage Leaves
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('assignTask')}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign Task
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('generateReport')}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Report
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('approveRequests')}>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve Requests
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('scheduleMeeting')}>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Schedule Meeting
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('viewAttendance')}>
+                  <Timer className="h-4 w-4 mr-2" />
+                  View Attendance
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('exportData')}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Data
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Team Members */}
+            {/* <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="flex items-center gap-2">
@@ -2844,47 +3372,11 @@ const SupervisorDashboard = () => {
                   <p className="text-center text-gray-500 py-4">No team members</p>
                 )}
               </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-orange-600" />
-                  Quick Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('assignTask')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Assign Task
-                </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('generateReport')}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Generate Report
-                </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('approveRequests')}>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Approve Requests
-                </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('scheduleMeeting')}>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Schedule Meeting
-                </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('viewAttendance')}>
-                  <Timer className="h-4 w-4 mr-2" />
-                  View Attendance
-                </Button>
-                <Button variant="outline" className="w-full justify-start" onClick={() => handleAction('exportData')}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Data
-                </Button>
-              </CardContent>
-            </Card>
+            </Card> */}
           </div>
         </div>
 
-        {/* Empty State */}
+        {/* Empty State for Employees */}
         {summary.totalEmployees === 0 && (
           <Card className="bg-gray-50 border-gray-200">
             <CardContent className="p-12 text-center">

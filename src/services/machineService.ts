@@ -189,7 +189,7 @@ api.interceptors.response.use(
 );
 
 export const machineService = {
-  // Get all machines with filters - ✅ FIXED with params option
+  // Get all machines with filters
   async getMachines(filters?: {
     search?: string;
     status?: string;
@@ -217,7 +217,7 @@ export const machineService = {
       console.log('Fetching machines with filters:', filters);
       console.log('Request params:', params);
       
-      // ✅ FIXED: Pass params in the config object
+      // Pass params in the config object
       const response = await api.get<FrontendMachine[]>('/machines', { 
         params 
       });
@@ -309,53 +309,60 @@ export const machineService = {
   },
 
   // Create new machine
-  async createMachine(data: CreateMachineDTO): Promise<FrontendMachine> {
-    try {
-      // Ensure required fields are present
-      if (!data.name || !data.cost || !data.purchaseDate) {
-        throw new Error('Missing required fields: name, cost, purchaseDate');
-      }
-
-      // Format the data for backend
-      const machineData = {
-        name: data.name,
-        cost: Number(data.cost),
-        purchaseDate: data.purchaseDate,
-        quantity: Number(data.quantity) || 1,
-        description: data.description || '',
-        status: data.status || 'operational',
-        location: data.location || '',
-        manufacturer: data.manufacturer || '',
-        model: data.model || '',
-        serialNumber: data.serialNumber || '',
-        department: data.department || '',
-        assignedTo: data.assignedTo || '',
-        lastMaintenanceDate: data.lastMaintenanceDate || undefined,
-        nextMaintenanceDate: data.nextMaintenanceDate || undefined,
-      };
-
-      const response = await api.post<FrontendMachine>('/machines', machineData);
-      
-      // Ensure the created machine has an id field
-      const createdMachine = response.data;
-      if (!createdMachine.id && createdMachine._id) {
-        createdMachine.id = createdMachine._id;
-      }
-      
-      return createdMachine;
-    } catch (error: any) {
-      console.error('Error creating machine:', error);
-      
-      let errorMessage = 'Failed to create machine';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      throw new Error(errorMessage);
+// Create new machine
+async createMachine(data: CreateMachineDTO): Promise<FrontendMachine> {
+  try {
+    // Ensure required fields are present
+    if (!data.name || !data.cost || !data.purchaseDate) {
+      throw new Error('Missing required fields: name, cost, purchaseDate');
     }
-  },
+
+    // Format the data for backend - ensure model field is properly mapped
+    const machineData = {
+      name: data.name,
+      cost: Number(data.cost),
+      purchaseDate: data.purchaseDate,
+      quantity: Number(data.quantity) || 1,
+      description: data.description || '',
+      status: data.status || 'operational',
+      location: data.location || '',
+      manufacturer: data.manufacturer || '',
+      model: data.model || '',        // Send as 'model', backend will map to 'modelNumber'
+      serialNumber: data.serialNumber || '',
+      department: data.department || '',
+      assignedTo: data.assignedTo || '',
+      lastMaintenanceDate: data.lastMaintenanceDate || undefined,
+      nextMaintenanceDate: data.nextMaintenanceDate || undefined,
+    };
+
+    console.log('Creating machine with data:', machineData);
+
+    const response = await api.post<FrontendMachine>('/machines', machineData);
+    
+    // Ensure the created machine has an id field
+    const createdMachine = response.data;
+    if (!createdMachine.id && createdMachine._id) {
+      createdMachine.id = createdMachine._id;
+    }
+    
+    console.log('Machine created successfully:', createdMachine);
+    
+    return createdMachine;
+  } catch (error: any) {
+    console.error('Error creating machine:', error);
+    
+    let errorMessage = 'Failed to create machine';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    throw new Error(errorMessage);
+  }
+},
 
   // Update machine
   async updateMachine(id: string, data: Partial<CreateMachineDTO>): Promise<FrontendMachine> {
@@ -364,13 +371,20 @@ export const machineService = {
         throw new Error('Invalid machine ID for update');
       }
       
-      const response = await api.put<FrontendMachine>(`/machines/${id}`, data);
+      // Ensure model field is properly formatted
+      const updateData = { ...data };
+      
+      console.log(`Updating machine ${id} with data:`, updateData);
+      
+      const response = await api.put<FrontendMachine>(`/machines/${id}`, updateData);
       
       // Ensure the updated machine has an id field
       const updatedMachine = response.data;
       if (!updatedMachine.id && updatedMachine._id) {
         updatedMachine.id = updatedMachine._id;
       }
+      
+      console.log('Machine updated successfully:', updatedMachine);
       
       return updatedMachine;
     } catch (error: any) {
@@ -379,6 +393,8 @@ export const machineService = {
       let errorMessage = 'Failed to update machine';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -394,13 +410,19 @@ export const machineService = {
         throw new Error('Invalid machine ID for deletion');
       }
       
+      console.log(`Deleting machine ${id}`);
+      
       await api.delete(`/machines/${id}`);
+      
+      console.log('Machine deleted successfully');
     } catch (error: any) {
       console.error(`Error deleting machine ${id}:`, error);
       
       let errorMessage = 'Failed to delete machine';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -409,14 +431,45 @@ export const machineService = {
     }
   },
 
-  // Get machine statistics - COMPLETELY LOCAL CALCULATION (backend endpoint is broken)
+  // Get machine statistics - Uses backend endpoint first, falls back to local calculation
   async getMachineStats(): Promise<MachineStats> {
-    // ALWAYS use local calculation since backend /machines/stats endpoint is broken
-    
     try {
-      const machines = await this.getMachines();
+      // Try to get stats from backend first
+      console.log('Fetching machine stats from backend...');
+      const response = await api.get<MachineStats>('/machines/stats');
       
-      if (machines.length === 0) {
+      console.log('Machine stats fetched from backend:', response.data);
+      return response.data;
+      
+    } catch (error: any) {
+      console.warn('Backend stats endpoint failed, using local calculation:', error.message);
+      
+      // Fall back to local calculation
+      try {
+        const machines = await this.getMachines();
+        
+        if (machines.length === 0) {
+          return {
+            totalMachines: 0,
+            totalMachineValue: 0,
+            operationalMachines: 0,
+            maintenanceMachines: 0,
+            outOfServiceMachines: 0,
+            averageMachineCost: 0,
+            machinesByDepartment: {},
+            machinesByLocation: {},
+            upcomingMaintenanceCount: 0
+          };
+        }
+        
+        const localStats = calculateLocalMachineStats(machines);
+        console.log('Machine stats calculated locally:', localStats);
+        return localStats;
+        
+      } catch (localError) {
+        console.error('Failed to calculate local machine stats:', localError);
+        
+        // Return empty stats as fallback
         return {
           totalMachines: 0,
           totalMachineValue: 0,
@@ -429,26 +482,6 @@ export const machineService = {
           upcomingMaintenanceCount: 0
         };
       }
-      
-      const localStats = calculateLocalMachineStats(machines);
-      console.log('Machine stats calculated locally:', localStats);
-      return localStats;
-      
-    } catch (error) {
-      console.error('Failed to calculate local machine stats:', error);
-      
-      // Return empty stats as fallback
-      return {
-        totalMachines: 0,
-        totalMachineValue: 0,
-        operationalMachines: 0,
-        maintenanceMachines: 0,
-        outOfServiceMachines: 0,
-        averageMachineCost: 0,
-        machinesByDepartment: {},
-        machinesByLocation: {},
-        upcomingMaintenanceCount: 0
-      };
     }
   },
 
@@ -458,6 +491,8 @@ export const machineService = {
       if (!machineId || machineId === 'undefined') {
         throw new Error('Invalid machine ID for maintenance');
       }
+      
+      console.log(`Adding maintenance record for machine ${machineId}:`, record);
       
       const response = await api.post<FrontendMachine>(
         `/machines/${machineId}/maintenance`,
@@ -470,6 +505,8 @@ export const machineService = {
         updatedMachine.id = updatedMachine._id;
       }
       
+      console.log('Maintenance record added successfully');
+      
       return updatedMachine;
     } catch (error: any) {
       console.error(`Error adding maintenance record for machine ${machineId}:`, error);
@@ -477,6 +514,8 @@ export const machineService = {
       let errorMessage = 'Failed to add maintenance record';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
       } else if (error.message) {
         errorMessage = error.message;
       } else if (error.response?.status === 404) {
@@ -492,7 +531,12 @@ export const machineService = {
   // Search machines
   async searchMachines(query: string): Promise<FrontendMachine[]> {
     try {
-      // ✅ FIXED: Pass params in the config object
+      if (!query || query.trim() === '') {
+        return await this.getMachines();
+      }
+      
+      console.log(`Searching machines with query: ${query}`);
+      
       const response = await api.get<FrontendMachine[]>(`/machines/search`, {
         params: { q: query }
       });
@@ -503,17 +547,35 @@ export const machineService = {
         id: machine.id || machine._id || `temp-${Date.now()}-${Math.random()}`
       }));
       
+      console.log(`Found ${machines.length} machines matching search`);
+      
       return machines;
     } catch (error: any) {
       console.error('Error searching machines:', error);
-      return [];
+      
+      // Fallback: filter locally
+      try {
+        const allMachines = await this.getMachines();
+        const lowerQuery = query.toLowerCase();
+        const filtered = allMachines.filter(machine => 
+          machine.name.toLowerCase().includes(lowerQuery) ||
+          (machine.model && machine.model.toLowerCase().includes(lowerQuery)) ||
+          (machine.location && machine.location.toLowerCase().includes(lowerQuery)) ||
+          (machine.department && machine.department.toLowerCase().includes(lowerQuery))
+        );
+        console.log(`Fallback search found ${filtered.length} machines`);
+        return filtered;
+      } catch (fallbackError) {
+        return [];
+      }
     }
   },
 
   // Test connection to backend
   async testConnection(): Promise<boolean> {
     try {
-      await api.get('/health');
+      await api.get('/health', { timeout: 5000 });
+      console.log('Backend connection successful');
       return true;
     } catch (error) {
       console.error('Backend connection test failed:', error);
@@ -541,5 +603,87 @@ export const machineService = {
         error: error.response?.data?.error || error.message 
       };
     }
+  },
+
+  // Bulk import machines
+  async bulkImportMachines(machines: CreateMachineDTO[]): Promise<{ success: number; failed: number; errors: string[] }> {
+    try {
+      console.log(`Bulk importing ${machines.length} machines`);
+      
+      let success = 0;
+      let failed = 0;
+      const errors: string[] = [];
+      
+      for (const machine of machines) {
+        try {
+          await this.createMachine(machine);
+          success++;
+        } catch (error: any) {
+          failed++;
+          errors.push(`Failed to import ${machine.name}: ${error.message}`);
+        }
+      }
+      
+      console.log(`Bulk import complete: ${success} success, ${failed} failed`);
+      
+      return { success, failed, errors };
+    } catch (error: any) {
+      console.error('Error in bulk import:', error);
+      throw new Error(`Bulk import failed: ${error.message}`);
+    }
+  },
+
+  // Export machines to CSV format
+  exportToCSV(machines: FrontendMachine[]): string {
+    if (machines.length === 0) return '';
+    
+    const headers = [
+      'Name', 'Model', 'Cost', 'Purchase Date', 'Quantity', 'Status', 
+      'Location', 'Department', 'Assigned To', 'Last Maintenance', 
+      'Next Maintenance', 'Description'
+    ];
+    
+    const rows = machines.map(machine => [
+      `"${machine.name.replace(/"/g, '""')}"`,
+      `"${(machine.model || '').replace(/"/g, '""')}"`,
+      machine.cost.toString(),
+      machine.purchaseDate,
+      machine.quantity.toString(),
+      machine.status,
+      `"${(machine.location || '').replace(/"/g, '""')}"`,
+      `"${(machine.department || '').replace(/"/g, '""')}"`,
+      `"${(machine.assignedTo || '').replace(/"/g, '""')}"`,
+      machine.lastMaintenanceDate || '',
+      machine.nextMaintenanceDate || '',
+      `"${(machine.description || '').replace(/"/g, '""')}"`
+    ]);
+    
+    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+  },
+
+  // Validate machine data before sending to backend
+  validateMachineData(data: Partial<CreateMachineDTO>): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    if (!data.name || data.name.trim() === '') {
+      errors.push('Machine name is required');
+    }
+    
+    if (data.cost === undefined || data.cost === null || data.cost < 0) {
+      errors.push('Valid cost is required');
+    }
+    
+    if (!data.purchaseDate) {
+      errors.push('Purchase date is required');
+    }
+    
+    if (data.quantity === undefined || data.quantity === null || data.quantity < 1) {
+      errors.push('Quantity must be at least 1');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors
+    };
   }
 };

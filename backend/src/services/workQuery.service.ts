@@ -1,9 +1,4 @@
 import { WorkQuery, IWorkQuery } from '../models/workQuery.model';
-import { 
-  uploadMultipleWorkQueryProofs, 
-  deleteWorkQueryProofs,
-  WorkQueryProofFile
-} from '../utils/WorkQueryCloudinaryUtils';
 
 // Update the interface to match what controller sends
 interface CreateWorkQueryData {
@@ -12,15 +7,15 @@ interface CreateWorkQueryData {
   serviceId: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   category: string;
-  reportedBy: { // ADD THIS LINE
+  reportedBy: {
     userId: string;
     name: string;
     role: string;
   };
-  supervisorId: string;      // Controller sends this
-  supervisorName: string;    // Controller sends this
+  supervisorId: string;
+  supervisorName: string;
   serviceTitle?: string;
-  serviceTeam?: string;
+  serviceType?: string;
 }
 
 interface Service {
@@ -70,11 +65,6 @@ interface Statistics {
     high: number;
     critical: number;
   };
-  fileStats: {
-    totalFiles: number;
-    queriesWithFiles: number;
-    averageFilesPerQuery: string;
-  };
 }
 
 interface CommentData {
@@ -91,87 +81,60 @@ interface AssignData {
 
 class WorkQueryService {
   
-  // CREATE WORK QUERY - Updated to accept supervisorId and supervisorName
-async createWorkQuery(data: CreateWorkQueryData, files: Express.Multer.File[] = []): Promise<IWorkQuery> {
-  try {
-    console.log('🚀 Creating work query with data:', data);
-    console.log('📎 Files to upload:', files.length);
-    
-    // Generate unique query ID
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    const queryId = `QUERY${timestamp}${random}`;
-    
-    // Upload files to Cloudinary if any
-    let uploadedFiles: WorkQueryProofFile[] = [];
-    if (files && files.length > 0) {
-      console.log('📤 Uploading files to Cloudinary...');
-      const filesForUpload = files.map(file => ({
-        buffer: file.buffer,
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size
-      }));
-      uploadedFiles = await uploadMultipleWorkQueryProofs(filesForUpload);
-      console.log(`✅ ${uploadedFiles.length} files uploaded successfully`);
-    }
-    
-    // Prepare work query data - Use provided reportedBy or create from supervisor info
-    const workQueryData: any = {
-      queryId,
-      title: data.title,
-      description: data.description,
-      serviceId: data.serviceId,
-      priority: data.priority,
-      category: data.category,
-      proofFiles: uploadedFiles,
-      // Use provided reportedBy or create from supervisor info
-      reportedBy: data.reportedBy || {  // Handle optional reportedBy
-        userId: data.supervisorId,
-        name: data.supervisorName,
-        role: 'supervisor'
-      },
-      supervisorId: data.supervisorId,
-      supervisorName: data.supervisorName,
-      status: 'pending',
-      type: 'service',
-    };
-    
-    // Handle service title and team if provided
-    if (data.serviceTitle) {
-      workQueryData.serviceTitle = data.serviceTitle;
-    }
-    
-    if (data.serviceTeam) {
-      workQueryData.serviceTeam = data.serviceTeam;
-    }
-    
-    console.log('💾 Saving to MongoDB with data:', JSON.stringify(workQueryData, null, 2));
-    
-    // Create and save the work query
-    const workQuery = new WorkQuery(workQueryData);
-    const savedQuery = await workQuery.save();
-    
-    console.log('✅ Work query saved successfully!');
-    console.log('📋 Query ID:', savedQuery.queryId);
-    console.log('🆔 MongoDB ID:', savedQuery._id);
-    
-    return savedQuery;
-  } catch (error: any) {
-    console.error('❌ Error in createWorkQuery service:', error);
-    
-    // Clean up uploaded files if there was an error
-    if (error.uploadedFiles) {
-      try {
-        await deleteWorkQueryProofs(error.uploadedFiles.map((f: any) => f.public_id));
-      } catch (cleanupError) {
-        console.error('❌ Error cleaning up uploaded files:', cleanupError);
+  // CREATE WORK QUERY - Without file upload
+  async createWorkQuery(data: CreateWorkQueryData): Promise<IWorkQuery> {
+    try {
+      console.log('🚀 Creating work query with data:', data);
+      
+      // Generate unique query ID
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000);
+      const queryId = `QUERY${timestamp}${random}`;
+      
+      // Prepare work query data
+      const workQueryData: any = {
+        queryId,
+        title: data.title,
+        description: data.description,
+        serviceId: data.serviceId,
+        priority: data.priority,
+        category: data.category,
+        reportedBy: data.reportedBy || {
+          userId: data.supervisorId,
+          name: data.supervisorName,
+          role: 'supervisor'
+        },
+        supervisorId: data.supervisorId,
+        supervisorName: data.supervisorName,
+        status: 'pending',
+        type: 'service',
+      };
+      
+      // Handle service title and type if provided
+      if (data.serviceTitle) {
+        workQueryData.serviceTitle = data.serviceTitle;
       }
+      
+      if (data.serviceType) {
+        workQueryData.serviceType = data.serviceType;
+      }
+      
+      console.log('💾 Saving to MongoDB with data:', JSON.stringify(workQueryData, null, 2));
+      
+      // Create and save the work query
+      const workQuery = new WorkQuery(workQueryData);
+      const savedQuery = await workQuery.save();
+      
+      console.log('✅ Work query saved successfully!');
+      console.log('📋 Query ID:', savedQuery.queryId);
+      console.log('🆔 MongoDB ID:', savedQuery._id);
+      
+      return savedQuery;
+    } catch (error: any) {
+      console.error('❌ Error in createWorkQuery service:', error);
+      throw error;
     }
-    
-    throw error;
   }
-}
   
   // GET ALL SERVICES (For dropdown) - Return mock data for now
   async getAllServices(): Promise<Service[]> {
@@ -340,22 +303,11 @@ async createWorkQuery(data: CreateWorkQueryData, files: Express.Multer.File[] = 
         maintenance: queries.filter((q: any) => q.serviceType === 'maintenance').length
       };
       
-      // Calculate file statistics
-      const totalFiles = queries.reduce((sum: number, query: any) => 
-        sum + (query.proofFiles?.length || 0), 0);
-      const queriesWithFiles = queries.filter((q: any) => 
-        q.proofFiles && q.proofFiles.length > 0).length;
-      
       return {
         total: queries.length,
         statusCounts,
         serviceTypeCounts,
-        priorityCounts,
-        fileStats: {
-          totalFiles,
-          queriesWithFiles,
-          averageFilesPerQuery: queries.length > 0 ? (totalFiles / queries.length).toFixed(2) : '0'
-        }
+        priorityCounts
       };
     } catch (error: any) {
       console.error('❌ Error getting statistics:', error);
@@ -380,11 +332,6 @@ async createWorkQuery(data: CreateWorkQueryData, files: Express.Multer.File[] = 
           medium: 0,
           high: 0,
           critical: 0
-        },
-        fileStats: {
-          totalFiles: 0,
-          queriesWithFiles: 0,
-          averageFilesPerQuery: '0'
         }
       };
     }
@@ -541,103 +488,22 @@ async createWorkQuery(data: CreateWorkQueryData, files: Express.Multer.File[] = 
     }
   }
 
-
-// DELETE WORK QUERY
-async deleteWorkQuery(id: string): Promise<IWorkQuery | null> {
-  try {
-    console.log(`🗑️ Deleting work query: ${id}`);
-    
-    const query = await WorkQuery.findByIdAndDelete(id);
-    
-    if (!query) {
-      console.log(`❌ Query ${id} not found`);
-      return null;
-    }
-    
-    // Delete files from Cloudinary if any
-    if (query.proofFiles && query.proofFiles.length > 0) {
-      const publicIds = query.proofFiles.map(file => file.public_id);
-      await deleteWorkQueryProofs(publicIds);
-      console.log(`🗑️ Deleted ${publicIds.length} files from Cloudinary`);
-    }
-    
-    console.log(`✅ Query ${id} deleted successfully`);
-    return query;
-  } catch (error: any) {
-    console.error('❌ Error deleting work query:', error);
-    return null;
-  }
-}
-
-  // ADD FILES TO WORK QUERY
-  async addFilesToWorkQuery(queryId: string, files: Express.Multer.File[]): Promise<IWorkQuery | null> {
+  // DELETE WORK QUERY
+  async deleteWorkQuery(id: string): Promise<IWorkQuery | null> {
     try {
-      console.log(`📎 Adding ${files.length} files to work query: ${queryId}`);
+      console.log(`🗑️ Deleting work query: ${id}`);
       
-      // Upload new files to Cloudinary
-      const filesForUpload = files.map(file => ({
-        buffer: file.buffer,
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size
-      }));
-      
-      const uploadedFiles = await uploadMultipleWorkQueryProofs(filesForUpload);
-      console.log(`✅ ${uploadedFiles.length} files uploaded to Cloudinary`);
-      
-      // Add files to existing query
-      const query = await WorkQuery.findByIdAndUpdate(
-        queryId,
-        {
-          $push: { proofFiles: { $each: uploadedFiles } },
-          $set: { updatedAt: new Date() }
-        },
-        { new: true }
-      );
+      const query = await WorkQuery.findByIdAndDelete(id);
       
       if (!query) {
-        console.log(`❌ Query ${queryId} not found`);
-        // Clean up uploaded files since query wasn't found
-        await deleteWorkQueryProofs(uploadedFiles.map(f => f.public_id));
+        console.log(`❌ Query ${id} not found`);
         return null;
       }
       
-      console.log(`✅ Files added to query ${queryId}`);
+      console.log(`✅ Query ${id} deleted successfully`);
       return query;
     } catch (error: any) {
-      console.error('❌ Error adding files to work query:', error);
-      return null;
-    }
-  }
-
-  // REMOVE FILES FROM WORK QUERY
-  async removeFilesFromWorkQuery(queryId: string, filePublicIds: string[]): Promise<IWorkQuery | null> {
-    try {
-      console.log(`🗑️ Removing ${filePublicIds.length} files from work query: ${queryId}`);
-      
-      // Delete files from Cloudinary
-      await deleteWorkQueryProofs(filePublicIds);
-      console.log(`🗑️ Files deleted from Cloudinary`);
-      
-      // Remove files from query
-      const query = await WorkQuery.findByIdAndUpdate(
-        queryId,
-        {
-          $pull: { proofFiles: { public_id: { $in: filePublicIds } } },
-          $set: { updatedAt: new Date() }
-        },
-        { new: true }
-      );
-      
-      if (!query) {
-        console.log(`❌ Query ${queryId} not found`);
-        return null;
-      }
-      
-      console.log(`✅ Files removed from query ${queryId}`);
-      return query;
-    } catch (error: any) {
-      console.error('❌ Error removing files from work query:', error);
+      console.error('❌ Error deleting work query:', error);
       return null;
     }
   }

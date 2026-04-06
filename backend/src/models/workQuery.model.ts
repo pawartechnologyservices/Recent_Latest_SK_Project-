@@ -1,16 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IWorkQueryProofFile {
-  name: string;
-  type: 'image' | 'video' | 'document' | 'other';
-  url: string;
-  public_id: string;
-  size: string;
-  format?: string;
-  bytes?: number;
-  uploadDate: Date;
-}
-
 export interface IWorkQuery extends Document {
   queryId: string;
   title: string;
@@ -26,7 +15,6 @@ export interface IWorkQuery extends Document {
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
   category: string;
-  proofFiles: IWorkQueryProofFile[];
   reportedBy: {
     userId: string;
     name: string;
@@ -50,17 +38,6 @@ export interface IWorkQuery extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
-
-const WorkQueryProofFileSchema = new Schema({
-  name: { type: String, required: true },
-  type: { type: String, enum: ['image', 'video', 'document', 'other'], required: true },
-  url: { type: String, required: true },
-  public_id: { type: String, required: true },
-  size: { type: String, required: true },
-  format: { type: String },
-  bytes: { type: Number },
-  uploadDate: { type: Date, default: Date.now }
-});
 
 const WorkQuerySchema = new Schema({
   queryId: { 
@@ -117,7 +94,6 @@ const WorkQuerySchema = new Schema({
     type: String, 
     required: true 
   },
-  proofFiles: [WorkQueryProofFileSchema],
   reportedBy: {
     userId: { type: String, required: true },
     name: { type: String, required: true },

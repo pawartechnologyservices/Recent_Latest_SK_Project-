@@ -4,17 +4,6 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
    TYPES
 ========================= */
 
-export interface WorkQueryProofFile {
-  name: string;
-  type: 'image' | 'video' | 'document' | 'other';
-  url: string;
-  public_id: string;
-  size: string;
-  format?: string;
-  bytes?: number;
-  uploadDate: string;
-}
-
 export interface WorkQuery {
   _id: string;
   queryId: string;
@@ -31,7 +20,6 @@ export interface WorkQuery {
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
   category: string;
-  proofFiles: WorkQueryProofFile[];
   reportedBy: {
     userId: string;
     name: string;
@@ -127,11 +115,6 @@ export interface Statistics {
     high: number;
     critical: number;
   };
-  fileStats: {
-    totalFiles: number;
-    queriesWithFiles: number;
-    averageFilesPerQuery: string;
-  };
 }
 
 export interface ApiResponse<T> {
@@ -160,10 +143,6 @@ api.interceptors.request.use((config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-  }
-
-  if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
   }
 
   console.log('🌐 API Request:', {
@@ -229,7 +208,7 @@ export const workQueryApi = {
     return response.data;
   },
 
-  /* CREATE work query */
+  /* CREATE work query - Simple JSON payload without files */
   createWorkQuery: async (
     workQueryData: {
       title: string;
@@ -240,27 +219,10 @@ export const workQueryApi = {
       supervisorId: string;
       supervisorName: string;
       serviceTitle?: string;
-      serviceTeam?: string;
-    },
-    files?: File[]
-  ): Promise<ApiResponse<WorkQuery>> => {
-    const formData = new FormData();
-    
-    // Append work query data
-    Object.entries(workQueryData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        formData.append(key, value.toString());
-      }
-    });
-    
-    // Append files if any
-    if (files && files.length > 0) {
-      files.forEach((file, index) => {
-        formData.append('proofFiles', file);
-      });
+      serviceType?: string;
     }
-    
-    const response = await api.post('/work-queries', formData);
+  ): Promise<ApiResponse<WorkQuery>> => {
+    const response = await api.post('/work-queries', workQueryData);
     return response.data;
   },
 
@@ -370,94 +332,10 @@ export const workQueryApi = {
     return response.data;
   },
 
-  /* ADD files to work query */
-  addFilesToWorkQuery: async (
-    queryId: string,
-    files: File[]
-  ): Promise<ApiResponse<WorkQuery>> => {
-    const formData = new FormData();
-    files.forEach((file, index) => {
-      formData.append('files', file);
-    });
-    
-    const response = await api.post(`/work-queries/${queryId}/files`, formData);
-    return response.data;
-  },
-
-  /* REMOVE files from work query */
-  removeFilesFromWorkQuery: async (
-    queryId: string,
-    filePublicIds: string[]
-  ): Promise<ApiResponse<WorkQuery>> => {
-    const response = await api.delete(`/work-queries/${queryId}/files`, {
-      data: { filePublicIds }
-    });
-    return response.data;
-  },
-
   /* DELETE work query */
   deleteWorkQuery: async (id: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await api.delete(`/work-queries/${id}`);
     return response.data;
-  },
-
-  /* HELPER: Format file size */
-  formatFileSize: (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  },
-
-  /* HELPER: Get file icon type */
-  getFileIcon: (mimetype: string): string => {
-    if (mimetype.startsWith('image/')) return 'image';
-    if (mimetype.startsWith('video/')) return 'video';
-    if (mimetype.includes('pdf') || mimetype.includes('document') || mimetype.includes('text')) return 'document';
-    return 'other';
-  },
-
-  /* HELPER: Validate file */
-  validateFile: (file: File): boolean => {
-    const maxSize = 25 * 1024 * 1024; // 25MB
-    const allowedTypes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/bmp',
-      'video/mp4', 'video/mov', 'video/avi', 'video/webm',
-      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
-    
-    if (file.size > maxSize) return false;
-    if (!allowedTypes.includes(file.type)) return false;
-    return true;
-  },
-
-  /* HELPER: Get file type from mime */
-  getFileTypeFromMime: (mimetype: string): 'image' | 'video' | 'document' | 'other' => {
-    if (mimetype.startsWith('image/')) return 'image';
-    if (mimetype.startsWith('video/')) return 'video';
-    if (mimetype.includes('pdf') || mimetype.includes('document') || mimetype.includes('text')) return 'document';
-    return 'other';
-  },
-
-  /* HELPER: Download file */
-  downloadFile: async (fileUrl: string, fileName: string): Promise<void> => {
-    const response = await fetch(fileUrl);
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  },
-
-  /* HELPER: Preview file */
-  previewFile: (fileUrl: string): void => {
-    window.open(fileUrl, '_blank');
   }
 };
 

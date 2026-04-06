@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Card, 
@@ -226,7 +226,7 @@ const shifts = ['morning', 'evening', 'night'];
 const priorities = ['low', 'medium', 'high'];
 
 // Attachment Viewer Component
-const AttachmentViewer = ({ attachment, onClose }: { attachment: any; onClose: () => void }) => {
+const AttachmentViewer = memo(({ attachment, onClose }: { attachment: any; onClose: () => void }) => {
   const isImage = attachment.type === 'image' || attachment.url?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
   const isVideo = attachment.type === 'video' || attachment.url?.match(/\.(mp4|mov|avi|webm)$/i);
   const isPDF = attachment.url?.match(/\.pdf$/i);
@@ -272,10 +272,12 @@ const AttachmentViewer = ({ attachment, onClose }: { attachment: any; onClose: (
       </DialogContent>
     </Dialog>
   );
-};
+});
+
+AttachmentViewer.displayName = 'AttachmentViewer';
 
 // Training Detail Dialog
-const TrainingDetailDialog = ({ training, open, onClose, onEdit, onUpdateStatus, getStatusBadge, getTypeColor, formatDate, trainingTypes }: any) => {
+const TrainingDetailDialog = memo(({ training, open, onClose, onEdit, onUpdateStatus, getStatusBadge, getTypeColor, formatDate, trainingTypes }: any) => {
   const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
 
   if (!training) return null;
@@ -487,10 +489,12 @@ const TrainingDetailDialog = ({ training, open, onClose, onEdit, onUpdateStatus,
       {selectedAttachment && <AttachmentViewer attachment={selectedAttachment} onClose={() => setSelectedAttachment(null)} />}
     </>
   );
-};
+});
+
+TrainingDetailDialog.displayName = 'TrainingDetailDialog';
 
 // Briefing Detail Dialog
-const BriefingDetailDialog = ({ briefing, open, onClose, onEdit, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate }: any) => {
+const BriefingDetailDialog = memo(({ briefing, open, onClose, onEdit, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate }: any) => {
   const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
 
   if (!briefing) return null;
@@ -682,10 +686,12 @@ const BriefingDetailDialog = ({ briefing, open, onClose, onEdit, onUpdateAction,
       {selectedAttachment && <AttachmentViewer attachment={selectedAttachment} onClose={() => setSelectedAttachment(null)} />}
     </>
   );
-};
+});
+
+BriefingDetailDialog.displayName = 'BriefingDetailDialog';
 
 // Mobile responsive supervisor selection card
-const MobileSupervisorCard = ({ supervisor, selected, onToggle }: { supervisor: Supervisor; selected: boolean; onToggle: (id: string) => void }) => {
+const MobileSupervisorCard = memo(({ supervisor, selected, onToggle }: { supervisor: Supervisor; selected: boolean; onToggle: (id: string) => void }) => {
   return (
     <div onClick={() => onToggle(supervisor._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
       <div className="flex items-center gap-3">
@@ -701,10 +707,12 @@ const MobileSupervisorCard = ({ supervisor, selected, onToggle }: { supervisor: 
       </div>
     </div>
   );
-};
+});
+
+MobileSupervisorCard.displayName = 'MobileSupervisorCard';
 
 // Mobile responsive manager selection card
-const MobileManagerCard = ({ manager, selected, onToggle }: { manager: Manager; selected: boolean; onToggle: (id: string) => void }) => {
+const MobileManagerCard = memo(({ manager, selected, onToggle }: { manager: Manager; selected: boolean; onToggle: (id: string) => void }) => {
   return (
     <div onClick={() => onToggle(manager._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
       <div className="flex items-center gap-3">
@@ -720,10 +728,12 @@ const MobileManagerCard = ({ manager, selected, onToggle }: { manager: Manager; 
       </div>
     </div>
   );
-};
+});
+
+MobileManagerCard.displayName = 'MobileManagerCard';
 
 // Mobile responsive employee selection card
-const MobileEmployeeCard = ({ employee, selected, onToggle }: { employee: Employee; selected: boolean; onToggle: (id: string) => void }) => {
+const MobileEmployeeCard = memo(({ employee, selected, onToggle }: { employee: Employee; selected: boolean; onToggle: (id: string) => void }) => {
   return (
     <div onClick={() => onToggle(employee._id)} className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'}`}>
       <div className="flex items-center gap-3">
@@ -742,10 +752,12 @@ const MobileEmployeeCard = ({ employee, selected, onToggle }: { employee: Employ
       </div>
     </div>
   );
-};
+});
+
+MobileEmployeeCard.displayName = 'MobileEmployeeCard';
 
 // Mobile responsive training card
-const MobileTrainingCard = ({ session, onView, onUpdateStatus, onDelete, getTypeColor, getStatusBadge, formatDate, trainingTypes, loading }: any) => {
+const MobileTrainingCard = memo(({ session, onView, onUpdateStatus, onDelete, getTypeColor, getStatusBadge, formatDate, trainingTypes, loading }: any) => {
   const [expanded, setExpanded] = useState(false);
   const canEdit = session.createdBy === session.currentManagerId;
   
@@ -811,10 +823,12 @@ const MobileTrainingCard = ({ session, onView, onUpdateStatus, onDelete, getType
       </CardContent>
     </Card>
   );
-};
+});
+
+MobileTrainingCard.displayName = 'MobileTrainingCard';
 
 // Mobile responsive briefing card
-const MobileBriefingCard = ({ briefing, onView, onDelete, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate, loading }: any) => {
+const MobileBriefingCard = memo(({ briefing, onView, onDelete, onUpdateAction, getShiftBadge, getPriorityBadge, formatDate, loading }: any) => {
   const [expanded, setExpanded] = useState(false);
   const canEdit = briefing.createdBy === briefing.currentManagerId;
   
@@ -874,12 +888,1155 @@ const MobileBriefingCard = ({ briefing, onView, onDelete, onUpdateAction, getShi
       </CardContent>
     </Card>
   );
-};
+});
 
-const MobileStatCard = ({ title, value, subValue, icon: Icon, color = "blue" }: any) => {
+MobileBriefingCard.displayName = 'MobileBriefingCard';
+
+const MobileStatCard = memo(({ title, value, subValue, icon: Icon, color = "blue" }: any) => {
   const colorClasses: any = { blue: "bg-blue-100 text-blue-600", green: "bg-green-100 text-green-600", purple: "bg-purple-100 text-purple-600", red: "bg-red-100 text-red-600" };
   return (<Card><CardContent className="p-4"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">{title}</p><p className="text-xl font-bold mt-1">{value}</p>{subValue && <p className="text-xs text-muted-foreground mt-1">{subValue}</p>}</div><div className={`p-3 rounded-lg ${colorClasses[color]}`}><Icon className="h-5 w-5" /></div></div></CardContent></Card>);
-};
+});
+
+MobileStatCard.displayName = 'MobileStatCard';
+
+// ==================== FORM COMPONENTS (Moved outside main component) ====================
+
+// Add Training Form Component
+const AddTrainingFormComponent = memo(({ trainingForm, setTrainingForm, addObjective, removeObjective, updateObjective, sites }: any) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Title *</label>
+        <Input
+          placeholder="Enter training title"
+          value={trainingForm.title}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, title: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Type</label>
+        <Select
+          value={trainingForm.type}
+          onValueChange={(value: any) => setTrainingForm((prev: any) => ({ ...prev, type: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            {trainingTypes.map(type => (
+              <SelectItem key={type.value} value={type.value}>
+                {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Date *</label>
+        <Input
+          type="date"
+          value={trainingForm.date}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, date: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Time</label>
+        <Input
+          type="time"
+          value={trainingForm.time}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, time: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Duration</label>
+        <Input
+          placeholder="e.g., 2 hours"
+          value={trainingForm.duration}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, duration: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Trainer *</label>
+        <Input
+          placeholder="Enter trainer name"
+          value={trainingForm.trainer}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, trainer: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+    </div>
+    
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Site *</label>
+        <Select
+          value={trainingForm.site}
+          onValueChange={(value) => setTrainingForm((prev: any) => ({ ...prev, site: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select site" />
+          </SelectTrigger>
+          <SelectContent>
+            {sites.map((site: Site) => (
+              <SelectItem key={site._id} value={site.name}>
+                {site.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Department</label>
+        <Select
+          value={trainingForm.department}
+          onValueChange={(value) => setTrainingForm((prev: any) => ({ ...prev, department: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select department" />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Max Attendees</label>
+        <Input
+          type="number"
+          min="1"
+          value={trainingForm.maxAttendees}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Location</label>
+        <Input
+          placeholder="Enter location"
+          value={trainingForm.location}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, location: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Objectives</label>
+        <div className="space-y-2">
+          {trainingForm.objectives.map((objective: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Objective ${index + 1}`}
+                value={objective}
+                onChange={(e) => updateObjective(index, e.target.value)}
+                className="flex-1"
+              />
+              {trainingForm.objectives.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeObjective(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addObjective}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Objective
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Description</label>
+        <Textarea
+          placeholder="Enter training description"
+          value={trainingForm.description}
+          onChange={(e) => setTrainingForm((prev: any) => ({ ...prev, description: e.target.value }))}
+          rows={3}
+          className="w-full"
+        />
+      </div>
+    </div>
+  </div>
+));
+
+AddTrainingFormComponent.displayName = 'AddTrainingFormComponent';
+
+// Add Briefing Form Component
+const AddBriefingFormComponent = memo(({ briefingForm, setBriefingForm, addTopic, removeTopic, updateTopic, addKeyPoint, removeKeyPoint, updateKeyPoint, sites }: any) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Date *</label>
+        <Input
+          type="date"
+          value={briefingForm.date}
+          onChange={(e) => setBriefingForm((prev: any) => ({ ...prev, date: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Time</label>
+        <Input
+          type="time"
+          value={briefingForm.time}
+          onChange={(e) => setBriefingForm((prev: any) => ({ ...prev, time: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Shift</label>
+        <Select
+          value={briefingForm.shift}
+          onValueChange={(value: any) => setBriefingForm((prev: any) => ({ ...prev, shift: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select shift" />
+          </SelectTrigger>
+          <SelectContent>
+            {shifts.map(shift => (
+              <SelectItem key={shift} value={shift}>
+                {shift.charAt(0).toUpperCase() + shift.slice(1)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Conducted By *</label>
+        <Input
+          placeholder="Enter conductor name"
+          value={briefingForm.conductedBy}
+          onChange={(e) => setBriefingForm((prev: any) => ({ ...prev, conductedBy: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Site *</label>
+        <Select
+          value={briefingForm.site}
+          onValueChange={(value) => setBriefingForm((prev: any) => ({ ...prev, site: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select site" />
+          </SelectTrigger>
+          <SelectContent>
+            {sites.map((site: Site) => (
+              <SelectItem key={site._id} value={site.name}>
+                {site.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Department</label>
+        <Select
+          value={briefingForm.department}
+          onValueChange={(value) => setBriefingForm((prev: any) => ({ ...prev, department: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select department" />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
+        <Input
+          type="number"
+          min="0"
+          value={briefingForm.attendeesCount}
+          onChange={(e) => setBriefingForm((prev: any) => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
+          className="w-full"
+        />
+      </div>
+    </div>
+    
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
+        <div className="space-y-2">
+          {briefingForm.topics.map((topic: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Topic ${index + 1}`}
+                value={topic}
+                onChange={(e) => updateTopic(index, e.target.value)}
+                className="flex-1"
+              />
+              {briefingForm.topics.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeTopic(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addTopic}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Topic
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Key Points</label>
+        <div className="space-y-2">
+          {briefingForm.keyPoints.map((point: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Key point ${index + 1}`}
+                value={point}
+                onChange={(e) => updateKeyPoint(index, e.target.value)}
+                className="flex-1"
+              />
+              {briefingForm.keyPoints.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeKeyPoint(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addKeyPoint}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Key Point
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Notes</label>
+        <Textarea
+          placeholder="Enter additional notes"
+          value={briefingForm.notes}
+          onChange={(e) => setBriefingForm((prev: any) => ({ ...prev, notes: e.target.value }))}
+          rows={3}
+          className="w-full"
+        />
+      </div>
+    </div>
+  </div>
+));
+
+AddBriefingFormComponent.displayName = 'AddBriefingFormComponent';
+
+// Edit Training Form Component
+const EditTrainingFormComponent = memo(({ editTrainingForm, setEditTrainingForm, addEditObjective, removeEditObjective, updateEditObjective, sites }: any) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Title *</label>
+        <Input
+          placeholder="Enter training title"
+          value={editTrainingForm.title}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, title: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Type</label>
+        <Select
+          value={editTrainingForm.type}
+          onValueChange={(value: any) => setEditTrainingForm((prev: any) => ({ ...prev, type: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            {trainingTypes.map(type => (
+              <SelectItem key={type.value} value={type.value}>
+                {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Date *</label>
+        <Input
+          type="date"
+          value={editTrainingForm.date}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, date: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Time</label>
+        <Input
+          type="time"
+          value={editTrainingForm.time}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, time: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Duration</label>
+        <Input
+          placeholder="e.g., 2 hours"
+          value={editTrainingForm.duration}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, duration: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Trainer *</label>
+        <Input
+          placeholder="Enter trainer name"
+          value={editTrainingForm.trainer}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, trainer: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+    </div>
+    
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Site *</label>
+        <Select
+          value={editTrainingForm.site}
+          onValueChange={(value) => setEditTrainingForm((prev: any) => ({ ...prev, site: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select site" />
+          </SelectTrigger>
+          <SelectContent>
+            {sites.map((site: Site) => (
+              <SelectItem key={site._id} value={site.name}>
+                {site.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Department</label>
+        <Select
+          value={editTrainingForm.department}
+          onValueChange={(value) => setEditTrainingForm((prev: any) => ({ ...prev, department: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select department" />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Max Attendees</label>
+        <Input
+          type="number"
+          min="1"
+          value={editTrainingForm.maxAttendees}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Location</label>
+        <Input
+          placeholder="Enter location"
+          value={editTrainingForm.location}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, location: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Training Objectives</label>
+        <div className="space-y-2">
+          {editTrainingForm.objectives.map((objective: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Objective ${index + 1}`}
+                value={objective}
+                onChange={(e) => updateEditObjective(index, e.target.value)}
+                className="flex-1"
+              />
+              {editTrainingForm.objectives.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeEditObjective(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addEditObjective}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Objective
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Description</label>
+        <Textarea
+          placeholder="Enter training description"
+          value={editTrainingForm.description}
+          onChange={(e) => setEditTrainingForm((prev: any) => ({ ...prev, description: e.target.value }))}
+          rows={3}
+          className="w-full"
+        />
+      </div>
+    </div>
+  </div>
+));
+
+EditTrainingFormComponent.displayName = 'EditTrainingFormComponent';
+
+// Edit Briefing Form Component
+const EditBriefingFormComponent = memo(({ editBriefingForm, setEditBriefingForm, addEditTopic, removeEditTopic, updateEditTopic, addEditKeyPoint, removeEditKeyPoint, updateEditKeyPoint, sites }: any) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Date *</label>
+        <Input
+          type="date"
+          value={editBriefingForm.date}
+          onChange={(e) => setEditBriefingForm((prev: any) => ({ ...prev, date: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Time</label>
+        <Input
+          type="time"
+          value={editBriefingForm.time}
+          onChange={(e) => setEditBriefingForm((prev: any) => ({ ...prev, time: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Shift</label>
+        <Select
+          value={editBriefingForm.shift}
+          onValueChange={(value: any) => setEditBriefingForm((prev: any) => ({ ...prev, shift: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select shift" />
+          </SelectTrigger>
+          <SelectContent>
+            {shifts.map(shift => (
+              <SelectItem key={shift} value={shift}>
+                {shift.charAt(0).toUpperCase() + shift.slice(1)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Conducted By *</label>
+        <Input
+          placeholder="Enter conductor name"
+          value={editBriefingForm.conductedBy}
+          onChange={(e) => setEditBriefingForm((prev: any) => ({ ...prev, conductedBy: e.target.value }))}
+          className="w-full"
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Site *</label>
+        <Select
+          value={editBriefingForm.site}
+          onValueChange={(value) => setEditBriefingForm((prev: any) => ({ ...prev, site: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select site" />
+          </SelectTrigger>
+          <SelectContent>
+            {sites.map((site: Site) => (
+              <SelectItem key={site._id} value={site.name}>
+                {site.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Department</label>
+        <Select
+          value={editBriefingForm.department}
+          onValueChange={(value) => setEditBriefingForm((prev: any) => ({ ...prev, department: value }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select department" />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
+        <Input
+          type="number"
+          min="0"
+          value={editBriefingForm.attendeesCount}
+          onChange={(e) => setEditBriefingForm((prev: any) => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
+          className="w-full"
+        />
+      </div>
+    </div>
+    
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
+        <div className="space-y-2">
+          {editBriefingForm.topics.map((topic: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Topic ${index + 1}`}
+                value={topic}
+                onChange={(e) => updateEditTopic(index, e.target.value)}
+                className="flex-1"
+              />
+              {editBriefingForm.topics.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeEditTopic(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addEditTopic}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Topic
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Key Points</label>
+        <div className="space-y-2">
+          {editBriefingForm.keyPoints.map((point: string, index: number) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                placeholder={`Key point ${index + 1}`}
+                value={point}
+                onChange={(e) => updateEditKeyPoint(index, e.target.value)}
+                className="flex-1"
+              />
+              {editBriefingForm.keyPoints.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeEditKeyPoint(index)}
+                  className="flex-shrink-0"
+                >
+                  <XCircle className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addEditKeyPoint}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Key Point
+          </Button>
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Notes</label>
+        <Textarea
+          placeholder="Enter additional notes"
+          value={editBriefingForm.notes}
+          onChange={(e) => setEditBriefingForm((prev: any) => ({ ...prev, notes: e.target.value }))}
+          rows={3}
+          className="w-full"
+        />
+      </div>
+    </div>
+  </div>
+));
+
+EditBriefingFormComponent.displayName = 'EditBriefingFormComponent';
+
+// Attachments Section Component
+const AttachmentsSection = memo(({ attachments, onUpload, onRemove, fileInputRef, title = "Attachments" }: any) => (
+  <div className="py-4 border-t dark:border-gray-700">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div>
+        <h3 className="text-base sm:text-lg font-semibold">{title}</h3>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          Upload photos, documents, or other files
+        </p>
+      </div>
+      <div>
+        <input
+          type="file"
+          ref={fileInputRef}
+          multiple
+          onChange={onUpload}
+          className="hidden"
+          accept="image/*,video/*,.pdf,.doc,.docx"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full sm:w-auto"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Upload Files
+        </Button>
+      </div>
+    </div>
+    
+    {attachments.length > 0 && (
+      <div className="space-y-2 max-h-40 overflow-y-auto">
+        {attachments.map((file: any, index: number) => (
+          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              {file.type === 'image' || file.type?.startsWith('image/') ? (
+                <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
+              ) : file.type === 'video' || file.type?.startsWith('video/') ? (
+                <Video className="h-5 w-5 text-red-500 flex-shrink-0" />
+              ) : (
+                <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{file.name}</p>
+                <p className="text-xs text-gray-500">{file.size}</p>
+              </div>
+              {file.url && !file.isNew && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(file.url, '_blank')}
+                  className="h-8 w-8 p-0"
+                  title="View"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(index)}
+              className="flex-shrink-0"
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+));
+
+AttachmentsSection.displayName = 'AttachmentsSection';
+
+// Supervisors Multi-Select Component
+const SupervisorsMultiSelect = memo(({ selected, onToggle, searchQuery, setSearchQuery, disabled, filteredSupervisorsList }: any) => (
+  <div className="py-4 border-t dark:border-gray-700">
+    <div className="mb-4">
+      <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+        <UserCheck className="h-5 w-5" />
+        Supervisors *
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+        Select supervisors assigned to this site
+      </p>
+    </div>
+    <div className="space-y-2">
+      <Input
+        placeholder="Search supervisors..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="h-9"
+        disabled={disabled}
+      />
+      <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+        {filteredSupervisorsList.length > 0 ? (
+          filteredSupervisorsList.map((sup: Supervisor) => (
+            <div
+              key={sup._id}
+              onClick={() => onToggle(sup._id)}
+              className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                selected.includes(sup._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                  selected.includes(sup._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                }`}>
+                  {selected.includes(sup._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">{sup.name}</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{sup.department}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            {disabled ? "Select a site first" : "No supervisors available for this site"}
+          </div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {selected.map((id: string) => {
+            const sup = filteredSupervisorsList.find((s: Supervisor) => s._id === id);
+            return sup ? (
+              <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                {sup.name}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+              </Badge>
+            ) : null;
+          })}
+        </div>
+      )}
+    </div>
+  </div>
+));
+
+SupervisorsMultiSelect.displayName = 'SupervisorsMultiSelect';
+
+// Managers Multi-Select Component
+const ManagersMultiSelect = memo(({ selected, onToggle, searchQuery, setSearchQuery, disabled, filteredManagersList }: any) => (
+  <div className="py-4 border-t dark:border-gray-700">
+    <div className="mb-4">
+      <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+        <UserCog className="h-5 w-5" />
+        Managers *
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+        Select managers assigned to this site
+      </p>
+    </div>
+    <div className="space-y-2">
+      <Input
+        placeholder="Search managers..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="h-9"
+        disabled={disabled}
+      />
+      <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+        {filteredManagersList.length > 0 ? (
+          filteredManagersList.map((mgr: Manager) => (
+            <div
+              key={mgr._id}
+              onClick={() => onToggle(mgr._id)}
+              className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                selected.includes(mgr._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                  selected.includes(mgr._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                }`}>
+                  {selected.includes(mgr._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">{mgr.name}</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{mgr.department}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            {disabled ? "Select a site first" : "No managers available for this site"}
+          </div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {selected.map((id: string) => {
+            const mgr = filteredManagersList.find((m: Manager) => m._id === id);
+            return mgr ? (
+              <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                {mgr.name}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+              </Badge>
+            ) : null;
+          })}
+        </div>
+      )}
+    </div>
+  </div>
+));
+
+ManagersMultiSelect.displayName = 'ManagersMultiSelect';
+
+// Employees Multi-Select Component
+const EmployeesMultiSelect = memo(({ selected, onToggle, searchQuery, setSearchQuery, disabled, filteredEmployeesList }: any) => (
+  <div className="py-4 border-t dark:border-gray-700">
+    <div className="mb-4">
+      <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+        <Users className="h-5 w-5" />
+        Employees
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+        Select employees to assign to this training
+      </p>
+    </div>
+    <div className="space-y-2">
+      <Input
+        placeholder="Search employees..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="h-9"
+        disabled={disabled}
+      />
+      <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
+        {filteredEmployeesList.length > 0 ? (
+          filteredEmployeesList.filter((emp: Employee) => emp.status === "active").map((emp: Employee) => (
+            <div
+              key={emp._id}
+              onClick={() => onToggle(emp._id)}
+              className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
+                selected.includes(emp._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center justify-center h-5 w-5 rounded border ${
+                  selected.includes(emp._id) ? 'bg-primary border-primary' : 'border-gray-300'
+                }`}>
+                  {selected.includes(emp._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">{emp.name}</h4>
+                    <Badge variant="outline" className="text-xs">{emp.employeeId}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{emp.position}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            No employees available
+          </div>
+        )}
+      </div>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {selected.map((id: string) => {
+            const emp = filteredEmployeesList.find((e: Employee) => e._id === id);
+            return emp ? (
+              <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
+                {emp.name}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
+              </Badge>
+            ) : null;
+          })}
+        </div>
+      )}
+    </div>
+  </div>
+));
+
+EmployeesMultiSelect.displayName = 'EmployeesMultiSelect';
+
+// Action Items Section Component
+const ActionItemsSection = memo(({ actionItems, onAdd, onRemove, onUpdate }: any) => (
+  <div className="py-4 border-t dark:border-gray-700">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div>
+        <h3 className="text-base sm:text-lg font-semibold">Action Items</h3>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          Add tasks assigned during the briefing
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onAdd}
+        className="w-full sm:w-auto"
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Action Item
+      </Button>
+    </div>
+    
+    {actionItems.map((item: any, index: number) => (
+      <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3">
+        <div className="sm:col-span-2">
+          <label className="text-xs font-medium mb-1 block">Description</label>
+          <Input
+            placeholder="Task description"
+            value={item.description}
+            onChange={(e) => onUpdate(index, 'description', e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium mb-1 block">Assigned To</label>
+          <Input
+            placeholder="Person/Team"
+            value={item.assignedTo}
+            onChange={(e) => onUpdate(index, 'assignedTo', e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium mb-1 block">Due Date</label>
+          <Input
+            type="date"
+            value={item.dueDate}
+            onChange={(e) => onUpdate(index, 'dueDate', e.target.value)}
+            className="w-full"
+          />
+        </div>
+        <div className="flex items-end gap-2 sm:col-span-4">
+          <div className="flex-1">
+            <label className="text-xs font-medium mb-1 block">Priority</label>
+            <Select
+              value={item.priority}
+              onValueChange={(value: any) => onUpdate(index, 'priority', value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {priorities.map(priority => (
+                  <SelectItem key={priority} value={priority}>
+                    {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(index)}
+            className="mb-0.5"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
+      </div>
+    ))}
+  </div>
+));
+
+ActionItemsSection.displayName = 'ActionItemsSection';
+
+// ==================== MAIN COMPONENT ====================
 
 const TrainingBriefingSectionManager: React.FC = () => {
   const { user: authUser, isAuthenticated } = useRole();
@@ -1576,142 +2733,134 @@ const TrainingBriefingSectionManager: React.FC = () => {
   };
   
   // Update training
- const handleUpdateTraining = async () => {
-  if (!editingTraining) return;
-  
-  try {
-    setLoading(true);
+  const handleUpdateTraining = async () => {
+    if (!editingTraining) return;
     
-    const supervisorsList = editSelectedSupervisors.map(supId => {
-      const sup = filteredSupervisors.find(s => s._id === supId);
-      return sup ? { id: sup._id, name: sup.name } : null;
-    }).filter(Boolean);
-    
-    const managersList = editSelectedManagers.map(mgrId => {
-      const mgr = filteredManagers.find(m => m._id === mgrId);
-      return mgr ? { id: mgr._id, name: mgr.name } : null;
-    }).filter(Boolean);
-    
-    const existingAttachments = editTrainingAttachments
-      .filter(att => !att.isNew)
-      .map(({ isNew, file, ...rest }) => rest);
-    
-    const newFiles = editTrainingNewFiles;
-    
-    const updateData = {
-      title: editTrainingForm.title,
-      description: editTrainingForm.description,
-      type: editTrainingForm.type,
-      date: editTrainingForm.date,
-      time: editTrainingForm.time,
-      duration: editTrainingForm.duration,
-      trainer: editTrainingForm.trainer,
-      site: editTrainingForm.site,
-      department: editTrainingForm.department,
-      maxAttendees: editTrainingForm.maxAttendees,
-      location: editTrainingForm.location,
-      objectives: editTrainingForm.objectives.filter(obj => obj.trim() !== ''),
-      supervisors: supervisorsList,
-      managers: managersList,
-      attachments: existingAttachments
-    };
-    
-    console.log('Updating training with data:', updateData);
-    console.log('New files to upload:', newFiles.length);
-    
-    // Make sure to use the imported trainingApi
-    const response = await trainingApi.updateTraining(editingTraining._id, updateData, newFiles);
-    
-    if (response.success) {
-      toast.success('Training session updated successfully');
-      await fetchTrainings();
-      setShowEditTrainingDialog(false);
-      setEditingTraining(null);
-      resetEditTrainingForm();
-      setEditTrainingAttachments([]);
-      setEditTrainingNewFiles([]);
-    } else {
-      throw new Error(response.message || 'Failed to update training');
+    try {
+      setLoading(true);
+      
+      const supervisorsList = editSelectedSupervisors.map(supId => {
+        const sup = filteredSupervisors.find(s => s._id === supId);
+        return sup ? { id: sup._id, name: sup.name } : null;
+      }).filter(Boolean);
+      
+      const managersList = editSelectedManagers.map(mgrId => {
+        const mgr = filteredManagers.find(m => m._id === mgrId);
+        return mgr ? { id: mgr._id, name: mgr.name } : null;
+      }).filter(Boolean);
+      
+      const existingAttachments = editTrainingAttachments
+        .filter(att => !att.isNew)
+        .map(({ isNew, file, ...rest }) => rest);
+      
+      const newFiles = editTrainingNewFiles;
+      
+      const updateData = {
+        title: editTrainingForm.title,
+        description: editTrainingForm.description,
+        type: editTrainingForm.type,
+        date: editTrainingForm.date,
+        time: editTrainingForm.time,
+        duration: editTrainingForm.duration,
+        trainer: editTrainingForm.trainer,
+        site: editTrainingForm.site,
+        department: editTrainingForm.department,
+        maxAttendees: editTrainingForm.maxAttendees,
+        location: editTrainingForm.location,
+        objectives: editTrainingForm.objectives.filter(obj => obj.trim() !== ''),
+        supervisors: supervisorsList,
+        managers: managersList,
+        attachments: existingAttachments
+      };
+      
+      const response = await trainingApi.updateTraining(editingTraining._id, updateData, newFiles);
+      
+      if (response.success) {
+        toast.success('Training session updated successfully');
+        await fetchTrainings();
+        setShowEditTrainingDialog(false);
+        setEditingTraining(null);
+        resetEditTrainingForm();
+        setEditTrainingAttachments([]);
+        setEditTrainingNewFiles([]);
+      } else {
+        throw new Error(response.message || 'Failed to update training');
+      }
+    } catch (error: any) {
+      console.error('Error updating training:', error);
+      toast.error(error.response?.data?.message || error.message || 'Error updating training session');
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error('Error updating training:', error);
-    toast.error(error.response?.data?.message || error.message || 'Error updating training session');
-  } finally {
-    setLoading(false);
-  }
-};
-
-const handleUpdateBriefing = async () => {
-  if (!editingBriefing) return;
+  };
   
-  try {
-    setLoading(true);
+  const handleUpdateBriefing = async () => {
+    if (!editingBriefing) return;
     
-    const supervisorsList = editSelectedSupervisors.map(supId => {
-      const sup = filteredSupervisors.find(s => s._id === supId);
-      return sup ? { id: sup._id, name: sup.name } : null;
-    }).filter(Boolean);
-    
-    const managersList = editSelectedManagers.map(mgrId => {
-      const mgr = filteredManagers.find(m => m._id === mgrId);
-      return mgr ? { id: mgr._id, name: mgr.name } : null;
-    }).filter(Boolean);
-    
-    const actionItems = editBriefingForm.actionItems.map(item => ({ 
-      description: item.description, 
-      assignedTo: item.assignedTo, 
-      dueDate: item.dueDate, 
-      status: item.status || 'pending', 
-      priority: item.priority || 'medium' 
-    }));
-    
-    const existingAttachments = editBriefingAttachments
-      .filter(att => !att.isNew)
-      .map(({ isNew, file, ...rest }) => rest);
-    
-    const newFiles = editBriefingNewFiles;
-    
-    const updateData = {
-      date: editBriefingForm.date,
-      time: editBriefingForm.time,
-      conductedBy: editBriefingForm.conductedBy,
-      site: editBriefingForm.site,
-      department: editBriefingForm.department,
-      attendeesCount: editBriefingForm.attendeesCount,
-      topics: editBriefingForm.topics.filter(topic => topic.trim() !== ''),
-      keyPoints: editBriefingForm.keyPoints.filter(point => point.trim() !== ''),
-      actionItems: actionItems,
-      notes: editBriefingForm.notes,
-      shift: editBriefingForm.shift,
-      supervisors: supervisorsList,
-      managers: managersList,
-      attachments: existingAttachments
-    };
-    
-    console.log('Updating briefing with data:', updateData);
-    console.log('New files to upload:', newFiles.length);
-    
-    // Make sure to use the imported briefingApi
-    const response = await briefingApi.updateBriefing(editingBriefing._id, updateData, newFiles);
-    
-    if (response.success) {
-      toast.success('Staff briefing updated successfully');
-      await fetchBriefings();
-      setShowEditBriefingDialog(false);
-      setEditingBriefing(null);
-      resetEditBriefingForm();
-      setEditBriefingAttachments([]);
-      setEditBriefingNewFiles([]);
-    } else {
-      throw new Error(response.message || 'Failed to update briefing');
+    try {
+      setLoading(true);
+      
+      const supervisorsList = editSelectedSupervisors.map(supId => {
+        const sup = filteredSupervisors.find(s => s._id === supId);
+        return sup ? { id: sup._id, name: sup.name } : null;
+      }).filter(Boolean);
+      
+      const managersList = editSelectedManagers.map(mgrId => {
+        const mgr = filteredManagers.find(m => m._id === mgrId);
+        return mgr ? { id: mgr._id, name: mgr.name } : null;
+      }).filter(Boolean);
+      
+      const actionItems = editBriefingForm.actionItems.map(item => ({ 
+        description: item.description, 
+        assignedTo: item.assignedTo, 
+        dueDate: item.dueDate, 
+        status: item.status || 'pending', 
+        priority: item.priority || 'medium' 
+      }));
+      
+      const existingAttachments = editBriefingAttachments
+        .filter(att => !att.isNew)
+        .map(({ isNew, file, ...rest }) => rest);
+      
+      const newFiles = editBriefingNewFiles;
+      
+      const updateData = {
+        date: editBriefingForm.date,
+        time: editBriefingForm.time,
+        conductedBy: editBriefingForm.conductedBy,
+        site: editBriefingForm.site,
+        department: editBriefingForm.department,
+        attendeesCount: editBriefingForm.attendeesCount,
+        topics: editBriefingForm.topics.filter(topic => topic.trim() !== ''),
+        keyPoints: editBriefingForm.keyPoints.filter(point => point.trim() !== ''),
+        actionItems: actionItems,
+        notes: editBriefingForm.notes,
+        shift: editBriefingForm.shift,
+        supervisors: supervisorsList,
+        managers: managersList,
+        attachments: existingAttachments
+      };
+      
+      const response = await briefingApi.updateBriefing(editingBriefing._id, updateData, newFiles);
+      
+      if (response.success) {
+        toast.success('Staff briefing updated successfully');
+        await fetchBriefings();
+        setShowEditBriefingDialog(false);
+        setEditingBriefing(null);
+        resetEditBriefingForm();
+        setEditBriefingAttachments([]);
+        setEditBriefingNewFiles([]);
+      } else {
+        throw new Error(response.message || 'Failed to update briefing');
+      }
+    } catch (error: any) {
+      console.error('Error updating briefing:', error);
+      toast.error(error.response?.data?.message || error.message || 'Error updating staff briefing');
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error('Error updating briefing:', error);
-    toast.error(error.response?.data?.message || error.message || 'Error updating staff briefing');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   
   // Delete training session
   const deleteTraining = async (id: string) => {
@@ -1914,9 +3063,11 @@ const handleUpdateBriefing = async () => {
   
   // Update objective
   const updateObjective = (index: number, value: string) => {
-    const newObjectives = [...trainingForm.objectives];
-    newObjectives[index] = value;
-    setTrainingForm(prev => ({ ...prev, objectives: newObjectives }));
+    setTrainingForm(prev => {
+      const newObjectives = [...prev.objectives];
+      newObjectives[index] = value;
+      return { ...prev, objectives: newObjectives };
+    });
   };
   
   // Edit objective handlers
@@ -1935,9 +3086,11 @@ const handleUpdateBriefing = async () => {
   };
   
   const updateEditObjective = (index: number, value: string) => {
-    const newObjectives = [...editTrainingForm.objectives];
-    newObjectives[index] = value;
-    setEditTrainingForm(prev => ({ ...prev, objectives: newObjectives }));
+    setEditTrainingForm(prev => {
+      const newObjectives = [...prev.objectives];
+      newObjectives[index] = value;
+      return { ...prev, objectives: newObjectives };
+    });
   };
   
   // Add topic field
@@ -1958,9 +3111,11 @@ const handleUpdateBriefing = async () => {
   
   // Update topic
   const updateTopic = (index: number, value: string) => {
-    const newTopics = [...briefingForm.topics];
-    newTopics[index] = value;
-    setBriefingForm(prev => ({ ...prev, topics: newTopics }));
+    setBriefingForm(prev => {
+      const newTopics = [...prev.topics];
+      newTopics[index] = value;
+      return { ...prev, topics: newTopics };
+    });
   };
   
   // Edit topic handlers
@@ -1979,9 +3134,11 @@ const handleUpdateBriefing = async () => {
   };
   
   const updateEditTopic = (index: number, value: string) => {
-    const newTopics = [...editBriefingForm.topics];
-    newTopics[index] = value;
-    setEditBriefingForm(prev => ({ ...prev, topics: newTopics }));
+    setEditBriefingForm(prev => {
+      const newTopics = [...prev.topics];
+      newTopics[index] = value;
+      return { ...prev, topics: newTopics };
+    });
   };
   
   // Add key point field
@@ -2002,9 +3159,11 @@ const handleUpdateBriefing = async () => {
   
   // Update key point
   const updateKeyPoint = (index: number, value: string) => {
-    const newKeyPoints = [...briefingForm.keyPoints];
-    newKeyPoints[index] = value;
-    setBriefingForm(prev => ({ ...prev, keyPoints: newKeyPoints }));
+    setBriefingForm(prev => {
+      const newKeyPoints = [...prev.keyPoints];
+      newKeyPoints[index] = value;
+      return { ...prev, keyPoints: newKeyPoints };
+    });
   };
   
   // Edit key point handlers
@@ -2023,9 +3182,11 @@ const handleUpdateBriefing = async () => {
   };
   
   const updateEditKeyPoint = (index: number, value: string) => {
-    const newKeyPoints = [...editBriefingForm.keyPoints];
-    newKeyPoints[index] = value;
-    setEditBriefingForm(prev => ({ ...prev, keyPoints: newKeyPoints }));
+    setEditBriefingForm(prev => {
+      const newKeyPoints = [...prev.keyPoints];
+      newKeyPoints[index] = value;
+      return { ...prev, keyPoints: newKeyPoints };
+    });
   };
   
   // Add action item
@@ -2055,9 +3216,11 @@ const handleUpdateBriefing = async () => {
   
   // Update action item
   const updateActionItem = (index: number, field: string, value: string) => {
-    const newActionItems = [...briefingForm.actionItems];
-    newActionItems[index] = { ...newActionItems[index], [field]: value };
-    setBriefingForm(prev => ({ ...prev, actionItems: newActionItems }));
+    setBriefingForm(prev => {
+      const newActionItems = [...prev.actionItems];
+      newActionItems[index] = { ...newActionItems[index], [field]: value };
+      return { ...prev, actionItems: newActionItems };
+    });
   };
   
   // Edit action item handlers
@@ -2085,9 +3248,11 @@ const handleUpdateBriefing = async () => {
   };
   
   const updateEditActionItem = (index: number, field: string, value: string) => {
-    const newActionItems = [...editBriefingForm.actionItems];
-    newActionItems[index] = { ...newActionItems[index], [field]: value };
-    setEditBriefingForm(prev => ({ ...prev, actionItems: newActionItems }));
+    setEditBriefingForm(prev => {
+      const newActionItems = [...prev.actionItems];
+      newActionItems[index] = { ...newActionItems[index], [field]: value };
+      return { ...prev, actionItems: newActionItems };
+    });
   };
   
   // Get status badge color
@@ -2191,6 +3356,7 @@ const handleUpdateBriefing = async () => {
   
   const calendarEvents = getCalendarEvents();
   
+  // Filtered lists for multi-select
   const filteredSupervisorsList = filteredSupervisors.filter(sup => 
     sup.name.toLowerCase().includes(supervisorSearchQuery.toLowerCase()) ||
     (sup.department && sup.department.toLowerCase().includes(supervisorSearchQuery.toLowerCase()))
@@ -2220,1123 +3386,6 @@ const handleUpdateBriefing = async () => {
   const completedTrainings = trainingSessions.filter(t => t.status === 'completed').length;
   const pendingActions = staffBriefings.reduce((acc, briefing) => 
     acc + briefing.actionItems.filter(a => a.status === 'pending').length, 0
-  );
-  
-  // Add Training Form Component
-  const AddTrainingFormComponent = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Title *</label>
-          <Input
-            placeholder="Enter training title"
-            value={trainingForm.title}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, title: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Type</label>
-          <Select
-            value={trainingForm.type}
-            onValueChange={(value: any) => setTrainingForm(prev => ({ ...prev, type: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {trainingTypes.map(type => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Date *</label>
-          <Input
-            type="date"
-            value={trainingForm.date}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, date: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Time</label>
-          <Input
-            type="time"
-            value={trainingForm.time}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, time: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Duration</label>
-          <Input
-            placeholder="e.g., 2 hours"
-            value={trainingForm.duration}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, duration: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Trainer *</label>
-          <Input
-            placeholder="Enter trainer name"
-            value={trainingForm.trainer}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, trainer: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Site *</label>
-          <Select
-            value={trainingForm.site}
-            onValueChange={(value) => setTrainingForm(prev => ({ ...prev, site: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map(site => (
-                <SelectItem key={site._id} value={site.name}>
-                  {site.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Department</label>
-          <Select
-            value={trainingForm.department}
-            onValueChange={(value) => setTrainingForm(prev => ({ ...prev, department: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Max Attendees</label>
-          <Input
-            type="number"
-            min="1"
-            value={trainingForm.maxAttendees}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Location</label>
-          <Input
-            placeholder="Enter location"
-            value={trainingForm.location}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, location: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Objectives</label>
-          <div className="space-y-2">
-            {trainingForm.objectives.map((objective, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Objective ${index + 1}`}
-                  value={objective}
-                  onChange={(e) => updateObjective(index, e.target.value)}
-                  className="flex-1"
-                />
-                {trainingForm.objectives.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeObjective(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addObjective}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Objective
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Description</label>
-          <Textarea
-            placeholder="Enter training description"
-            value={trainingForm.description}
-            onChange={(e) => setTrainingForm(prev => ({ ...prev, description: e.target.value }))}
-            rows={3}
-            className="w-full"
-          />
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Supervisors Multi-Select Component
-  const SupervisorsMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
-    <div className="py-4 border-t dark:border-gray-700">
-      <div className="mb-4">
-        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <UserCheck className="h-5 w-5" />
-          Supervisors *
-        </h3>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          Select supervisors assigned to this site
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Input
-          placeholder="Search supervisors..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-9"
-          disabled={disabled}
-        />
-        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
-          {filteredSupervisorsList.length > 0 ? (
-            filteredSupervisorsList.map(sup => (
-              <div
-                key={sup._id}
-                onClick={() => onToggle(sup._id)}
-                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
-                  selected.includes(sup._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
-                    selected.includes(sup._id) ? 'bg-primary border-primary' : 'border-gray-300'
-                  }`}>
-                    {selected.includes(sup._id) && <Check className="h-3 w-3 text-primary-foreground" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm">{sup.name}</h4>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{sup.department}</p>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-muted-foreground">
-              {disabled ? "Select a site first" : "No supervisors available for this site"}
-            </div>
-          )}
-        </div>
-        {selected.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {selected.map(id => {
-              const sup = filteredSupervisors.find(s => s._id === id);
-              return sup ? (
-                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
-                  {sup.name}
-                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
-                </Badge>
-              ) : null;
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-  
-  // Managers Multi-Select Component
-  const ManagersMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
-    <div className="py-4 border-t dark:border-gray-700">
-      <div className="mb-4">
-        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <UserCog className="h-5 w-5" />
-          Managers *
-        </h3>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          Select managers assigned to this site
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Input
-          placeholder="Search managers..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-9"
-          disabled={disabled}
-        />
-        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
-          {filteredManagersList.length > 0 ? (
-            filteredManagersList.map(mgr => (
-              <div
-                key={mgr._id}
-                onClick={() => onToggle(mgr._id)}
-                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
-                  selected.includes(mgr._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
-                    selected.includes(mgr._id) ? 'bg-primary border-primary' : 'border-gray-300'
-                  }`}>
-                    {selected.includes(mgr._id) && <Check className="h-3 w-3 text-primary-foreground" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm">{mgr.name}</h4>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{mgr.department}</p>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-muted-foreground">
-              {disabled ? "Select a site first" : "No managers available for this site"}
-            </div>
-          )}
-        </div>
-        {selected.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {selected.map(id => {
-              const mgr = filteredManagers.find(m => m._id === id);
-              return mgr ? (
-                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
-                  {mgr.name}
-                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
-                </Badge>
-              ) : null;
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-  
-  // Employees Multi-Select Component
-  const EmployeesMultiSelect = ({ selected, onToggle, searchQuery, setSearchQuery, disabled }: any) => (
-    <div className="py-4 border-t dark:border-gray-700">
-      <div className="mb-4">
-        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Employees
-        </h3>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-          Select employees to assign to this training
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Input
-          placeholder="Search employees..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-9"
-          disabled={disabled}
-        />
-        <div className="border rounded-lg max-h-40 overflow-y-auto p-2">
-          {filteredEmployeesList.length > 0 ? (
-            filteredEmployeesList.filter(emp => emp.status === "active").map(emp => (
-              <div
-                key={emp._id}
-                onClick={() => onToggle(emp._id)}
-                className={`p-3 border rounded-lg mb-2 cursor-pointer transition-colors ${
-                  selected.includes(emp._id) ? 'border-primary bg-primary/5' : 'hover:border-muted-foreground/20'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`flex items-center justify-center h-5 w-5 rounded border ${
-                    selected.includes(emp._id) ? 'bg-primary border-primary' : 'border-gray-300'
-                  }`}>
-                    {selected.includes(emp._id) && <Check className="h-3 w-3 text-primary-foreground" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-sm">{emp.name}</h4>
-                      <Badge variant="outline" className="text-xs">{emp.employeeId}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{emp.position}</p>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-muted-foreground">
-              No employees available
-            </div>
-          )}
-        </div>
-        {selected.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {selected.map(id => {
-              const emp = filteredEmployees.find(e => e._id === id);
-              return emp ? (
-                <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
-                  {emp.name}
-                  <X className="h-3 w-3 cursor-pointer" onClick={() => onToggle(id)} />
-                </Badge>
-              ) : null;
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-  
-  // Attachments Section
-  const AttachmentsSection = ({ attachments, onUpload, onRemove, fileInputRef }: any) => (
-    <div className="py-4 border-t dark:border-gray-700">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-base sm:text-lg font-semibold">Attachments</h3>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            Upload photos, documents, or other files
-          </p>
-        </div>
-        <div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            multiple
-            onChange={onUpload}
-            className="hidden"
-            accept="image/*,video/*,.pdf,.doc,.docx"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full sm:w-auto"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Files
-          </Button>
-        </div>
-      </div>
-      
-      {attachments.length > 0 && (
-        <div className="space-y-2 max-h-40 overflow-y-auto">
-          {attachments.map((file: any, index: number) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {file.type === 'image' || file.type?.startsWith('image/') ? (
-                  <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                ) : file.type === 'video' || file.type?.startsWith('video/') ? (
-                  <Video className="h-5 w-5 text-red-500 flex-shrink-0" />
-                ) : (
-                  <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{file.name}</p>
-                  <p className="text-xs text-gray-500">{file.size}</p>
-                </div>
-                {file.url && !file.isNew && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.open(file.url, '_blank')}
-                    className="h-8 w-8 p-0"
-                    title="View"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemove(index)}
-                className="flex-shrink-0"
-              >
-                <Trash2 className="h-4 w-4 text-red-500" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-  
-  // Action Items Section
-  const ActionItemsSection = ({ actionItems, onAdd, onRemove, onUpdate }: any) => (
-    <div className="py-4 border-t dark:border-gray-700">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-base sm:text-lg font-semibold">Action Items</h3>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            Add tasks assigned during the briefing
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onAdd}
-          className="w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Action Item
-        </Button>
-      </div>
-      
-      {actionItems.map((item: any, index: number) => (
-        <div key={index} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mb-3">
-          <div className="sm:col-span-2">
-            <label className="text-xs font-medium mb-1 block">Description</label>
-            <Input
-              placeholder="Task description"
-              value={item.description}
-              onChange={(e) => onUpdate(index, 'description', e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium mb-1 block">Assigned To</label>
-            <Input
-              placeholder="Person/Team"
-              value={item.assignedTo}
-              onChange={(e) => onUpdate(index, 'assignedTo', e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium mb-1 block">Due Date</label>
-            <Input
-              type="date"
-              value={item.dueDate}
-              onChange={(e) => onUpdate(index, 'dueDate', e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <div className="flex items-end gap-2 sm:col-span-4">
-            <div className="flex-1">
-              <label className="text-xs font-medium mb-1 block">Priority</label>
-              <Select
-                value={item.priority}
-                onValueChange={(value: any) => onUpdate(index, 'priority', value)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {priorities.map(priority => (
-                    <SelectItem key={priority} value={priority}>
-                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onRemove(index)}
-              className="mb-0.5"
-            >
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-  
-  // Add Briefing Form Component
-  const AddBriefingFormComponent = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Date *</label>
-          <Input
-            type="date"
-            value={briefingForm.date}
-            onChange={(e) => setBriefingForm(prev => ({ ...prev, date: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Time</label>
-          <Input
-            type="time"
-            value={briefingForm.time}
-            onChange={(e) => setBriefingForm(prev => ({ ...prev, time: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Shift</label>
-          <Select
-            value={briefingForm.shift}
-            onValueChange={(value: any) => setBriefingForm(prev => ({ ...prev, shift: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select shift" />
-            </SelectTrigger>
-            <SelectContent>
-              {shifts.map(shift => (
-                <SelectItem key={shift} value={shift}>
-                  {shift.charAt(0).toUpperCase() + shift.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Conducted By *</label>
-          <Input
-            placeholder="Enter conductor name"
-            value={briefingForm.conductedBy}
-            onChange={(e) => setBriefingForm(prev => ({ ...prev, conductedBy: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Site *</label>
-          <Select
-            value={briefingForm.site}
-            onValueChange={(value) => setBriefingForm(prev => ({ ...prev, site: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map(site => (
-                <SelectItem key={site._id} value={site.name}>
-                  {site.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Department</label>
-          <Select
-            value={briefingForm.department}
-            onValueChange={(value) => setBriefingForm(prev => ({ ...prev, department: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
-          <Input
-            type="number"
-            min="0"
-            value={briefingForm.attendeesCount}
-            onChange={(e) => setBriefingForm(prev => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
-            className="w-full"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
-          <div className="space-y-2">
-            {briefingForm.topics.map((topic, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Topic ${index + 1}`}
-                  value={topic}
-                  onChange={(e) => updateTopic(index, e.target.value)}
-                  className="flex-1"
-                />
-                {briefingForm.topics.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeTopic(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addTopic}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Topic
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Key Points</label>
-          <div className="space-y-2">
-            {briefingForm.keyPoints.map((point, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Key point ${index + 1}`}
-                  value={point}
-                  onChange={(e) => updateKeyPoint(index, e.target.value)}
-                  className="flex-1"
-                />
-                {briefingForm.keyPoints.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeKeyPoint(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addKeyPoint}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Key Point
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Notes</label>
-          <Textarea
-            placeholder="Enter additional notes"
-            value={briefingForm.notes}
-            onChange={(e) => setBriefingForm(prev => ({ ...prev, notes: e.target.value }))}
-            rows={3}
-            className="w-full"
-          />
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Edit Training Form Component
-  const EditTrainingFormComponent = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Title *</label>
-          <Input
-            placeholder="Enter training title"
-            value={editTrainingForm.title}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, title: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Type</label>
-          <Select
-            value={editTrainingForm.type}
-            onValueChange={(value: any) => setEditTrainingForm(prev => ({ ...prev, type: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {trainingTypes.map(type => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Date *</label>
-          <Input
-            type="date"
-            value={editTrainingForm.date}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, date: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Time</label>
-          <Input
-            type="time"
-            value={editTrainingForm.time}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, time: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Duration</label>
-          <Input
-            placeholder="e.g., 2 hours"
-            value={editTrainingForm.duration}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, duration: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Trainer *</label>
-          <Input
-            placeholder="Enter trainer name"
-            value={editTrainingForm.trainer}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, trainer: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Site *</label>
-          <Select
-            value={editTrainingForm.site}
-            onValueChange={(value) => setEditTrainingForm(prev => ({ ...prev, site: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map(site => (
-                <SelectItem key={site._id} value={site.name}>
-                  {site.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Department</label>
-          <Select
-            value={editTrainingForm.department}
-            onValueChange={(value) => setEditTrainingForm(prev => ({ ...prev, department: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Max Attendees</label>
-          <Input
-            type="number"
-            min="1"
-            value={editTrainingForm.maxAttendees}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, maxAttendees: parseInt(e.target.value) || 1 }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Location</label>
-          <Input
-            placeholder="Enter location"
-            value={editTrainingForm.location}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, location: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Training Objectives</label>
-          <div className="space-y-2">
-            {editTrainingForm.objectives.map((objective, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Objective ${index + 1}`}
-                  value={objective}
-                  onChange={(e) => updateEditObjective(index, e.target.value)}
-                  className="flex-1"
-                />
-                {editTrainingForm.objectives.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeEditObjective(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addEditObjective}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Objective
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Description</label>
-          <Textarea
-            placeholder="Enter training description"
-            value={editTrainingForm.description}
-            onChange={(e) => setEditTrainingForm(prev => ({ ...prev, description: e.target.value }))}
-            rows={3}
-            className="w-full"
-          />
-        </div>
-      </div>
-    </div>
-  );
-  
-  // Edit Briefing Form Component
-  const EditBriefingFormComponent = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 py-4">
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Date *</label>
-          <Input
-            type="date"
-            value={editBriefingForm.date}
-            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, date: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Time</label>
-          <Input
-            type="time"
-            value={editBriefingForm.time}
-            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, time: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Shift</label>
-          <Select
-            value={editBriefingForm.shift}
-            onValueChange={(value: any) => setEditBriefingForm(prev => ({ ...prev, shift: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select shift" />
-            </SelectTrigger>
-            <SelectContent>
-              {shifts.map(shift => (
-                <SelectItem key={shift} value={shift}>
-                  {shift.charAt(0).toUpperCase() + shift.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Conducted By *</label>
-          <Input
-            placeholder="Enter conductor name"
-            value={editBriefingForm.conductedBy}
-            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, conductedBy: e.target.value }))}
-            className="w-full"
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Site *</label>
-          <Select
-            value={editBriefingForm.site}
-            onValueChange={(value) => setEditBriefingForm(prev => ({ ...prev, site: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map(site => (
-                <SelectItem key={site._id} value={site.name}>
-                  {site.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Department</label>
-          <Select
-            value={editBriefingForm.department}
-            onValueChange={(value) => setEditBriefingForm(prev => ({ ...prev, department: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.map(dept => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Number of Attendees</label>
-          <Input
-            type="number"
-            min="0"
-            value={editBriefingForm.attendeesCount}
-            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, attendeesCount: parseInt(e.target.value) || 0 }))}
-            className="w-full"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="text-sm font-medium mb-2 block">Topics Discussed</label>
-          <div className="space-y-2">
-            {editBriefingForm.topics.map((topic, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Topic ${index + 1}`}
-                  value={topic}
-                  onChange={(e) => updateEditTopic(index, e.target.value)}
-                  className="flex-1"
-                />
-                {editBriefingForm.topics.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeEditTopic(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addEditTopic}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Topic
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Key Points</label>
-          <div className="space-y-2">
-            {editBriefingForm.keyPoints.map((point, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`Key point ${index + 1}`}
-                  value={point}
-                  onChange={(e) => updateEditKeyPoint(index, e.target.value)}
-                  className="flex-1"
-                />
-                {editBriefingForm.keyPoints.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeEditKeyPoint(index)}
-                    className="flex-shrink-0"
-                  >
-                    <XCircle className="h-4 w-4 text-red-500" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addEditKeyPoint}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Key Point
-            </Button>
-          </div>
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-2 block">Notes</label>
-          <Textarea
-            placeholder="Enter additional notes"
-            value={editBriefingForm.notes}
-            onChange={(e) => setEditBriefingForm(prev => ({ ...prev, notes: e.target.value }))}
-            rows={3}
-            className="w-full"
-          />
-        </div>
-      </div>
-    </div>
   );
 
   return (
@@ -3400,13 +3449,21 @@ const handleUpdateBriefing = async () => {
                   </DialogDescription>
                 </DialogHeader>
                 
-                <AddTrainingFormComponent />
+                <AddTrainingFormComponent 
+                  trainingForm={trainingForm}
+                  setTrainingForm={setTrainingForm}
+                  addObjective={addObjective}
+                  removeObjective={removeObjective}
+                  updateObjective={updateObjective}
+                  sites={sites}
+                />
                 <SupervisorsMultiSelect 
                   selected={selectedSupervisors}
                   onToggle={handleSupervisorToggle}
                   searchQuery={supervisorSearchQuery}
                   setSearchQuery={setSupervisorSearchQuery}
                   disabled={!trainingForm.site}
+                  filteredSupervisorsList={filteredSupervisorsList}
                 />
                 <ManagersMultiSelect 
                   selected={selectedManagers}
@@ -3414,6 +3471,7 @@ const handleUpdateBriefing = async () => {
                   searchQuery={managerSearchQuery}
                   setSearchQuery={setManagerSearchQuery}
                   disabled={!trainingForm.site}
+                  filteredManagersList={filteredManagersList}
                 />
                 <EmployeesMultiSelect 
                   selected={selectedEmployees}
@@ -3421,6 +3479,7 @@ const handleUpdateBriefing = async () => {
                   searchQuery={employeeSearchQuery}
                   setSearchQuery={setEmployeeSearchQuery}
                   disabled={!trainingForm.site}
+                  filteredEmployeesList={filteredEmployeesList}
                 />
                 <AttachmentsSection 
                   attachments={attachments}
@@ -3457,13 +3516,24 @@ const handleUpdateBriefing = async () => {
                   </DialogDescription>
                 </DialogHeader>
                 
-                <AddBriefingFormComponent />
+                <AddBriefingFormComponent 
+                  briefingForm={briefingForm}
+                  setBriefingForm={setBriefingForm}
+                  addTopic={addTopic}
+                  removeTopic={removeTopic}
+                  updateTopic={updateTopic}
+                  addKeyPoint={addKeyPoint}
+                  removeKeyPoint={removeKeyPoint}
+                  updateKeyPoint={updateKeyPoint}
+                  sites={sites}
+                />
                 <SupervisorsMultiSelect 
                   selected={selectedSupervisors}
                   onToggle={handleSupervisorToggle}
                   searchQuery={supervisorSearchQuery}
                   setSearchQuery={setSupervisorSearchQuery}
                   disabled={!briefingForm.site}
+                  filteredSupervisorsList={filteredSupervisorsList}
                 />
                 <ManagersMultiSelect 
                   selected={selectedManagers}
@@ -3471,6 +3541,7 @@ const handleUpdateBriefing = async () => {
                   searchQuery={managerSearchQuery}
                   setSearchQuery={setManagerSearchQuery}
                   disabled={!briefingForm.site}
+                  filteredManagersList={filteredManagersList}
                 />
                 <ActionItemsSection 
                   actionItems={briefingForm.actionItems}
@@ -3501,61 +3572,10 @@ const handleUpdateBriefing = async () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <Card>
-            <CardContent className="p-3 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Total Training</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{totalTrainings}</p>
-                </div>
-                <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900 rounded-full flex-shrink-0">
-                  <Calendar className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-3 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Briefings</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{totalBriefings}</p>
-                </div>
-                <div className="p-2 sm:p-3 bg-green-100 dark:bg-green-900 rounded-full flex-shrink-0">
-                  <Users className="h-4 w-4 sm:h-6 sm:w-6 text-green-600 dark:text-green-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-3 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Completed</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{completedTrainings}</p>
-                </div>
-                <div className="p-2 sm:p-3 bg-purple-100 dark:bg-purple-900 rounded-full flex-shrink-0">
-                  <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-purple-600 dark:text-purple-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-3 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 truncate">Pending Actions</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{pendingActions}</p>
-                </div>
-                <div className="p-2 sm:p-3 bg-red-100 dark:bg-red-900 rounded-full flex-shrink-0">
-                  <AlertCircle className="h-4 w-4 sm:h-6 sm:w-6 text-red-600 dark:text-red-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <MobileStatCard title="Total Training" value={totalTrainings} icon={Calendar} color="blue" />
+          <MobileStatCard title="Briefings" value={totalBriefings} icon={Users} color="green" />
+          <MobileStatCard title="Completed" value={completedTrainings} icon={CheckCircle} color="purple" />
+          <MobileStatCard title="Pending Actions" value={pendingActions} icon={AlertCircle} color="red" />
         </div>
       </motion.div>
 
@@ -4050,13 +4070,21 @@ const handleUpdateBriefing = async () => {
             <DialogDescription className="text-sm">Update the training session details</DialogDescription>
           </DialogHeader>
           
-          <EditTrainingFormComponent />
+          <EditTrainingFormComponent 
+            editTrainingForm={editTrainingForm}
+            setEditTrainingForm={setEditTrainingForm}
+            addEditObjective={addEditObjective}
+            removeEditObjective={removeEditObjective}
+            updateEditObjective={updateEditObjective}
+            sites={sites}
+          />
           <SupervisorsMultiSelect 
             selected={editSelectedSupervisors}
             onToggle={handleEditSupervisorToggle}
             searchQuery={editSupervisorSearchQuery}
             setSearchQuery={setEditSupervisorSearchQuery}
             disabled={!editTrainingForm.site}
+            filteredSupervisorsList={filteredEditSupervisorsList}
           />
           <ManagersMultiSelect 
             selected={editSelectedManagers}
@@ -4064,6 +4092,7 @@ const handleUpdateBriefing = async () => {
             searchQuery={editManagerSearchQuery}
             setSearchQuery={setEditManagerSearchQuery}
             disabled={!editTrainingForm.site}
+            filteredManagersList={filteredEditManagersList}
           />
           <AttachmentsSection 
             attachments={editTrainingAttachments}
@@ -4089,13 +4118,24 @@ const handleUpdateBriefing = async () => {
             <DialogDescription className="text-sm">Update the staff briefing details</DialogDescription>
           </DialogHeader>
           
-          <EditBriefingFormComponent />
+          <EditBriefingFormComponent 
+            editBriefingForm={editBriefingForm}
+            setEditBriefingForm={setEditBriefingForm}
+            addEditTopic={addEditTopic}
+            removeEditTopic={removeEditTopic}
+            updateEditTopic={updateEditTopic}
+            addEditKeyPoint={addEditKeyPoint}
+            removeEditKeyPoint={removeEditKeyPoint}
+            updateEditKeyPoint={updateEditKeyPoint}
+            sites={sites}
+          />
           <SupervisorsMultiSelect 
             selected={editSelectedSupervisors}
             onToggle={handleEditSupervisorToggle}
             searchQuery={editSupervisorSearchQuery}
             setSearchQuery={setEditSupervisorSearchQuery}
             disabled={!editBriefingForm.site}
+            filteredSupervisorsList={filteredEditSupervisorsList}
           />
           <ManagersMultiSelect 
             selected={editSelectedManagers}
@@ -4103,6 +4143,7 @@ const handleUpdateBriefing = async () => {
             searchQuery={editManagerSearchQuery}
             setSearchQuery={setEditManagerSearchQuery}
             disabled={!editBriefingForm.site}
+            filteredManagersList={filteredEditManagersList}
           />
           <ActionItemsSection 
             actionItems={editBriefingForm.actionItems}

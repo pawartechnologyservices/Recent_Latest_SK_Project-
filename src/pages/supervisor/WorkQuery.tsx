@@ -31,21 +31,16 @@ import {
 import { 
   Search, 
   Plus, 
-  Upload, 
   FileText, 
-  Image, 
-  Video, 
   X, 
   Eye, 
   Clock, 
   AlertCircle, 
   CheckCircle, 
   MessageCircle, 
-  Paperclip, 
   User, 
   Trash2,
   Download,
-  Filter,
   RefreshCw,
   Building2,
   Loader2,
@@ -89,7 +84,6 @@ const DashboardHeader = ({ title, subtitle, onMenuClick, showMenu = true }: Dash
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* Hamburger Menu for Mobile */}
           {showMenu && (
             <Button
               variant="ghost"
@@ -113,7 +107,6 @@ const DashboardHeader = ({ title, subtitle, onMenuClick, showMenu = true }: Dash
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Menu Button Alternative */}
           <Button
             variant="ghost"
             size="icon"
@@ -155,7 +148,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -164,7 +156,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
             className="fixed inset-0 bg-black/50 z-50 lg:hidden"
           />
           
-          {/* Drawer */}
           <motion.div
             initial={{ x: -300 }}
             animate={{ x: 0 }}
@@ -173,7 +164,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
             className="fixed top-0 left-0 h-full w-80 bg-white dark:bg-gray-800 shadow-xl z-50 lg:hidden"
           >
             <div className="flex flex-col h-full">
-              {/* Drawer Header */}
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Menu</h2>
@@ -187,7 +177,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
                   </Button>
                 </div>
                 
-                {/* User Info */}
                 <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg">
@@ -221,7 +210,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
                 </div>
               </div>
 
-              {/* Navigation Links */}
               <div className="flex-1 overflow-y-auto p-4">
                 <nav className="space-y-2">
                   {navItems.map((item) => (
@@ -241,7 +229,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
                 </nav>
               </div>
 
-              {/* Drawer Footer */}
               <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                 <Button
                   variant="ghost"
@@ -264,15 +251,6 @@ const MobileNavDrawer = ({ isOpen, onClose, onNavigate, userName, userRole, user
 };
 
 // Types
-interface WorkQueryProofFile {
-  name: string;
-  type: 'image' | 'video' | 'document' | 'other';
-  url: string;
-  public_id: string;
-  size: string;
-  uploadDate: string;
-}
-
 interface WorkQuery {
   _id: string;
   queryId: string;
@@ -282,7 +260,6 @@ interface WorkQuery {
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'pending' | 'in-progress' | 'resolved' | 'rejected';
   category: string;
-  proofFiles: WorkQueryProofFile[];
   reportedBy: {
     userId: string;
     name: string;
@@ -349,60 +326,6 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const FileIcon = ({ type }: { type: string }) => {
-  const icons = {
-    image: <Image className="h-4 w-4" />,
-    video: <Video className="h-4 w-4" />,
-    document: <FileText className="h-4 w-4" />,
-    other: <File className="h-4 w-4" />
-  };
-
-  return icons[type as keyof typeof icons] || <File className="h-4 w-4" />;
-};
-
-const FilePreview = ({ file, onRemove }: { file: File; onRemove: () => void }) => {
-  const getFileType = (fileType: string): "image" | "video" | "document" | "other" => {
-    if (fileType.startsWith('image/')) return 'image';
-    if (fileType.startsWith('video/')) return 'video';
-    if (fileType.includes('pdf') || fileType.includes('document') || fileType.includes('text')) return 'document';
-    return 'other';
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const fileType = getFileType(file.type);
-
-  return (
-    <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="p-2 bg-white rounded-lg border flex-shrink-0">
-          <FileIcon type={fileType} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">{file.name}</div>
-          <div className="text-xs text-muted-foreground">
-            {formatFileSize(file.size)} • {fileType.charAt(0).toUpperCase() + fileType.slice(1)}
-          </div>
-        </div>
-      </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 flex-shrink-0"
-        onClick={onRemove}
-      >
-        <X className="h-3 w-3" />
-      </Button>
-    </div>
-  );
-};
-
 const ServiceIcon = ({ type }: { type: string }) => {
   const icons = {
     cleaning: <Sparkles className="h-4 w-4" />,
@@ -464,9 +387,6 @@ const WorkQueryPage = () => {
     deleteWorkQuery,
     fetchWorkQueries,
     fetchStatistics,
-    validateFile,
-    downloadFile,
-    previewFile,
     pagination,
     changePage,
     changeLimit
@@ -497,7 +417,6 @@ const WorkQueryPage = () => {
     supervisorName: ""
   });
 
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedServiceType, setSelectedServiceType] = useState<string>("other");
 
   // Check if mobile view
@@ -532,7 +451,6 @@ const WorkQueryPage = () => {
           throw new Error("User not authenticated");
         }
         
-        // Use authenticated user data
         console.log("👤 Auth User:", authUser);
         
         setCurrentSupervisor({
@@ -544,7 +462,6 @@ const WorkQueryPage = () => {
           site: authUser.site || ""
         });
         
-        // Update new query with supervisor info
         setNewQuery(prev => ({
           ...prev,
           supervisorId: authUser._id || authUser.id || "",
@@ -554,7 +471,6 @@ const WorkQueryPage = () => {
       } catch (error: any) {
         console.error("❌ Error fetching supervisor data:", error);
         
-        // Fallback to localStorage
         try {
           const storedUser = localStorage.getItem('sk_user');
           if (storedUser) {
@@ -622,41 +538,6 @@ const WorkQueryPage = () => {
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
-  // Handle file upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    const newFiles = Array.from(files);
-    const invalidFiles: string[] = [];
-    
-    // Validate each file
-    newFiles.forEach(file => {
-      if (!validateFile(file)) {
-        invalidFiles.push(file.name);
-      }
-    });
-
-    if (invalidFiles.length > 0) {
-      toast.error(`Invalid files: ${invalidFiles.join(', ')}. Allowed: Images, Videos, PDFs, Docs (Max 25MB)`);
-      return;
-    }
-
-    // Check total files count (max 10 files)
-    if (uploadedFiles.length + newFiles.length > 10) {
-      toast.error("Maximum 10 files allowed per query");
-      return;
-    }
-
-    setUploadedFiles(prev => [...prev, ...newFiles]);
-    toast.success(`${newFiles.length} file(s) uploaded successfully`);
-  };
-
-  // Handle file removal
-  const handleRemoveFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
   // Reset form
   const handleDialogClose = () => {
     setIsCreateDialogOpen(false);
@@ -670,7 +551,6 @@ const WorkQueryPage = () => {
         supervisorId: currentSupervisor.id,
         supervisorName: currentSupervisor.name
       });
-      setUploadedFiles([]);
       setSelectedServiceType("other");
     }, 300);
   };
@@ -705,18 +585,15 @@ const WorkQueryPage = () => {
     }
 
     try {
-      // Extract service ID from input (if format is "ID - Name", just take the ID part)
       let serviceId = newQuery.serviceId;
       let serviceTitle = newQuery.serviceId;
       
-      // If input contains " - ", split it (assuming format: "ID - Name")
       if (serviceId.includes(" - ")) {
         const parts = serviceId.split(" - ");
-        serviceId = parts[0]; // Take the ID part
-        serviceTitle = parts.slice(1).join(" - "); // Take the name part
+        serviceId = parts[0];
+        serviceTitle = parts.slice(1).join(" - ");
       }
       
-      // Clean up service ID (remove any extra spaces)
       serviceId = serviceId.trim().toUpperCase();
       
       const result = await createWorkQuery({
@@ -729,7 +606,7 @@ const WorkQueryPage = () => {
         supervisorName: currentSupervisor.name,
         serviceTitle: serviceTitle,
         serviceType: selectedServiceType
-      }, uploadedFiles);
+      }, []); // Empty array for files (no file uploads)
       
       if (result.success) {
         toast.success("Work query created successfully!");
@@ -842,7 +719,7 @@ const WorkQueryPage = () => {
         transition={{ duration: 0.3 }}
         className="p-4 md:p-6 space-y-4 md:space-y-6"
       >
-        {/* Statistics Cards - Mobile Optimized */}
+        {/* Statistics Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <Card className="bg-white">
             <CardHeader className="p-3 md:p-6 pb-2 md:pb-2">
@@ -905,7 +782,7 @@ const WorkQueryPage = () => {
           </Card>
         </div>
 
-        {/* Supervisor Info Card - Mobile Optimized */}
+        {/* Supervisor Info Card */}
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-3 md:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -1109,52 +986,6 @@ const WorkQueryPage = () => {
                         </div>
                       </div>
 
-                      {/* File Upload Section */}
-                      <div className="space-y-4">
-                        <h3 className="text-base md:text-lg font-semibold">Supporting Evidence (Optional)</h3>
-                        
-                        <div className="border-2 border-dashed rounded-lg p-4 md:p-6 text-center">
-                          <Upload className="mx-auto h-6 w-6 md:h-8 md:w-8 text-muted-foreground" />
-                          <p className="mt-2 text-xs md:text-sm text-muted-foreground">
-                            Upload screenshots, photos, or documents (Max 10 files, 25MB each)
-                          </p>
-                          <Input
-                            type="file"
-                            multiple
-                            onChange={handleFileUpload}
-                            className="hidden"
-                            id="file-upload"
-                            accept="image/*,video/*,.pdf,.doc,.docx"
-                            disabled={workQueryLoading.creating}
-                          />
-                          <Label htmlFor="file-upload">
-                            <Button 
-                              variant="outline" 
-                              className="mt-4 text-sm" 
-                              type="button"
-                              disabled={workQueryLoading.creating}
-                            >
-                              Choose Files
-                            </Button>
-                          </Label>
-                        </div>
-
-                        {uploadedFiles.length > 0 && (
-                          <div className="space-y-3">
-                            <Label className="text-sm">Uploaded Files ({uploadedFiles.length}/10)</Label>
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                              {uploadedFiles.map((file, index) => (
-                                <FilePreview 
-                                  key={index} 
-                                  file={file} 
-                                  onRemove={() => handleRemoveFile(index)} 
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
                       {/* Service Examples (for guidance) */}
                       <div className="p-3 md:p-4 bg-gray-50 rounded-lg border">
                         <div className="flex items-center gap-2 mb-2">
@@ -1260,7 +1091,7 @@ const WorkQueryPage = () => {
           </CardHeader>
           
           <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
-            {/* Filters - Mobile Optimized */}
+            {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4 md:mb-6">
               <div className="space-y-1 md:space-y-2">
                 <Label className="text-xs md:text-sm">Search</Label>
@@ -1328,7 +1159,7 @@ const WorkQueryPage = () => {
               </div>
             </div>
 
-            {/* Queries Table - Mobile Optimized */}
+            {/* Queries Table */}
             {workQueryLoading.queries ? (
               <div className="text-center py-8 md:py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
@@ -1353,7 +1184,6 @@ const WorkQueryPage = () => {
                       <Card key={query._id} className="overflow-hidden">
                         <CardContent className="p-4">
                           <div className="space-y-3">
-                            {/* Header */}
                             <div className="flex justify-between items-start">
                               <div>
                                 <div className="font-mono text-xs text-gray-500">{query.queryId}</div>
@@ -1362,24 +1192,20 @@ const WorkQueryPage = () => {
                               <PriorityBadge priority={query.priority} />
                             </div>
 
-                            {/* Description Preview */}
                             <div className="text-xs text-gray-600 line-clamp-2">
                               {query.description}
                             </div>
 
-                            {/* Service Info */}
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               <Building2 className="h-3 w-3" />
                               <span className="truncate">{query.serviceId}</span>
                             </div>
 
-                            {/* Status and Date */}
                             <div className="flex items-center justify-between">
                               <StatusBadge status={query.status} />
                               <span className="text-xs text-gray-500">{formatDate(query.createdAt)}</span>
                             </div>
 
-                            {/* Actions */}
                             <div className="grid grid-cols-2 gap-2 pt-2">
                               <Button 
                                 size="sm" 
@@ -1527,7 +1353,7 @@ const WorkQueryPage = () => {
                   </div>
                 )}
 
-                {/* View Query Details Dialog - Mobile Optimized */}
+                {/* View Query Details Dialog */}
                 <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
                   <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
                     {selectedQueryForView && (
@@ -1598,50 +1424,6 @@ const WorkQueryPage = () => {
                             </p>
                           </div>
 
-                          {/* Proof Files */}
-                          {selectedQueryForView.proofFiles.length > 0 && (
-                            <div>
-                              <Label className="font-semibold text-sm">Supporting Evidence ({selectedQueryForView.proofFiles.length})</Label>
-                              <div className="grid gap-2 mt-2">
-                                {selectedQueryForView.proofFiles.map((file, index) => (
-                                  <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                      <div className="p-2 bg-gray-100 rounded-lg flex-shrink-0">
-                                        <FileIcon type={file.type} />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-sm truncate">{file.name}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {file.size} • {formatDate(file.uploadDate)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex gap-2 w-full sm:w-auto justify-end">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => previewFile(file.url)}
-                                        className="flex-1 sm:flex-none"
-                                      >
-                                        <Eye className="h-3 w-3 mr-1" />
-                                        View
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => downloadFile(file.url, file.name)}
-                                        className="flex-1 sm:flex-none"
-                                      >
-                                        <Download className="h-3 w-3 mr-1" />
-                                        Download
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
                           {/* Superadmin Response */}
                           {selectedQueryForView.superadminResponse && (
                             <div className="p-3 md:p-4 bg-green-50 rounded-lg border border-green-200">
@@ -1662,7 +1444,7 @@ const WorkQueryPage = () => {
                   </DialogContent>
                 </Dialog>
 
-                {/* Pagination - Mobile Optimized */}
+                {/* Pagination */}
                 {pagination.totalPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
                     <div className="text-xs md:text-sm text-muted-foreground order-2 sm:order-1">

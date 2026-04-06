@@ -780,6 +780,630 @@ const compareSiteIds = (id1: string | null, id2: string | null): boolean => {
 
 const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
 
+// Employee Leave Form Component - Moved outside to prevent recreation
+const EmployeeLeaveForm = ({ 
+  formData, 
+  formErrors, 
+  handleInputChange, 
+  selectedSite, 
+  selectedEmployee, 
+  setSelectedEmployee, 
+  setSelectedSite, 
+  handleSiteSelect, 
+  handleEmployeeSubmit, 
+  isSubmitting,
+  supervisorSites,
+  employees,
+  getEmployeesForSite,
+  supervisorDepartment,
+  isLoadingSites,
+  isLoadingEmployees,
+  fetchSupervisorSitesFromTasks,
+  fetchEmployees,
+  user
+}: {
+  formData: any;
+  formErrors: any;
+  handleInputChange: (field: string, value: string) => void;
+  selectedSite: string;
+  selectedEmployee: string;
+  setSelectedEmployee: (id: string) => void;
+  setSelectedSite: (id: string) => void;
+  handleSiteSelect: (siteId: string) => void;
+  handleEmployeeSubmit: (e: React.FormEvent) => Promise<void>;
+  isSubmitting: boolean;
+  supervisorSites: Site[];
+  employees: Employee[];
+  getEmployeesForSite: (siteId: string) => Employee[];
+  supervisorDepartment: string;
+  isLoadingSites: boolean;
+  isLoadingEmployees: boolean;
+  fetchSupervisorSitesFromTasks: () => Promise<any>;
+  fetchEmployees: () => Promise<void>;
+  user: any;
+}) => {
+  const [showEmployeeList, setShowEmployeeList] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Check for mobile view
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  const siteEmployees = selectedSite ? getEmployeesForSite(selectedSite) : [];
+  
+  const handleReasonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange("reason", e.target.value);
+  };
+  
+  return (
+    <form onSubmit={handleEmployeeSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="appliedBy" className="text-sm">
+          Applied By (Supervisor Name) *
+        </Label>
+        <Input 
+          id="appliedBy"
+          value={formData.appliedBy}
+          onChange={(e) => handleInputChange("appliedBy", e.target.value)}
+          onBlur={() => {}}
+          placeholder="Enter supervisor name"
+          className={`h-9 ${formErrors.appliedBy ? 'border-red-500' : ''}`}
+        />
+        {formErrors.appliedBy && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.appliedBy}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="site" className="text-sm">Select Site *</Label>
+        {isLoadingSites ? (
+          <div className="flex items-center justify-center p-4 border rounded-lg">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <span className="text-sm">Loading sites...</span>
+          </div>
+        ) : supervisorSites.length === 0 ? (
+          <div className="p-3 border border-dashed rounded-lg text-center">
+            <Building className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              No sites available from your tasks
+            </p>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchSupervisorSitesFromTasks}
+              className="mt-2"
+            >
+              <RefreshCw className="h-3 w-3 mr-2" />
+              Reload Sites
+            </Button>
+          </div>
+        ) : (
+          <Select
+            value={selectedSite}
+            onValueChange={handleSiteSelect}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Select site" />
+            </SelectTrigger>
+            <SelectContent>
+              {supervisorSites.map((site) => {
+                const siteEmployees = getEmployeesForSite(site._id);
+                return (
+                  <SelectItem key={site._id} value={site._id}>
+                    <div className="flex flex-col py-1">
+                      <div className="flex items-center justify-between">
+                        <span>{site.name}</span>
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {siteEmployees.length}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {site.clientName}
+                      </div>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        )}
+        {selectedSite && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {siteEmployees.length} employees available at this site in {supervisorDepartment} department
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="employee" className="text-sm">
+            Select Employee *
+          </Label>
+          <div className="flex items-center text-xs text-muted-foreground">
+            <Users className="mr-1 h-3 w-3" />
+            {selectedSite ? siteEmployees.length : employees.length} employees
+          </div>
+        </div>
+        
+        {isLoadingEmployees ? (
+          <div className="flex items-center justify-center p-4 border rounded-lg">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <span className="text-sm">Loading employees...</span>
+          </div>
+        ) : !selectedSite ? (
+          <div className="p-3 border border-dashed rounded-lg text-center">
+            <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              Please select a site first
+            </p>
+          </div>
+        ) : siteEmployees.length === 0 ? (
+          <div className="p-3 border border-dashed rounded-lg text-center">
+            <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              No employees found at this site in {supervisorDepartment} department
+            </p>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchEmployees}
+              className="mt-2"
+            >
+              <RefreshCw className="h-3 w-3 mr-2" />
+              Reload Employees
+            </Button>
+          </div>
+        ) : isMobileView ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-between"
+              onClick={() => setShowEmployeeList(!showEmployeeList)}
+            >
+              <span className="truncate">
+                {selectedEmployee ? employees.find(e => e._id === selectedEmployee)?.name || "Select employee" : "Select employee"}
+              </span>
+              {showEmployeeList ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+            
+            {showEmployeeList && (
+              <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-2">
+                {siteEmployees.map((employee) => (
+                  <MobileEmployeeCard
+                    key={employee._id}
+                    employee={employee}
+                    selected={selectedEmployee === employee._id}
+                    onSelect={(id) => {
+                      setSelectedEmployee(id);
+                      setShowEmployeeList(false);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <Select
+            value={selectedEmployee}
+            onValueChange={setSelectedEmployee}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Select employee" />
+            </SelectTrigger>
+            <SelectContent>
+              {siteEmployees.map((employee) => (
+                <SelectItem key={employee._id} value={employee._id}>
+                  <div className="flex flex-col py-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{employee.name}</span>
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        {employee.employeeId}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{employee.position}</span>
+                      <span>•</span>
+                      <span>{employee.department}</span>
+                    </div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {selectedEmployee && selectedSite && (
+        <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Employee Name</Label>
+              <Input 
+                value={employees.find(e => e._id === selectedEmployee)?.name || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Employee ID</Label>
+              <Input 
+                value={employees.find(e => e._id === selectedEmployee)?.employeeId || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Department</Label>
+              <Input 
+                value={employees.find(e => e._id === selectedEmployee)?.department || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Site</Label>
+              <Input 
+                value={supervisorSites.find(s => s._id === selectedSite)?.name || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Position</Label>
+              <Input 
+                value={employees.find(e => e._id === selectedEmployee)?.position || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Contact</Label>
+              <Input 
+                value={employees.find(e => e._id === selectedEmployee)?.contactNumber || employees.find(e => e._id === selectedEmployee)?.phone || ""}
+                readOnly 
+                className="bg-background h-9 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="type" className="text-sm">Leave Type *</Label>
+        <Select 
+          value={formData.leaveType}
+          onValueChange={(value) => handleInputChange("leaveType", value)}
+        >
+          <SelectTrigger className={`h-9 ${formErrors.leaveType ? 'border-red-500' : ''}`}>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="annual">Annual Leave</SelectItem>
+            <SelectItem value="sick">Sick Leave</SelectItem>
+            <SelectItem value="casual">Casual Leave</SelectItem>
+            <SelectItem value="emergency">Emergency Leave</SelectItem>
+            <SelectItem value="other">Other Leave</SelectItem>
+          </SelectContent>
+        </Select>
+        {formErrors.leaveType && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.leaveType}</p>
+        )}
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="from" className="text-sm">From Date *</Label>
+          <Input 
+            id="from" 
+            type="date" 
+            value={formData.fromDate}
+            onChange={(e) => handleInputChange("fromDate", e.target.value)}
+            onBlur={() => {}}
+            className={`h-9 ${formErrors.fromDate ? 'border-red-500' : ''}`}
+          />
+          {formErrors.fromDate && (
+            <p className="text-xs text-red-500 mt-1">{formErrors.fromDate}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="to" className="text-sm">To Date *</Label>
+          <Input 
+            id="to" 
+            type="date" 
+            value={formData.toDate}
+            onChange={(e) => handleInputChange("toDate", e.target.value)}
+            onBlur={() => {}}
+            min={formData.fromDate}
+            className={`h-9 ${formErrors.toDate ? 'border-red-500' : ''}`}
+          />
+          {formErrors.toDate && (
+            <p className="text-xs text-red-500 mt-1">{formErrors.toDate}</p>
+          )}
+        </div>
+      </div>
+      
+      {formData.fromDate && formData.toDate && (
+        <div className="text-sm text-muted-foreground">
+          Total Days: {(() => {
+            if (!formData.fromDate || !formData.toDate) return 0;
+            const fromDate = new Date(formData.fromDate);
+            const toDate = new Date(formData.toDate);
+            const timeDiff = toDate.getTime() - fromDate.getTime();
+            return Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+          })()} days
+        </div>
+      )}
+      
+      <div className="space-y-2">
+        <Label htmlFor="reason" className="text-sm">Reason *</Label>
+        <Textarea 
+          id="reason" 
+          name="reason"
+          value={formData.reason}
+          onChange={handleReasonChange}
+          onBlur={() => {}}
+          placeholder="Enter reason for leave" 
+          className={`min-h-[80px] resize-none ${formErrors.reason ? 'border-red-500' : ''}`}
+        />
+        {formErrors.reason && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.reason}</p>
+        )}
+      </div>
+      
+      <div className="p-3 bg-yellow-50 rounded-lg">
+        <p className="text-xs text-yellow-700 font-medium">
+          This leave request will be sent to: Site Manager
+        </p>
+        <p className="text-xs text-yellow-700 mt-1">
+          Employee: {employees.find(e => e._id === selectedEmployee)?.name || "Not selected"}
+        </p>
+        <p className="text-xs text-yellow-700 mt-1">
+          Site: {supervisorSites.find(s => s._id === selectedSite)?.name || "Not selected"}
+        </p>
+        <p className="text-xs text-yellow-700 mt-1">
+          Department: {supervisorDepartment}
+        </p>
+      </div>
+      
+      <div className="flex gap-2 pt-2">
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="flex-1"
+          onClick={() => {
+            // Reset form logic will be handled by parent
+          }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          className="flex-1"
+          disabled={isSubmitting || !selectedEmployee || !selectedSite}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            'Submit Leave'
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+// Self Leave Form Component - Moved outside to prevent recreation
+const SelfLeaveForm = ({ 
+  formData, 
+  formErrors, 
+  handleInputChange, 
+  handleSelfSubmit, 
+  isSubmitting,
+  supervisorSites,
+  supervisorDepartment,
+  user,
+  calculateTotalDays
+}: {
+  formData: any;
+  formErrors: any;
+  handleInputChange: (field: string, value: string) => void;
+  handleSelfSubmit: (e: React.FormEvent) => Promise<void>;
+  isSubmitting: boolean;
+  supervisorSites: Site[];
+  supervisorDepartment: string;
+  user: any;
+  calculateTotalDays: (from: string, to: string) => number;
+}) => {
+  const supervisorSite = supervisorSites.length > 0 ? supervisorSites[0] : null;
+  
+  const handleReasonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    handleInputChange("reason", e.target.value);
+  };
+  
+  return (
+    <form onSubmit={handleSelfSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-sm">Supervisor Information</Label>
+        <div className="p-3 bg-blue-50 rounded-lg">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Name</p>
+              <p className="font-medium">{user?.name || "Supervisor"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Supervisor ID</p>
+              <p className="font-medium">{user?._id || "Not available"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Department</p>
+              <p className="font-medium">{user?.department || supervisorDepartment || "Not assigned"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Site</p>
+              <p className="font-medium">{supervisorSite?.name || user?.site || "Not assigned"}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="appliedBy" className="text-sm">
+          Applied By (Your Name) *
+        </Label>
+        <Input 
+          id="appliedBy"
+          value={formData.appliedBy}
+          onChange={(e) => handleInputChange("appliedBy", e.target.value)}
+          onBlur={() => {}}
+          placeholder="Enter your name"
+          className={`h-9 ${formErrors.appliedBy ? 'border-red-500' : ''}`}
+        />
+        {formErrors.appliedBy && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.appliedBy}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="type" className="text-sm">Leave Type *</Label>
+        <Select 
+          value={formData.leaveType}
+          onValueChange={(value) => handleInputChange("leaveType", value)}
+        >
+          <SelectTrigger className={`h-9 ${formErrors.leaveType ? 'border-red-500' : ''}`}>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="annual">Annual Leave</SelectItem>
+            <SelectItem value="sick">Sick Leave</SelectItem>
+            <SelectItem value="casual">Casual Leave</SelectItem>
+            <SelectItem value="emergency">Emergency Leave</SelectItem>
+            <SelectItem value="other">Other Leave</SelectItem>
+          </SelectContent>
+        </Select>
+        {formErrors.leaveType && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.leaveType}</p>
+        )}
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="from" className="text-sm">From Date *</Label>
+          <Input 
+            id="from" 
+            type="date" 
+            value={formData.fromDate}
+            onChange={(e) => handleInputChange("fromDate", e.target.value)}
+            onBlur={() => {}}
+            className={`h-9 ${formErrors.fromDate ? 'border-red-500' : ''}`}
+          />
+          {formErrors.fromDate && (
+            <p className="text-xs text-red-500 mt-1">{formErrors.fromDate}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="to" className="text-sm">To Date *</Label>
+          <Input 
+            id="to" 
+            type="date" 
+            value={formData.toDate}
+            onChange={(e) => handleInputChange("toDate", e.target.value)}
+            onBlur={() => {}}
+            min={formData.fromDate}
+            className={`h-9 ${formErrors.toDate ? 'border-red-500' : ''}`}
+          />
+          {formErrors.toDate && (
+            <p className="text-xs text-red-500 mt-1">{formErrors.toDate}</p>
+          )}
+        </div>
+      </div>
+      
+      {formData.fromDate && formData.toDate && (
+        <div className="text-sm text-muted-foreground">
+          Total Days: {calculateTotalDays(formData.fromDate, formData.toDate)} days
+        </div>
+      )}
+      
+      <div className="space-y-2">
+        <Label htmlFor="reason" className="text-sm">Reason *</Label>
+        <Textarea 
+          id="reason" 
+          name="reason"
+          value={formData.reason}
+          onChange={handleReasonChange}
+          onBlur={() => {}}
+          placeholder="Enter reason for leave" 
+          className={`min-h-[80px] resize-none ${formErrors.reason ? 'border-red-500' : ''}`}
+        />
+        {formErrors.reason && (
+          <p className="text-xs text-red-500 mt-1">{formErrors.reason}</p>
+        )}
+      </div>
+      
+      <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+        <p className="text-xs text-purple-700 font-medium flex items-center gap-1">
+          <Crown className="h-3 w-3" />
+          Your Supervisor Leave Request
+        </p>
+        <p className="text-xs text-purple-700 mt-1">
+          Site: {supervisorSite?.name || user?.site || "Not assigned"}
+        </p>
+        <p className="text-xs text-purple-700 mt-1">
+          Department: {user?.department || supervisorDepartment || "Not assigned"}
+        </p>
+        <p className="text-xs text-purple-700 mt-1">
+          Your User ID: {user?._id || "Not available"} (stored as supervisorId)
+        </p>
+        <p className="text-xs text-purple-700 mt-1">
+          ⓘ This will be marked as a supervisor leave with your ID
+        </p>
+      </div>
+      
+      <div className="flex gap-2 pt-2">
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="flex-1"
+          onClick={() => {
+            // Reset form logic will be handled by parent
+          }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          className="flex-1"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            'Submit Leave'
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
 const Leave = () => {
   const { onMenuClick } = useOutletContext<{ onMenuClick: () => void }>();
   const { user, loading: authLoading } = useRole();
@@ -2324,602 +2948,6 @@ const Leave = () => {
 
   const filteredLeaveRequests = getFilteredLeaveRequests();
 
-  // Employee Leave Form Component
-  const EmployeeLeaveForm = () => {
-    const [showEmployeeList, setShowEmployeeList] = useState(false);
-    const siteEmployees = selectedSite ? getEmployeesForSite(selectedSite) : [];
-    
-    const handleReasonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      // Prevent event propagation to stop cursor jumping
-      e.stopPropagation();
-      
-      // Update the form data
-      setFormData(prev => ({ ...prev, reason: e.target.value }));
-      
-      // Clear error if any
-      if (formErrors.reason) {
-        setFormErrors(prev => ({ ...prev, reason: "" }));
-      }
-    };
-    
-    return (
-      <form onSubmit={handleEmployeeSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="appliedBy" className="text-sm">
-            Applied By (Supervisor Name) *
-          </Label>
-          <Input 
-            id="appliedBy"
-            value={formData.appliedBy}
-            onChange={(e) => handleInputChange("appliedBy", e.target.value)}
-            onBlur={() => validateForm()}
-            placeholder="Enter supervisor name"
-            className={`h-9 ${formErrors.appliedBy ? 'border-red-500' : ''}`}
-          />
-          {formErrors.appliedBy && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.appliedBy}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="site" className="text-sm">Select Site *</Label>
-          {isLoadingSites ? (
-            <div className="flex items-center justify-center p-4 border rounded-lg">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-sm">Loading sites...</span>
-            </div>
-          ) : supervisorSites.length === 0 ? (
-            <div className="p-3 border border-dashed rounded-lg text-center">
-              <Building className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No sites available from your tasks
-              </p>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchSupervisorSitesFromTasks}
-                className="mt-2"
-              >
-                <RefreshCw className="h-3 w-3 mr-2" />
-                Reload Sites
-              </Button>
-            </div>
-          ) : (
-            <Select
-              value={selectedSite}
-              onValueChange={handleSiteSelect}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Select site" />
-              </SelectTrigger>
-              <SelectContent>
-                {supervisorSites.map((site) => {
-                  const siteEmployees = getEmployeesForSite(site._id);
-                  return (
-                    <SelectItem key={site._id} value={site._id}>
-                      <div className="flex flex-col py-1">
-                        <div className="flex items-center justify-between">
-                          <span>{site.name}</span>
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            {siteEmployees.length}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {site.clientName}
-                        </div>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          )}
-          {selectedSite && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {siteEmployees.length} employees available at this site in {supervisorDepartment} department
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="employee" className="text-sm">
-              Select Employee *
-            </Label>
-            <div className="flex items-center text-xs text-muted-foreground">
-              <Users className="mr-1 h-3 w-3" />
-              {selectedSite ? siteEmployees.length : employees.length} employees
-            </div>
-          </div>
-          
-          {isLoadingEmployees ? (
-            <div className="flex items-center justify-center p-4 border rounded-lg">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-sm">Loading employees...</span>
-            </div>
-          ) : !selectedSite ? (
-            <div className="p-3 border border-dashed rounded-lg text-center">
-              <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Please select a site first
-              </p>
-            </div>
-          ) : siteEmployees.length === 0 ? (
-            <div className="p-3 border border-dashed rounded-lg text-center">
-              <Users className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No employees found at this site in {supervisorDepartment} department
-              </p>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchEmployees}
-                className="mt-2"
-              >
-                <RefreshCw className="h-3 w-3 mr-2" />
-                Reload Employees
-              </Button>
-            </div>
-          ) : isMobileView ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => setShowEmployeeList(!showEmployeeList)}
-              >
-                <span className="truncate">
-                  {selectedEmployee ? employees.find(e => e._id === selectedEmployee)?.name || "Select employee" : "Select employee"}
-                </span>
-                {showEmployeeList ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-              
-              {showEmployeeList && (
-                <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-2">
-                  {siteEmployees.map((employee) => (
-                    <MobileEmployeeCard
-                      key={employee._id}
-                      employee={employee}
-                      selected={selectedEmployee === employee._id}
-                      onSelect={(id) => {
-                        setSelectedEmployee(id);
-                        setShowEmployeeList(false);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <Select
-              value={selectedEmployee}
-              onValueChange={setSelectedEmployee}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Select employee" />
-              </SelectTrigger>
-              <SelectContent>
-                {siteEmployees.map((employee) => (
-                  <SelectItem key={employee._id} value={employee._id}>
-                    <div className="flex flex-col py-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{employee.name}</span>
-                        <Badge variant="outline" className="ml-2 text-xs">
-                          {employee.employeeId}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{employee.position}</span>
-                        <span>•</span>
-                        <span>{employee.department}</span>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {selectedEmployee && selectedSite && (
-          <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Employee Name</Label>
-                <Input 
-                  value={employees.find(e => e._id === selectedEmployee)?.name || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Employee ID</Label>
-                <Input 
-                  value={employees.find(e => e._id === selectedEmployee)?.employeeId || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Department</Label>
-                <Input 
-                  value={employees.find(e => e._id === selectedEmployee)?.department || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Site</Label>
-                <Input 
-                  value={supervisorSites.find(s => s._id === selectedSite)?.name || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Position</Label>
-                <Input 
-                  value={employees.find(e => e._id === selectedEmployee)?.position || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Contact</Label>
-                <Input 
-                  value={employees.find(e => e._id === selectedEmployee)?.contactNumber || employees.find(e => e._id === selectedEmployee)?.phone || ""}
-                  readOnly 
-                  className="bg-background h-9 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="type" className="text-sm">Leave Type *</Label>
-          <Select 
-            value={formData.leaveType}
-            onValueChange={(value) => handleInputChange("leaveType", value)}
-          >
-            <SelectTrigger className={`h-9 ${formErrors.leaveType ? 'border-red-500' : ''}`}>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="annual">Annual Leave</SelectItem>
-              <SelectItem value="sick">Sick Leave</SelectItem>
-              <SelectItem value="casual">Casual Leave</SelectItem>
-              <SelectItem value="emergency">Emergency Leave</SelectItem>
-              <SelectItem value="other">Other Leave</SelectItem>
-            </SelectContent>
-          </Select>
-          {formErrors.leaveType && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.leaveType}</p>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="from" className="text-sm">From Date *</Label>
-            <Input 
-              id="from" 
-              type="date" 
-              value={formData.fromDate}
-              onChange={(e) => handleInputChange("fromDate", e.target.value)}
-              onBlur={() => validateForm()}
-              className={`h-9 ${formErrors.fromDate ? 'border-red-500' : ''}`}
-            />
-            {formErrors.fromDate && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.fromDate}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="to" className="text-sm">To Date *</Label>
-            <Input 
-              id="to" 
-              type="date" 
-              value={formData.toDate}
-              onChange={(e) => handleInputChange("toDate", e.target.value)}
-              onBlur={() => validateForm()}
-              min={formData.fromDate}
-              className={`h-9 ${formErrors.toDate ? 'border-red-500' : ''}`}
-            />
-            {formErrors.toDate && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.toDate}</p>
-            )}
-          </div>
-        </div>
-        
-        {formData.fromDate && formData.toDate && (
-          <div className="text-sm text-muted-foreground">
-            Total Days: {calculateTotalDays(formData.fromDate, formData.toDate)} days
-          </div>
-        )}
-        
-        <div className="space-y-2">
-          <Label htmlFor="reason" className="text-sm">Reason *</Label>
-          <Textarea 
-            id="reason" 
-            name="reason"
-            value={formData.reason}
-            onChange={handleReasonChange}
-            onBlur={() => validateForm()}
-            placeholder="Enter reason for leave" 
-            className={`min-h-[80px] resize-none ${formErrors.reason ? 'border-red-500' : ''}`}
-            onMouseDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          />
-          {formErrors.reason && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.reason}</p>
-          )}
-        </div>
-        
-        <div className="p-3 bg-yellow-50 rounded-lg">
-          <p className="text-xs text-yellow-700 font-medium">
-            This leave request will be sent to: Site Manager
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Employee: {employees.find(e => e._id === selectedEmployee)?.name || "Not selected"}
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Site: {supervisorSites.find(s => s._id === selectedSite)?.name || "Not selected"}
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Department: {supervisorDepartment}
-          </p>
-        </div>
-        
-        <div className="flex gap-2 pt-2">
-          <Button 
-            type="button" 
-            variant="outline" 
-            className="flex-1"
-            onClick={() => {
-              setDialogOpen(false);
-              setFormData({
-                leaveType: "",
-                fromDate: "",
-                toDate: "",
-                reason: "",
-                appliedBy: user?.name || "Supervisor",
-              });
-              setFormErrors({
-                leaveType: "",
-                fromDate: "",
-                toDate: "",
-                reason: "",
-                appliedBy: "",
-              });
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            className="flex-1"
-            disabled={isSubmitting || !selectedEmployee || !selectedSite}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              'Submit Leave'
-            )}
-          </Button>
-        </div>
-      </form>
-    );
-  };
-
-  // Self Leave Form Component
-  const SelfLeaveForm = () => {
-    const supervisorSite = supervisorSites.length > 0 ? supervisorSites[0] : null;
-    
-    const handleReasonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      // Prevent event propagation to stop cursor jumping
-      e.stopPropagation();
-      
-      // Update the form data
-      setFormData(prev => ({ ...prev, reason: e.target.value }));
-      
-      // Clear error if any
-      if (formErrors.reason) {
-        setFormErrors(prev => ({ ...prev, reason: "" }));
-      }
-    };
-    
-    return (
-      <form onSubmit={handleSelfSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label className="text-sm">Supervisor Information</Label>
-          <div className="p-3 bg-blue-50 rounded-lg">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Name</p>
-                <p className="font-medium">{user?.name || "Supervisor"}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Supervisor ID</p>
-                <p className="font-medium">{user?._id || "Not available"}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Department</p>
-                <p className="font-medium">{user?.department || supervisorDepartment || "Not assigned"}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Site</p>
-                <p className="font-medium">{supervisorSite?.name || user?.site || "Not assigned"}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="appliedBy" className="text-sm">
-            Applied By (Your Name) *
-          </Label>
-          <Input 
-            id="appliedBy"
-            value={formData.appliedBy}
-            onChange={(e) => handleInputChange("appliedBy", e.target.value)}
-            onBlur={() => validateForm()}
-            placeholder="Enter your name"
-            className={`h-9 ${formErrors.appliedBy ? 'border-red-500' : ''}`}
-          />
-          {formErrors.appliedBy && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.appliedBy}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="type" className="text-sm">Leave Type *</Label>
-          <Select 
-            value={formData.leaveType}
-            onValueChange={(value) => handleInputChange("leaveType", value)}
-          >
-            <SelectTrigger className={`h-9 ${formErrors.leaveType ? 'border-red-500' : ''}`}>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="annual">Annual Leave</SelectItem>
-              <SelectItem value="sick">Sick Leave</SelectItem>
-              <SelectItem value="casual">Casual Leave</SelectItem>
-              <SelectItem value="emergency">Emergency Leave</SelectItem>
-              <SelectItem value="other">Other Leave</SelectItem>
-            </SelectContent>
-          </Select>
-          {formErrors.leaveType && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.leaveType}</p>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="from" className="text-sm">From Date *</Label>
-            <Input 
-              id="from" 
-              type="date" 
-              value={formData.fromDate}
-              onChange={(e) => handleInputChange("fromDate", e.target.value)}
-              onBlur={() => validateForm()}
-              className={`h-9 ${formErrors.fromDate ? 'border-red-500' : ''}`}
-            />
-            {formErrors.fromDate && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.fromDate}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="to" className="text-sm">To Date *</Label>
-            <Input 
-              id="to" 
-              type="date" 
-              value={formData.toDate}
-              onChange={(e) => handleInputChange("toDate", e.target.value)}
-              onBlur={() => validateForm()}
-              min={formData.fromDate}
-              className={`h-9 ${formErrors.toDate ? 'border-red-500' : ''}`}
-            />
-            {formErrors.toDate && (
-              <p className="text-xs text-red-500 mt-1">{formErrors.toDate}</p>
-            )}
-          </div>
-        </div>
-        
-        {formData.fromDate && formData.toDate && (
-          <div className="text-sm text-muted-foreground">
-            Total Days: {calculateTotalDays(formData.fromDate, formData.toDate)} days
-          </div>
-        )}
-        
-        <div className="space-y-2">
-          <Label htmlFor="reason" className="text-sm">Reason *</Label>
-          <Textarea 
-            id="reason" 
-            name="reason"
-            value={formData.reason}
-            onChange={handleReasonChange}
-            onBlur={() => validateForm()}
-            placeholder="Enter reason for leave" 
-            className={`min-h-[80px] resize-none ${formErrors.reason ? 'border-red-500' : ''}`}
-            onMouseDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          />
-          {formErrors.reason && (
-            <p className="text-xs text-red-500 mt-1">{formErrors.reason}</p>
-          )}
-        </div>
-        
-        <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <p className="text-xs text-purple-700 font-medium flex items-center gap-1">
-            <Crown className="h-3 w-3" />
-            Your Supervisor Leave Request
-          </p>
-          <p className="text-xs text-purple-700 mt-1">
-            Site: {supervisorSite?.name || user?.site || "Not assigned"}
-          </p>
-          <p className="text-xs text-purple-700 mt-1">
-            Department: {user?.department || supervisorDepartment || "Not assigned"}
-          </p>
-          <p className="text-xs text-purple-700 mt-1">
-            Your User ID: {user?._id || "Not available"} (stored as supervisorId)
-          </p>
-          <p className="text-xs text-purple-700 mt-1">
-            ⓘ This will be marked as a supervisor leave with your ID
-          </p>
-        </div>
-        
-        <div className="flex gap-2 pt-2">
-          <Button 
-            type="button" 
-            variant="outline" 
-            className="flex-1"
-            onClick={() => {
-              setDialogOpen(false);
-              setFormData({
-                leaveType: "",
-                fromDate: "",
-                toDate: "",
-                reason: "",
-                appliedBy: user?.name || "Supervisor",
-              });
-              setFormErrors({
-                leaveType: "",
-                fromDate: "",
-                toDate: "",
-                reason: "",
-                appliedBy: "",
-              });
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            className="flex-1"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              'Submit Leave'
-            )}
-          </Button>
-        </div>
-      </form>
-    );
-  };
-
   // Show loading while checking authentication
   if (authLoading) {
     return (
@@ -3359,7 +3387,41 @@ const Leave = () => {
                   </DialogTitle>
                 </DialogHeader>
                 
-                {applyMode === 'employee' ? <EmployeeLeaveForm /> : <SelfLeaveForm />}
+                {applyMode === 'employee' ? (
+                  <EmployeeLeaveForm 
+                    formData={formData}
+                    formErrors={formErrors}
+                    handleInputChange={handleInputChange}
+                    selectedSite={selectedSite}
+                    selectedEmployee={selectedEmployee}
+                    setSelectedEmployee={setSelectedEmployee}
+                    setSelectedSite={setSelectedSite}
+                    handleSiteSelect={handleSiteSelect}
+                    handleEmployeeSubmit={handleEmployeeSubmit}
+                    isSubmitting={isSubmitting}
+                    supervisorSites={supervisorSites}
+                    employees={employees}
+                    getEmployeesForSite={getEmployeesForSite}
+                    supervisorDepartment={supervisorDepartment}
+                    isLoadingSites={isLoadingSites}
+                    isLoadingEmployees={isLoadingEmployees}
+                    fetchSupervisorSitesFromTasks={fetchSupervisorSitesFromTasks}
+                    fetchEmployees={fetchEmployees}
+                    user={user}
+                  />
+                ) : (
+                  <SelfLeaveForm 
+                    formData={formData}
+                    formErrors={formErrors}
+                    handleInputChange={handleInputChange}
+                    handleSelfSubmit={handleSelfSubmit}
+                    isSubmitting={isSubmitting}
+                    supervisorSites={supervisorSites}
+                    supervisorDepartment={supervisorDepartment}
+                    user={user}
+                    calculateTotalDays={calculateTotalDays}
+                  />
+                )}
               </DialogContent>
             </Dialog>
           </div>

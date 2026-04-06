@@ -103,3 +103,4 @@ DeductionSchema.index({ createdAt: -1 });
 DeductionSchema.index({ employeeId: 1, appliedMonth: 1 });
 
 export default mongoose.model<IDeduction>('Deduction', DeductionSchema);
+

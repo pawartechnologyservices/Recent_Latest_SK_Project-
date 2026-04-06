@@ -1050,62 +1050,90 @@ const SupervisorOnboardingTab = ({
     }
   };
 
-  const initializeEPFForm = (employee: Employee) => {
-    setCreatedEmployeeData(employee);
-    
-    const today = new Date().toISOString().split("T")[0];
-    
-    let salaryValue = 0;
-    if (employee.salary) {
-      salaryValue = typeof employee.salary === 'string' 
-        ? parseFloat(employee.salary) 
-        : Number(employee.salary) || 0;
+const initializeEPFForm = (employee: Employee) => {
+  setCreatedEmployeeData(employee);
+  
+  const today = new Date().toISOString().split("T")[0];
+  
+  let salaryValue = 0;
+  if (employee.salary) {
+    salaryValue = typeof employee.salary === 'string' 
+      ? parseFloat(employee.salary) 
+      : Number(employee.salary) || 0;
+  }
+  
+  // FIXED: Get date of birth properly
+  let dateOfBirth = "";
+  if (employee.dateOfBirth) {
+    try {
+      // Try to create a date object
+      const dobDate = new Date(employee.dateOfBirth);
+      if (!isNaN(dobDate.getTime())) {
+        dateOfBirth = dobDate.toISOString().split("T")[0];
+      } else {
+        // If it's already in YYYY-MM-DD format as string
+        const dateStr = String(employee.dateOfBirth);
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          dateOfBirth = dateStr;
+        }
+      }
+    } catch (e) {
+      console.warn("Error parsing date of birth:", e);
+      // Last resort - just use the raw value if it looks like a date
+      const rawDate = String(employee.dateOfBirth);
+      if (rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        dateOfBirth = rawDate;
+      }
     }
-    
-    const epfData: EPFForm11Data = {
-      memberName: employee.name || "",
-      fatherOrSpouseName: employee.fatherName || employee.spouseName || "",
-      relationshipType: employee.fatherName ? "father" : "spouse",
-      dateOfBirth: employee.dateOfBirth || "",
-      gender: employee.gender || "",
-      maritalStatus: employee.maritalStatus || "",
-      email: employee.email || "",
-      mobileNumber: employee.phone || "",
-      previousEPFMember: false,
-      previousPensionMember: false,
-      previousUAN: employee.uanNumber || employee.uan || "",
-      previousPFAccountNumber: "",
-      dateOfExit: "",
-      schemeCertificateNumber: "",
-      pensionPaymentOrder: "",
-      internationalWorker: false,
-      countryOfOrigin: "",
-      passportNumber: "",
-      passportValidityFrom: "",
-      passportValidityTo: "",
-      bankAccountNumber: employee.accountNumber || "",
-      ifscCode: employee.ifscCode || "",
-      aadharNumber: employee.aadharNumber || "",
-      panNumber: employee.panNumber || "",
-      firstEPFMember: true,
-      enrolledDate: employee.joinDate || employee.dateOfJoining || today,
-      firstEmploymentWages: salaryValue.toString() || "0",
-      epfMemberBeforeSep2014: false,
-      epfAmountWithdrawn: false,
-      epsAmountWithdrawn: false,
-      epsAmountWithdrawnAfterSep2014: false,
-      declarationDate: today,
-      declarationPlace: "Mumbai",
-      employerDeclarationDate: today,
-      kycStatus: "not_uploaded",
-      transferRequestGenerated: false,
-      physicalClaimFiled: false
-    };
-    
-    setEpfFormData(epfData);
-    setActiveTab("epf-form");
-    toast.success("Employee created successfully! Please fill EPF Form 11.");
+  }
+  
+  // Debug log to check what's coming from employee
+  console.log("Employee dateOfBirth:", employee.dateOfBirth, "Parsed dateOfBirth:", dateOfBirth);
+  
+  const epfData: EPFForm11Data = {
+    memberName: employee.name || "",
+    fatherOrSpouseName: employee.fatherName || employee.spouseName || "",
+    relationshipType: employee.fatherName ? "father" : "spouse",
+    dateOfBirth: dateOfBirth, // Now properly set
+    gender: employee.gender || "",
+    maritalStatus: employee.maritalStatus || "",
+    email: employee.email || "",
+    mobileNumber: employee.phone || "",
+    previousEPFMember: false,
+    previousPensionMember: false,
+    previousUAN: employee.uanNumber || employee.uan || "",
+    previousPFAccountNumber: "",
+    dateOfExit: "",
+    schemeCertificateNumber: "",
+    pensionPaymentOrder: "",
+    internationalWorker: false,
+    countryOfOrigin: "",
+    passportNumber: "",
+    passportValidityFrom: "",
+    passportValidityTo: "",
+    bankAccountNumber: employee.accountNumber || "",
+    ifscCode: employee.ifscCode || "",
+    aadharNumber: employee.aadharNumber || "",
+    panNumber: employee.panNumber || "",
+    firstEPFMember: true,
+    enrolledDate: employee.joinDate || employee.dateOfJoining || today,
+    firstEmploymentWages: salaryValue.toString() || "0",
+    epfMemberBeforeSep2014: false,
+    epfAmountWithdrawn: false,
+    epsAmountWithdrawn: false,
+    epsAmountWithdrawnAfterSep2014: false,
+    declarationDate: today,
+    declarationPlace: "Mumbai",
+    employerDeclarationDate: today,
+    kycStatus: "not_uploaded",
+    transferRequestGenerated: false,
+    physicalClaimFiled: false
   };
+  
+  setEpfFormData(epfData);
+  setActiveTab("epf-form");
+  toast.success("Employee created successfully! Please fill EPF Form 11.");
+};
 
   const handleDocumentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

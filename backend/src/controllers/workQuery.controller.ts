@@ -7,9 +7,6 @@ export class WorkQueryController {
     try {
       console.log('📝 Creating work query...');
       
-      // Files are already processed by multer middleware
-      const files = req.files as Express.Multer.File[];
-      
       // Extract form data from request body
       const {
         title,
@@ -18,7 +15,9 @@ export class WorkQueryController {
         priority = 'medium',
         category = 'service-quality',
         supervisorId,
-        supervisorName
+        supervisorName,
+        serviceTitle,
+        serviceType
       } = req.body;
 
       console.log('✅ Extracted data:', { 
@@ -28,7 +27,9 @@ export class WorkQueryController {
         priority, 
         category, 
         supervisorId, 
-        supervisorName 
+        supervisorName,
+        serviceTitle,
+        serviceType
       });
 
       // Basic validation
@@ -39,20 +40,7 @@ export class WorkQueryController {
         });
       }
 
-      // Validate files if provided
-      if (files && files.length > 0) {
-        const maxFileSize = 25 * 1024 * 1024; // 25MB
-        for (const file of files) {
-          if (file.size > maxFileSize) {
-            return res.status(400).json({
-              success: false,
-              message: `File ${file.originalname} exceeds maximum size of 25MB`
-            });
-          }
-        }
-      }
-
-      // Create work query data
+      // Create work query data (no files)
       const workQueryData = {
         title,
         description,
@@ -66,12 +54,13 @@ export class WorkQueryController {
         },
         supervisorId,
         supervisorName,
-        serviceTitle: serviceId, // Use serviceId as serviceTitle
-        serviceType: 'other' // Default service type
+        serviceTitle: serviceTitle || serviceId, // Use provided serviceTitle or fallback to serviceId
+        serviceType: serviceType || 'other' // Use provided serviceType or default to 'other'
       };
 
       console.log('🚀 Calling service with data:', workQueryData);
-      const workQuery = await workQueryService.createWorkQuery(workQueryData, files || []);
+      // Fix: Only pass one argument (no empty array)
+      const workQuery = await workQueryService.createWorkQuery(workQueryData);
       
       console.log('✅ Work query created successfully:', workQuery.queryId);
       
@@ -83,17 +72,10 @@ export class WorkQueryController {
     } catch (error: any) {
       console.error('❌ Error creating work query:', error);
       
-      if (error.message.includes('Service not found')) {
+      if (error.message && error.message.includes('Service not found')) {
         return res.status(404).json({
           success: false,
           message: 'Service not found'
-        });
-      }
-      
-      if (error.message.includes('Cloudinary')) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload files to cloud storage'
         });
       }
       
@@ -655,92 +637,6 @@ export class WorkQueryController {
       success: true,
       data: serviceTypes
     });
-  }
-
-  // Add files to existing work query
-  async addFilesToWorkQuery(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const files = req.files as Express.Multer.File[];
-      
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Query ID is required'
-        });
-      }
-      
-      if (!files || files.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'No files provided'
-        });
-      }
-
-      const updatedQuery = await workQueryService.addFilesToWorkQuery(id, files);
-
-      if (!updatedQuery) {
-        return res.status(404).json({
-          success: false,
-          message: 'Work query not found'
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: updatedQuery,
-        message: 'Files added successfully'
-      });
-    } catch (error: any) {
-      console.error('❌ Error adding files to work query:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to add files to work query'
-      });
-    }
-  }
-
-  // Remove files from work query
-  async removeFilesFromWorkQuery(req: Request, res: Response) {
-    try {
-      const { id } = req.params;
-      const { filePublicIds } = req.body;
-
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Query ID is required'
-        });
-      }
-
-      if (!filePublicIds || !Array.isArray(filePublicIds) || filePublicIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'File public IDs are required as an array'
-        });
-      }
-
-      const updatedQuery = await workQueryService.removeFilesFromWorkQuery(id, filePublicIds);
-
-      if (!updatedQuery) {
-        return res.status(404).json({
-          success: false,
-          message: 'Work query not found'
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: updatedQuery,
-        message: 'Files removed successfully'
-      });
-    } catch (error: any) {
-      console.error('❌ Error removing files from work query:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to remove files from work query'
-      });
-    }
   }
 }
 

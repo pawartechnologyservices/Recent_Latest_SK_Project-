@@ -1,10 +1,11 @@
+// backend/src/controllers/deductionController.ts
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Deduction, { IDeduction } from '../models/Deduction';
 import Employee from '../models/Employee';
 
 class DeductionController {
-  // Get all deductions with pagination and filters
+  // Get all deductions with pagination and filters (excludes advances)
   async getAllDeductions(req: Request, res: Response) {
     try {
       const { 
@@ -20,7 +21,7 @@ class DeductionController {
       
       const query: any = {};
       
-      // Apply filters
+      // Apply filters - exclude advances
       if (status && status !== 'all') query.status = status;
       if (type && type !== 'all') query.type = type;
       if (employeeId) query.employeeId = employeeId;
@@ -31,9 +32,6 @@ class DeductionController {
         if (startDate) query.deductionDate.$gte = new Date(startDate as string);
         if (endDate) query.deductionDate.$lte = new Date(endDate as string);
       }
-      
-      // Search filter
-      const searchTerm = search as string;
       
       const pageNum = parseInt(page as string) || 1;
       const limitNum = parseInt(limit as string) || 10;
@@ -70,6 +68,7 @@ class DeductionController {
       ];
       
       // Add search filtering if search term exists
+      const searchTerm = search as string;
       if (searchTerm) {
         pipeline.push({
           $match: {
@@ -177,7 +176,7 @@ class DeductionController {
     }
   }
 
-  // Create new deduction
+  // Create new deduction (non-advance)
   async createDeduction(req: Request, res: Response) {
     try {
       const {
@@ -197,6 +196,14 @@ class DeductionController {
         return res.status(400).json({
           success: false,
           message: 'Missing required fields: employeeId, type, amount, and appliedMonth are required'
+        });
+      }
+      
+      // Prevent creating advance deductions here
+      if (type === 'advance') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please use the advances endpoint for salary advances'
         });
       }
       
@@ -277,6 +284,14 @@ class DeductionController {
         });
       }
       
+      // Prevent updating type to 'advance'
+      if (updateData.type === 'advance') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot update deduction to advance type. Use advances endpoint.'
+        });
+      }
+      
       // If employeeId is being updated, check if employee exists
       if (updateData.employeeId && updateData.employeeId !== existingDeduction.employeeId) {
         const employee = await Employee.findOne({ employeeId: updateData.employeeId });
@@ -354,7 +369,7 @@ class DeductionController {
     }
   }
 
-  // Get deduction statistics
+  // Get deduction statistics (excludes advances)
   async getDeductionStats(req: Request, res: Response) {
     try {
       const stats = await Deduction.aggregate([
@@ -362,14 +377,14 @@ class DeductionController {
           $group: {
             _id: null,
             totalDeductions: { $sum: '$amount' },
-            totalAdvances: {
-              $sum: {
-                $cond: [{ $eq: ['$type', 'advance'] }, '$amount', 0]
-              }
-            },
             totalFines: {
               $sum: {
                 $cond: [{ $eq: ['$type', 'fine'] }, '$amount', 0]
+              }
+            },
+            totalOther: {
+              $sum: {
+                $cond: [{ $eq: ['$type', 'other'] }, '$amount', 0]
               }
             },
             pendingCount: {
@@ -400,14 +415,17 @@ class DeductionController {
       // If no deductions exist, return zero stats
       const result = stats[0] || {
         totalDeductions: 0,
-        totalAdvances: 0,
         totalFines: 0,
+        totalOther: 0,
         pendingCount: 0,
         approvedCount: 0,
         rejectedCount: 0,
         completedCount: 0,
         totalCount: 0
       };
+      
+      // Add zero for advances (handled separately)
+      result.totalAdvances = 0;
       
       res.status(200).json({
         success: true,

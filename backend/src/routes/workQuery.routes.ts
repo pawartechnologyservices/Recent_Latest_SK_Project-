@@ -1,9 +1,5 @@
 import express from 'express';
 import { workQueryController } from '../controllers/workQuery.controller';
-import {
-  workQueryFileUpload,
-  handleFileUploadErrors
-} from '../middleware/workQueryMulter.middleware';
 
 const router = express.Router();
 
@@ -47,27 +43,14 @@ router.get('/:id', (req: express.Request, res: express.Response) =>
   workQueryController.getWorkQueryById(req, res)
 );
 
-// Create work query with file upload
-router.post(
-  '/',
-  workQueryFileUpload.array('proofFiles', 10),
-  handleFileUploadErrors,
-  (req: express.Request, res: express.Response) => 
-    workQueryController.createWorkQuery(req, res)
+// Create work query (no file upload)
+router.post('/', (req: express.Request, res: express.Response) => 
+  workQueryController.createWorkQuery(req, res)
 );
 
 // Update status
 router.patch('/:id/status', (req: express.Request, res: express.Response) => 
   workQueryController.updateWorkQueryStatus(req, res)
-);
-
-// Add files
-router.post(
-  '/:id/files',
-  workQueryFileUpload.array('files', 10),
-  handleFileUploadErrors,
-  (req: express.Request, res: express.Response) => 
-    workQueryController.addFilesToWorkQuery(req, res)
 );
 
 // Add comment

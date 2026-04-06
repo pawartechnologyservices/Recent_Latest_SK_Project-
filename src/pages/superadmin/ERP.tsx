@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { DashboardHeader } from "@/components/shared/DashboardHeader";
-import { DashboardSidebar } from "@/components/shared/DashboardSidebar";
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardDescription,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +29,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Upload,
@@ -55,34 +52,24 @@ import {
   ShoppingBag,
   Coffee,
   BarChart3,
-  Tag,
   MapPin,
   RefreshCw,
   Cpu,
-  Settings,
   Calendar,
-  TrendingUp,
   AlertCircle,
   CheckCircle,
   XCircle,
-  Server,
-  Database,
-  Filter,
-  MoreVertical,
+  UserCog,
+  ImageIcon,
+  Grid3x3,
+  List,
+  ChevronLeft,
   ChevronRight,
-  FileText,
-  UploadCloud,
-  DownloadCloud,
-  Sun,
-  Moon,
-  Bell,
-  Loader2,
-  ArrowUpRight,
-  ArrowDownRight,
-  DollarSign,
-  Users,
-  MessageSquare,
+  TrendingUp,
   Target,
+  DollarSign,
+  MessageSquare,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -90,14 +77,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { inventoryService, type FrontendInventoryItem } from '@/services/inventoryService';
 import { machineService, type FrontendMachine, type MachineStats, type MaintenanceRecordDTO } from '@/services/machineService';
+import { DashboardHeader } from "@/components/shared/DashboardHeader";
+import { useOutletContext } from "react-router-dom";
+import { siteService, type Site } from '@/services/SiteService';
 import { motion, AnimatePresence } from "framer-motion";
 
 // Types
-interface Site {
-  id: string;
-  name: string;
-}
-
 interface Department {
   value: string;
   label: string;
@@ -108,59 +93,335 @@ interface InventoryStats {
   totalItems: number;
   lowStockItems: number;
   totalValue: number;
-  itemsValueChange: number;
 }
 
-// Use the FrontendInventoryItem type from service
-type InventoryItem = FrontendInventoryItem;
+interface MachineUpdate {
+  id: string;
+  machineId: string;
+  machineName: string;
+  modelNumber: string;
+  site: string;
+  description: string;
+  status: 'operational' | 'maintenance' | 'out-of-service';
+  photoUrls: string[];
+  updatedBy: string;
+  updatedAt: string;
+}
 
-// Use the FrontendMachine type from service
+type InventoryItem = FrontendInventoryItem;
 type Machine = FrontendMachine;
 
-const InventoryPage = () => {
-  // State for mobile sidebar
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+const machineStatusOptions = [
+  { value: 'operational', label: 'Operational', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  { value: 'maintenance', label: 'Under Maintenance', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
+  { value: 'out-of-service', label: 'Out of Service', color: 'bg-red-100 text-red-800', icon: XCircle },
+];
+
+// Machine View Dialog Component
+const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null; open: boolean; onClose: () => void }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const machineImages = machine?.photoUrls || [];
+
+  if (!machine) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl md:rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg md:text-xl font-bold text-gray-900">
+            <Cpu className="h-5 w-5 text-blue-600" />
+            Machine Details: {machine.name}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {machineImages.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-xs md:text-sm font-medium text-gray-700">Images</Label>
+              <div className="relative bg-gray-100 rounded-lg overflow-hidden min-h-[300px]">
+                <img 
+                  src={machineImages[currentImageIndex]} 
+                  alt={`${machine.name} - ${currentImageIndex + 1}`}
+                  className="w-full h-80 object-contain bg-gray-50"
+                />
+                {machineImages.length > 1 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white rounded-full"
+                      onClick={() => setCurrentImageIndex(prev => prev === 0 ? machineImages.length - 1 : prev - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white rounded-full"
+                      onClick={() => setCurrentImageIndex(prev => prev === machineImages.length - 1 ? 0 : prev + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Machine Name</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.name}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Model Number</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.model || 'N/A'}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Cost</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">
+                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(machine.cost)}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Quantity</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.quantity}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Purchase Date</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{new Date(machine.purchaseDate).toLocaleDateString()}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Status</div>
+              <Badge className={machine.status === 'operational' ? 'bg-green-100 text-green-800 border-green-200' : machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-red-100 text-red-800 border-red-200'}>
+                {machine.status}
+              </Badge>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Location/Site</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-gray-400" />
+                {machine.location || 'Not assigned'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Department</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.department || 'N/A'}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Assigned To</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-1">
+                <UserCheck className="h-3 w-3 text-gray-400" />
+                {machine.assignedTo || 'Not assigned'}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Last Maintenance</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.lastMaintenanceDate ? new Date(machine.lastMaintenanceDate).toLocaleDateString() : 'N/A'}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Next Maintenance</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{machine.nextMaintenanceDate ? new Date(machine.nextMaintenanceDate).toLocaleDateString() : 'N/A'}</div>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Description</div>
+              <div className="text-sm text-gray-600">{machine.description || 'No description available'}</div>
+            </div>
+          </div>
+
+          {machine.maintenanceHistory && machine.maintenanceHistory.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-xs md:text-sm font-medium text-gray-700">Maintenance History</Label>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {machine.maintenanceHistory.map((record, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="flex justify-between items-start flex-wrap gap-2">
+                      <div>
+                        <div className="font-medium text-sm text-gray-900">{record.type}</div>
+                        <div className="text-xs text-gray-600">{record.description}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">{new Date(record.date).toLocaleDateString()}</div>
+                        <div className="text-sm font-medium text-green-600">
+                          {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(record.cost)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">Performed by: {record.performedBy}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={onClose} className="bg-blue-600 hover:bg-blue-700 rounded-lg">Close</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Update View Dialog Component
+const UpdateViewDialog = ({ update, open, onClose }: { update: MachineUpdate | null; open: boolean; onClose: () => void }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const updateImages = update?.photoUrls || [];
+
+  if (!update) return null;
+
+  const statusOption = machineStatusOptions.find(s => s.value === update.status);
+  const StatusIcon = statusOption?.icon || CheckCircle;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl md:rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg md:text-xl font-bold text-gray-900">
+            <Building className="h-5 w-5 text-blue-600" />
+            Site Update Details: {update.machineName}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {updateImages.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-xs md:text-sm font-medium text-gray-700">Images</Label>
+              <div className="relative bg-gray-100 rounded-lg overflow-hidden min-h-[300px]">
+                <img 
+                  src={updateImages[currentImageIndex]} 
+                  alt={`${update.machineName} - ${currentImageIndex + 1}`}
+                  className="w-full h-80 object-contain bg-gray-50"
+                />
+                {updateImages.length > 1 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white rounded-full"
+                      onClick={() => setCurrentImageIndex(prev => prev === 0 ? updateImages.length - 1 : prev - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white rounded-full"
+                      onClick={() => setCurrentImageIndex(prev => prev === updateImages.length - 1 ? 0 : prev + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Machine Name</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-blue-600" />
+                {update.machineName}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Model Number</div>
+              <div className="font-medium text-sm md:text-base text-gray-900">{update.modelNumber || 'N/A'}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Site Location</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-gray-400" />
+                {update.site}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Status</div>
+              <Badge className={`${statusOption?.color} border-0 flex items-center gap-1 w-fit px-2 py-1 rounded-full`}>
+                <StatusIcon className="h-3 w-3" />
+                {statusOption?.label}
+              </Badge>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Updated By</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-1">
+                <UserCheck className="h-3 w-3 text-gray-400" />
+                {update.updatedBy}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Update Date</div>
+              <div className="font-medium text-sm md:text-base text-gray-900 flex items-center gap-1">
+                <Calendar className="h-3 w-3 text-gray-400" />
+                {new Date(update.updatedAt).toLocaleDateString()}
+              </div>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <div className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Description</div>
+              <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                {update.description || 'No description provided'}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={onClose} className="bg-blue-600 hover:bg-blue-700 rounded-lg">Close</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const SuperAdminInventoryPage = () => {
+  const outletContext = useOutletContext<{ onMenuClick?: () => void }>();
   
   // State
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
+  const [machineUpdates, setMachineUpdates] = useState<MachineUpdate[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedSite, setSelectedSite] = useState("all");
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [selectedManager, setSelectedManager] = useState("all");
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [changeHistoryDialogOpen, setChangeHistoryDialogOpen] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-  const [loading, setLoading] = useState({
-    items: true,
-    machines: true,
-    stats: true
-  });
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<InventoryStats>({
     totalItems: 0,
     lowStockItems: 0,
     totalValue: 0,
-    itemsValueChange: 0,
   });
   
   // Machine states
   const [machineDialogOpen, setMachineDialogOpen] = useState(false);
   const [editMachine, setEditMachine] = useState<Machine | null>(null);
   const [viewMachine, setViewMachine] = useState<Machine | null>(null);
+  const [viewMachineDialogOpen, setViewMachineDialogOpen] = useState(false);
   const [machineSearchQuery, setMachineSearchQuery] = useState("");
   const [machineStats, setMachineStats] = useState<MachineStats | null>(null);
   const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false);
   const [selectedMachineForMaintenance, setSelectedMachineForMaintenance] = useState<string | null>(null);
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   
+  // Update view state
+  const [viewUpdate, setViewUpdate] = useState<MachineUpdate | null>(null);
+  const [viewUpdateDialogOpen, setViewUpdateDialogOpen] = useState(false);
+  
+  // View mode for mobile
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [isMobileView, setIsMobileView] = useState(false);
+  
   // Track active tab
   const [activeTab, setActiveTab] = useState("inventory");
   
-  // New state for tracking data source
-  const [usingLocalMachineStats, setUsingLocalMachineStats] = useState(false);
   const [backendConnected, setBackendConnected] = useState(true);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   
   // New item form state
   const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
@@ -187,9 +448,7 @@ const InventoryPage = () => {
     description: "",
     status: 'operational',
     location: "",
-    manufacturer: "",
     model: "",
-    serialNumber: "",
     department: "",
     assignedTo: "",
   });
@@ -202,17 +461,15 @@ const InventoryPage = () => {
     performedBy: "",
   });
 
-  // Handler for menu button click
-  const handleMenuClick = () => {
-    setMobileSidebarOpen(!mobileSidebarOpen);
-  };
+  const maintenanceTypes = [
+    "Routine",
+    "Preventive",
+    "Corrective",
+    "Emergency",
+    "Scheduled",
+    "Overhaul"
+  ];
 
-  // Close sidebar when clicking outside or on navigation
-  const handleMobileClose = () => {
-    setMobileSidebarOpen(false);
-  };
-
-  // Data
   const departments: Department[] = [
     { value: "cleaning", label: "Cleaning", icon: Shield },
     { value: "maintenance", label: "Maintenance", icon: Wrench },
@@ -220,13 +477,6 @@ const InventoryPage = () => {
     { value: "paint", label: "Paint", icon: Palette },
     { value: "tools", label: "Tools", icon: ShoppingBag },
     { value: "canteen", label: "Canteen", icon: Coffee },
-  ];
-
-  const sites: Site[] = [
-    { id: "1", name: "Main Site" },
-    { id: "2", name: "Branch Office" },
-    { id: "3", name: "Warehouse A" },
-    { id: "4", name: "Construction Site B" },
   ];
 
   const managers = ["John Doe", "Jane Smith", "Robert Johnson", "Sarah Wilson", "Michael Brown"];
@@ -240,46 +490,60 @@ const InventoryPage = () => {
     canteen: ["Food Items", "Beverages", "Utensils", "Cleaning"],
   };
 
-  const machineStatusOptions = [
-    { value: 'operational', label: 'Operational', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-    { value: 'maintenance', label: 'Under Maintenance', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
-    { value: 'out-of-service', label: 'Out of Service', color: 'bg-red-100 text-red-800', icon: XCircle },
-  ];
+  // Check if mobile view
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileView(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  const maintenanceTypes = [
-    "Routine",
-    "Preventive",
-    "Corrective",
-    "Emergency",
-    "Scheduled",
-    "Overhaul"
-  ];
+  // Load machine updates from localStorage
+  useEffect(() => {
+    const storedUpdates = localStorage.getItem('machineUpdates');
+    if (storedUpdates) {
+      const updates = JSON.parse(storedUpdates);
+      const migratedUpdates = updates.map((update: any) => ({
+        ...update,
+        photoUrls: update.photoUrls || (update.photoUrl ? [update.photoUrl] : [])
+      }));
+      setMachineUpdates(migratedUpdates);
+    }
+  }, []);
 
-  // Helper function to calculate stats from items
+  // Fetch sites
+  useEffect(() => {
+    fetchSites();
+  }, []);
+
+  const fetchSites = async () => {
+    try {
+      const sitesData = await siteService.getAllSites();
+      setSites(sitesData);
+    } catch (error) {
+      console.error('Failed to fetch sites:', error);
+      setSites([]);
+    }
+  };
+
   const calculateStats = (itemsList: InventoryItem[]): InventoryStats => {
     const totalItems = itemsList.length;
     const lowStockItems = itemsList.filter(item => item.quantity <= item.reorderLevel).length;
     const totalValue = itemsList.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
-    
-    return {
-      totalItems,
-      lowStockItems,
-      totalValue,
-      itemsValueChange: 0 // We can implement change tracking later
-    };
+    return { totalItems, lowStockItems, totalValue };
   };
 
-  // Format currency - INDIAN RUPEES
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
@@ -289,16 +553,13 @@ const InventoryPage = () => {
     });
   };
 
-  // Calculate machine statistics locally if API fails
   const calculateLocalMachineStats = () => {
     const totalMachines = machines.length;
     const totalMachineValue = machines.reduce((sum, machine) => sum + (machine.cost * machine.quantity), 0);
     const operationalMachines = machines.filter(m => m.status === 'operational').length;
     const maintenanceMachines = machines.filter(m => m.status === 'maintenance').length;
     const outOfServiceMachines = machines.filter(m => m.status === 'out-of-service').length;
-    const averageMachineCost = totalMachines > 0 ? totalMachineValue / totalMachines : 0;
     
-    // Count machines needing maintenance soon (within next 30 days)
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     const today = new Date();
@@ -308,20 +569,17 @@ const InventoryPage = () => {
       try {
         const nextMaintenanceDate = new Date(machine.nextMaintenanceDate);
         return nextMaintenanceDate <= thirtyDaysFromNow && nextMaintenanceDate >= today;
-      } catch (error) {
-        console.error('Error parsing maintenance date:', machine.nextMaintenanceDate, error);
+      } catch {
         return false;
       }
     }).length;
 
-    // Calculate machines by department
     const machinesByDepartment = machines.reduce((acc, machine) => {
       const dept = machine.department || 'Unassigned';
       acc[dept] = (acc[dept] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    // Calculate machines by location
     const machinesByLocation = machines.reduce((acc, machine) => {
       const location = machine.location || 'Unassigned';
       acc[location] = (acc[location] || 0) + 1;
@@ -334,29 +592,18 @@ const InventoryPage = () => {
       operationalMachines,
       maintenanceMachines,
       outOfServiceMachines,
-      averageMachineCost,
+      averageMachineCost: totalMachines > 0 ? totalMachineValue / totalMachines : 0,
       machinesByDepartment,
       machinesByLocation,
       upcomingMaintenanceCount
     };
   };
 
-  // Fetch data from backend on component mount
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     try {
-      setLoading({
-        items: true,
-        machines: true,
-        stats: true
-      });
-      setUsingLocalMachineStats(false);
+      setLoading(true);
       setBackendConnected(true);
       
-      // Fetch items and machines in parallel
       const [itemsData, machinesData] = await Promise.all([
         inventoryService.getItems(),
         machineService.getMachines()
@@ -365,54 +612,27 @@ const InventoryPage = () => {
       setItems(itemsData || []);
       setMachines(machinesData || []);
       
-      // Try to fetch machine stats
       try {
         const statsData = await machineService.getMachineStats();
         setMachineStats(statsData);
-        setUsingLocalMachineStats(false);
-      } catch (statsError: any) {
-        // Check if it's a stats endpoint error
-        if (statsError.isStatsEndpointError) {
-          console.warn('Stats endpoint unavailable, using local calculation');
-          setUsingLocalMachineStats(true);
-          const localStats = calculateLocalMachineStats();
-          setMachineStats(localStats);
-        } else {
-          // Other errors
-          console.error('Error fetching machine stats:', statsError);
-          setUsingLocalMachineStats(true);
-          const localStats = calculateLocalMachineStats();
-          setMachineStats(localStats);
-        }
+      } catch (statsError) {
+        console.warn('Stats endpoint unavailable, using local calculation');
+        const localStats = calculateLocalMachineStats();
+        setMachineStats(localStats);
       }
       
-      // Calculate inventory stats locally
-      const calculatedStats = calculateStats(itemsData || []);
-      setStats(calculatedStats);
+      setStats(calculateStats(itemsData || []));
       
     } catch (error) {
-      console.error('Failed to fetch data from backend:', error);
+      console.error('Failed to fetch data:', error);
       setBackendConnected(false);
-      
-      // Set empty arrays if backend fails
       setItems([]);
       setMachines([]);
-      setUsingLocalMachineStats(true);
-      
-      // Calculate local machine stats even if machines array is empty
       setMachineStats(calculateLocalMachineStats());
-      setStats({ totalItems: 0, lowStockItems: 0, totalValue: 0, itemsValueChange: 0 });
-      
-      // Show warning toast
-      toast.warning("Backend connection issue. Using local data.", {
-        description: "Some features may be limited."
-      });
+      setStats({ totalItems: 0, lowStockItems: 0, totalValue: 0 });
+      toast.warning("Backend connection issue. Using local data.");
     } finally {
-      setLoading({
-        items: false,
-        machines: false,
-        stats: false
-      });
+      setLoading(false);
     }
   };
 
@@ -428,7 +648,6 @@ const InventoryPage = () => {
     }
   };
 
-  // Functions
   const getDepartmentIcon = (department: string) => {
     const dept = departments.find(d => d.value === department);
     return dept ? dept.icon : Package;
@@ -438,220 +657,58 @@ const InventoryPage = () => {
     return categories[dept as keyof typeof categories] || [];
   };
 
-  // Filter items
+  // Get unique managers from items
+  const uniqueManagers = useMemo(() => {
+    const managerSet = new Set(items.map(item => item.assignedManager).filter(Boolean));
+    return Array.from(managerSet);
+  }, [items]);
+
   const filteredItems = items.filter(item => {
     const matchesSearch = 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.supplier.toLowerCase().includes(searchQuery.toLowerCase());
-    
     const matchesDept = selectedDepartment === "all" || item.department === selectedDepartment;
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
     const matchesSite = selectedSite === "all" || item.site === selectedSite;
-    
-    return matchesSearch && matchesDept && matchesCategory && matchesSite;
+    const matchesManager = selectedManager === "all" || item.assignedManager === selectedManager;
+    return matchesSearch && matchesDept && matchesCategory && matchesSite && matchesManager;
   });
 
-  // Filter machines
   const filteredMachines = machines.filter(machine => {
     const matchesSearch = 
       machine.name.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
-      machine.manufacturer?.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
       machine.model?.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
-      machine.location?.toLowerCase().includes(machineSearchQuery.toLowerCase()) ||
-      machine.serialNumber?.toLowerCase().includes(machineSearchQuery.toLowerCase());
-    
+      machine.location?.toLowerCase().includes(machineSearchQuery.toLowerCase());
     return matchesSearch;
   });
 
-  // Handle item actions
+  // All CRUD operations are disabled - view only mode
   const handleDeleteItem = async (itemId: string) => {
-    try {
-      await inventoryService.deleteItem(itemId);
-      const updatedItems = items.filter(item => item.id !== itemId);
-      setItems(updatedItems);
-      
-      // Recalculate stats from updated items
-      setStats(calculateStats(updatedItems));
-      
-      toast.success("Item deleted successfully!");
-    } catch (error) {
-      console.error('Failed to delete item:', error);
-    }
+    toast.error("You do not have permission to delete items. View only mode.");
   };
 
   const handleAddItem = async () => {
-    if (!newItem.name || !newItem.sku) {
-      toast.error("Please fill in required fields");
-      return;
-    }
-
-    try {
-      const itemData: Omit<InventoryItem, 'id' | '_id' | 'createdAt' | 'updatedAt'> = {
-        sku: newItem.sku.toUpperCase(),
-        name: newItem.name,
-        department: newItem.department || "cleaning",
-        category: newItem.category || "Tools",
-        site: newItem.site || "1",
-        assignedManager: newItem.assignedManager || "John Doe",
-        quantity: newItem.quantity || 0,
-        price: newItem.price || 0,
-        costPrice: newItem.costPrice || 0,
-        supplier: newItem.supplier || "",
-        reorderLevel: newItem.reorderLevel || 10,
-        description: newItem.description,
-        changeHistory: [{
-          date: new Date().toISOString().split('T')[0],
-          change: "Created",
-          user: "Supervisor",
-          quantity: newItem.quantity || 0
-        }],
-      };
-
-      const createdItem = await inventoryService.createItem(itemData);
-    
-      // Add to local state
-      const updatedItems = [...items, createdItem];
-      setItems(updatedItems);
-      
-      // Recalculate stats from updated items
-      setStats(calculateStats(updatedItems));
-      
-      setItemDialogOpen(false);
-      resetNewItemForm();
-      toast.success("Item added successfully!");
-    } catch (error) {
-      console.error('Failed to add item:', error);
-      toast.error("Failed to add item");
-    }
+    toast.error("You do not have permission to add items. View only mode.");
   };
 
   const handleEditItem = async () => {
-    if (!editItem) return;
-
-    try {
-      // Create a clean update object without id and timestamps
-      const { id, createdAt, updatedAt, ...updateData } = editItem;
-      
-      // Add change history entry for quantity changes
-      const originalItem = items.find(item => item.id === editItem.id);
-      if (originalItem && editItem.quantity !== originalItem.quantity) {
-        updateData.changeHistory = [
-          ...(editItem.changeHistory || []),
-          {
-            date: new Date().toISOString().split('T')[0],
-            change: "Updated",
-            user: "Supervisor",
-            quantity: editItem.quantity - originalItem.quantity
-          }
-        ];
-      }
-
-      const updatedItem = await inventoryService.updateItem(editItem.id, updateData);
-      
-      // Update local state
-      const updatedItems = items.map(item => 
-        item.id === updatedItem.id ? updatedItem : item
-      );
-      setItems(updatedItems);
-      
-      // Recalculate stats from updated items
-      setStats(calculateStats(updatedItems));
-      
-      setEditItem(null);
-      setItemDialogOpen(false);
-      toast.success("Item updated successfully!");
-    } catch (error) {
-      console.error('Failed to update item:', error);
-      toast.error("Failed to update item");
-    }
+    toast.error("You do not have permission to edit items. View only mode.");
   };
 
-  // Machine functions
   const handleAddMachine = async () => {
-    if (!newMachine.name || !newMachine.cost || !newMachine.purchaseDate) {
-      toast.error("Please fill in required fields");
-      return;
-    }
-
-    try {
-      const machineData = {
-        name: newMachine.name,
-        cost: newMachine.cost || 0,
-        purchaseDate: newMachine.purchaseDate,
-        quantity: newMachine.quantity || 1,
-        description: newMachine.description,
-        status: newMachine.status || 'operational',
-        location: newMachine.location,
-        manufacturer: newMachine.manufacturer,
-        model: newMachine.model,
-        serialNumber: newMachine.serialNumber,
-        department: newMachine.department,
-        assignedTo: newMachine.assignedTo,
-        lastMaintenanceDate: newMachine.lastMaintenanceDate,
-        nextMaintenanceDate: newMachine.nextMaintenanceDate,
-      };
-
-      if (editMachine) {
-        // Update existing machine
-        const updatedMachine = await machineService.updateMachine(editMachine.id, machineData);
-        const updatedMachines = machines.map(machine => 
-          machine.id === editMachine.id ? updatedMachine : machine
-        );
-        setMachines(updatedMachines);
-        toast.success("Machine updated successfully!");
-      } else {
-        // Add new machine
-        const createdMachine = await machineService.createMachine(machineData);
-        setMachines([...machines, createdMachine]);
-        toast.success("Machine added successfully!");
-      }
-
-      // Refresh machine stats
-      try {
-        const statsData = await machineService.getMachineStats();
-        setMachineStats(statsData);
-        setUsingLocalMachineStats(false);
-      } catch (statsError) {
-        setUsingLocalMachineStats(true);
-        const localStats = calculateLocalMachineStats();
-        setMachineStats(localStats);
-      }
-      
-      setMachineDialogOpen(false);
-      resetNewMachineForm();
-      setEditMachine(null);
-    } catch (error) {
-      console.error('Failed to save machine:', error);
-      toast.error("Failed to save machine");
-    }
+    toast.error("You do not have permission to add machines. View only mode.");
   };
 
   const handleEditMachine = (machine: Machine) => {
-    setEditMachine(machine);
-    setNewMachine({
-      name: machine.name,
-      cost: machine.cost,
-      purchaseDate: machine.purchaseDate,
-      quantity: machine.quantity,
-      description: machine.description,
-      status: machine.status,
-      location: machine.location,
-      manufacturer: machine.manufacturer,
-      model: machine.model,
-      serialNumber: machine.serialNumber,
-      department: machine.department,
-      assignedTo: machine.assignedTo,
-      lastMaintenanceDate: machine.lastMaintenanceDate,
-      nextMaintenanceDate: machine.nextMaintenanceDate,
-    });
-    setMachineDialogOpen(true);
+    toast.error("You do not have permission to edit machines. View only mode.");
   };
 
   const handleViewMachine = async (machineId: string) => {
     try {
       const machine = await machineService.getMachineById(machineId);
       setViewMachine(machine);
+      setViewMachineDialogOpen(true);
     } catch (error) {
       console.error('Failed to fetch machine details:', error);
       toast.error("Failed to fetch machine details");
@@ -659,75 +716,20 @@ const InventoryPage = () => {
   };
 
   const handleDeleteMachine = async (machineId: string) => {
-    try {
-      await machineService.deleteMachine(machineId);
-      const updatedMachines = machines.filter(machine => machine.id !== machineId);
-      setMachines(updatedMachines);
-      
-      // Refresh machine stats
-      try {
-        const statsData = await machineService.getMachineStats();
-        setMachineStats(statsData);
-        setUsingLocalMachineStats(false);
-      } catch (statsError) {
-        setUsingLocalMachineStats(true);
-        const localStats = calculateLocalMachineStats();
-        setMachineStats(localStats);
-      }
-      
-      toast.success("Machine deleted successfully!");
-    } catch (error) {
-      console.error('Failed to delete machine:', error);
-      toast.error("Failed to delete machine");
-    }
+    toast.error("You do not have permission to delete machines. View only mode.");
   };
 
   const handleAddMaintenance = async () => {
-    if (!selectedMachineForMaintenance || !maintenanceRecord.type || !maintenanceRecord.description || !maintenanceRecord.performedBy) {
-      toast.error("Please fill in all maintenance record fields");
-      return;
-    }
+    toast.error("You do not have permission to add maintenance records. View only mode.");
+  };
 
-    try {
-      setMaintenanceLoading(true);
-      const updatedMachine = await machineService.addMaintenanceRecord(
-        selectedMachineForMaintenance,
-        maintenanceRecord
-      );
-      
-      // Update local state
-      const updatedMachines = machines.map(machine => 
-        machine.id === selectedMachineForMaintenance ? updatedMachine : machine
-      );
-      setMachines(updatedMachines);
-      
-      // Refresh machine stats
-      try {
-        const statsData = await machineService.getMachineStats();
-        setMachineStats(statsData);
-        setUsingLocalMachineStats(false);
-      } catch (statsError) {
-        setUsingLocalMachineStats(true);
-        const localStats = calculateLocalMachineStats();
-        setMachineStats(localStats);
-      }
-      
-      // Reset form
-      setMaintenanceRecord({
-        type: "Routine",
-        description: "",
-        cost: 0,
-        performedBy: "",
-      });
-      setSelectedMachineForMaintenance(null);
-      setMaintenanceDialogOpen(false);
-      toast.success("Maintenance record added successfully!");
-    } catch (error) {
-      console.error('Failed to add maintenance record:', error);
-      toast.error("Failed to add maintenance record");
-    } finally {
-      setMaintenanceLoading(false);
-    }
+  const handleDeleteUpdate = (updateId: string) => {
+    toast.error("You do not have permission to delete updates. View only mode.");
+  };
+
+  const handleViewUpdate = (update: MachineUpdate) => {
+    setViewUpdate(update);
+    setViewUpdateDialogOpen(true);
   };
 
   const resetNewMachineForm = () => {
@@ -739,9 +741,7 @@ const InventoryPage = () => {
       description: "",
       status: 'operational',
       location: "",
-      manufacturer: "",
       model: "",
-      serialNumber: "",
       department: "",
       assignedTo: "",
     });
@@ -765,11 +765,13 @@ const InventoryPage = () => {
   };
 
   const openEditDialog = (item: InventoryItem) => {
-    setEditItem(item);
-    setItemDialogOpen(true);
+    toast.error("You do not have permission to edit items. View only mode.");
   };
 
-  // Handle export
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    toast.error("You do not have permission to import items. View only mode.");
+  };
+
   const handleExport = () => {
     if (items.length === 0) {
       toast.error("No items to export");
@@ -783,7 +785,7 @@ const InventoryPage = () => {
         item.name,
         departments.find(d => d.value === item.department)?.label || item.department,
         item.category,
-        sites.find(s => s.id === item.site)?.name || item.site,
+        item.site,
         item.assignedManager,
         item.quantity.toString(),
         item.price.toString(),
@@ -799,11 +801,9 @@ const InventoryPage = () => {
     a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
-    
     toast.success("Inventory exported successfully!");
   };
 
-  // Export machines to CSV
   const handleExportMachines = async () => {
     try {
       if (machines.length === 0) {
@@ -812,7 +812,7 @@ const InventoryPage = () => {
       }
 
       const csvContent = [
-        ["Name", "Cost", "Purchase Date", "Quantity", "Status", "Location", "Manufacturer", "Model", "Serial Number", "Department", "Assigned To"],
+        ["Name", "Cost", "Purchase Date", "Quantity", "Status", "Location", "Model", "Department", "Assigned To"],
         ...machines.map(machine => [
           machine.name,
           machine.cost.toString(),
@@ -820,9 +820,7 @@ const InventoryPage = () => {
           machine.quantity.toString(),
           machine.status,
           machine.location || '',
-          machine.manufacturer || '',
           machine.model || '',
-          machine.serialNumber || '',
           machine.department || '',
           machine.assignedTo || ''
         ])
@@ -835,7 +833,6 @@ const InventoryPage = () => {
       a.download = `machines-export-${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
-      
       toast.success("Machines exported successfully!");
     } catch (error) {
       console.error('Failed to export machines:', error);
@@ -843,7 +840,6 @@ const InventoryPage = () => {
     }
   };
 
-  // Calculate machine age
   const calculateMachineAge = (purchaseDate: string) => {
     const purchase = new Date(purchaseDate);
     const today = new Date();
@@ -852,51 +848,186 @@ const InventoryPage = () => {
     return Math.floor(diffYears);
   };
 
-  // Get machine stats for display
   const machineStatsDisplay = machineStats || calculateLocalMachineStats();
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Inventory Grid View Component for Mobile
+  const InventoryGridView = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {filteredItems.map((item) => {
+        const DeptIcon = getDepartmentIcon(item.department);
+        const isLowStock = item.quantity <= item.reorderLevel;
+        
+        return (
+          <Card key={item.id} className="overflow-hidden border-0 shadow-lg rounded-xl">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <Package className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{item.name}</p>
+                    <p className="text-xs text-gray-500 font-mono">{item.sku}</p>
+                  </div>
+                </div>
+                <Badge variant={isLowStock ? "destructive" : "outline"} className="text-xs">
+                  {isLowStock ? "Low Stock" : "In Stock"}
+                </Badge>
+              </div>
+              
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Department:</span>
+                  <div className="flex items-center gap-1">
+                    <DeptIcon className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-700">{departments.find(d => d.value === item.department)?.label}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Manager:</span>
+                  <div className="flex items-center gap-1">
+                    <UserCheck className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-700">{item.assignedManager}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Quantity:</span>
+                  <span className={`font-medium text-xs ${isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>{item.quantity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Price:</span>
+                  <span className="font-medium text-xs text-green-600">{formatCurrency(item.price)}</span>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                <Button variant="ghost" size="sm" onClick={() => setChangeHistoryDialogOpen(item.id)} className="rounded-full hover:bg-blue-100 hover:text-blue-600">
+                  <History className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+
+  // Machines Grid View Component for Mobile
+  const MachinesGridView = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {filteredMachines.map((machine) => {
+        const statusOption = machineStatusOptions.find(s => s.value === machine.status);
+        const StatusIcon = statusOption?.icon || CheckCircle;
+        const machineAge = calculateMachineAge(machine.purchaseDate);
+        
+        return (
+          <Card key={machine.id} className="overflow-hidden border-0 shadow-lg rounded-xl">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                    <Cpu className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">{machine.name}</p>
+                    <p className="text-xs text-gray-500">{machine.model || 'No model'}</p>
+                  </div>
+                </div>
+                <Badge className={`${statusOption?.color} border-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full`}>
+                  <StatusIcon className="h-3 w-3" />
+                  {statusOption?.label}
+                </Badge>
+              </div>
+              
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Quantity:</span>
+                  <span className="font-medium text-xs text-gray-900">{machine.quantity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Cost:</span>
+                  <span className="font-medium text-xs text-green-600">{formatCurrency(machine.cost)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-xs">Location:</span>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-700">{machine.location || 'Not assigned'}</span>
+                  </div>
+                </div>
+                {machine.assignedTo && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-xs">Assigned To:</span>
+                    <div className="flex items-center gap-1">
+                      <UserCheck className="h-3 w-3 text-gray-400" />
+                      <span className="text-xs text-gray-700">{machine.assignedTo}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                <Button variant="ghost" size="sm" onClick={() => handleViewMachine(machine.id)} className="rounded-full hover:bg-blue-100 hover:text-blue-600">
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DashboardHeader title="Super Admin Inventory" subtitle="Managing all inventory and machinery" onMenuClick={outletContext?.onMenuClick} />
+        <div className="container mx-auto p-4 md:p-6">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 md:h-12 md:w-12 animate-spin text-blue-600 mx-auto" />
+              <p className="mt-4 text-sm text-gray-500">Loading data from backend...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with hamburger menu */}
       <DashboardHeader 
         title={
           <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Inventory Management
           </span>
         }
-        subtitle="Manage inventory, machinery, and equipment across sites"
-        onMenuClick={handleMenuClick}
+        subtitle="Full access to manage and track all inventory, machinery, and site updates" 
+        onMenuClick={outletContext?.onMenuClick}
       />
-
-      {/* Mobile Sidebar - Only shown when open */}
-      {mobileSidebarOpen && (
-        <DashboardSidebar 
-          mobileOpen={mobileSidebarOpen}
-          onMobileClose={handleMobileClose}
-        />
-      )}
-
-      <div className="p-4 md:p-6 space-y-6">
-        {/* Stats Cards - Responsive Grid */}
+      
+      <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
+        {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className="w-full"
+            whileHover={{ y: -2, md: { y: -4 }, transition: { duration: 0.2 } }}
           >
             <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl bg-gradient-to-br from-white to-blue-50 hover:shadow-xl transition-shadow duration-300">
               <CardContent className="p-3 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-blue-100 flex items-center justify-center">
                     <Package className="h-4 w-4 md:h-6 md:w-6 text-blue-600" />
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1">Total Items</p>
-                    <p className="text-lg md:text-3xl font-bold text-gray-900">
-                      {loading.stats ? <Loader2 className="h-5 w-5 md:h-7 md:w-7 animate-spin text-blue-500" /> : stats.totalItems}
-                    </p>
+                    <p className="text-base md:text-3xl font-bold text-gray-900">{stats.totalItems}</p>
                   </div>
                 </div>
               </CardContent>
@@ -907,20 +1038,17 @@ const InventoryPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className="w-full"
+            whileHover={{ y: -2, md: { y: -4 }, transition: { duration: 0.2 } }}
           >
             <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl bg-gradient-to-br from-white to-amber-50 hover:shadow-xl transition-shadow duration-300">
               <CardContent className="p-3 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-amber-100 flex items-center justify-center">
                     <AlertTriangle className="h-4 w-4 md:h-6 md:w-6 text-amber-600" />
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1">Low Stock</p>
-                    <p className="text-lg md:text-3xl font-bold text-amber-600">
-                      {loading.stats ? <Loader2 className="h-5 w-5 md:h-7 md:w-7 animate-spin text-amber-500" /> : stats.lowStockItems}
-                    </p>
+                    <p className="text-base md:text-3xl font-bold text-amber-600">{stats.lowStockItems}</p>
                   </div>
                 </div>
               </CardContent>
@@ -931,19 +1059,18 @@ const InventoryPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className="w-full"
+            whileHover={{ y: -2, md: { y: -4 }, transition: { duration: 0.2 } }}
           >
             <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl bg-gradient-to-br from-white to-green-50 hover:shadow-xl transition-shadow duration-300">
               <CardContent className="p-3 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-green-100 flex items-center justify-center">
                     <DollarSign className="h-4 w-4 md:h-6 md:w-6 text-green-600" />
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1">Total Value</p>
                     <p className="text-xs md:text-3xl font-bold text-gray-900 truncate max-w-[80px] md:max-w-none">
-                      {loading.stats ? <Loader2 className="h-5 w-5 md:h-7 md:w-7 animate-spin text-green-500" /> : formatCurrency(stats.totalValue)}
+                      {formatCurrency(stats.totalValue)}
                     </p>
                   </div>
                 </div>
@@ -955,20 +1082,17 @@ const InventoryPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
-            whileHover={{ y: -4, transition: { duration: 0.2 } }}
-            className="w-full"
+            whileHover={{ y: -2, md: { y: -4 }, transition: { duration: 0.2 } }}
           >
             <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl bg-gradient-to-br from-white to-purple-50 hover:shadow-xl transition-shadow duration-300">
               <CardContent className="p-3 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                  <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-purple-100 flex items-center justify-center">
                     <Cpu className="h-4 w-4 md:h-6 md:w-6 text-purple-600" />
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1">Machines</p>
-                    <p className="text-lg md:text-3xl font-bold text-gray-900">
-                      {loading.stats ? <Loader2 className="h-5 w-5 md:h-7 md:w-7 animate-spin text-purple-500" /> : machineStatsDisplay.totalMachines}
-                    </p>
+                    <p className="text-[10px] md:text-sm font-medium text-gray-500 mb-0.5 md:mb-1">Total Machines</p>
+                    <p className="text-base md:text-3xl font-bold text-gray-900">{machineStatsDisplay?.totalMachines || 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -976,8 +1100,8 @@ const InventoryPage = () => {
           </motion.div>
         </div>
 
-        {/* Tabs Section - Scrollable on Mobile */}
-        <div className="space-y-6">
+        {/* Tabs */}
+        <div className="space-y-4 md:space-y-6">
           <div className="border-b border-gray-200 overflow-x-auto pb-px">
             <Tabs defaultValue="inventory" className="w-full" onValueChange={setActiveTab}>
               <TabsList className="inline-flex h-10 md:h-12 items-center justify-start rounded-lg bg-transparent p-0 min-w-max">
@@ -986,60 +1110,24 @@ const InventoryPage = () => {
                   className="relative px-3 md:px-6 py-2 md:py-3 text-xs md:text-sm font-medium text-gray-600 hover:text-gray-900 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 transition-all whitespace-nowrap"
                 >
                   <Package className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                  Inventory ({items.length})
-                  {activeTab === "inventory" && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 z-[-1]"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="low-stock" 
-                  className="relative px-3 md:px-6 py-2 md:py-3 text-xs md:text-sm font-medium text-gray-600 hover:text-gray-900 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 transition-all whitespace-nowrap"
-                >
-                  <AlertTriangle className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                  Low Stock ({stats.lowStockItems})
-                  {activeTab === "low-stock" && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 z-[-1]"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
+                  <span className="hidden xs:inline">Inventory</span>
+                  <span className="xs:hidden">Inv</span> ({items.length})
                 </TabsTrigger>
                 <TabsTrigger 
                   value="machines" 
                   className="relative px-3 md:px-6 py-2 md:py-3 text-xs md:text-sm font-medium text-gray-600 hover:text-gray-900 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 transition-all whitespace-nowrap"
                 >
                   <Cpu className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                  Machines ({machines.length})
-                  {activeTab === "machines" && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 z-[-1]"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
+                  <span className="hidden xs:inline">Machines</span>
+                  <span className="xs:hidden">Mach</span> ({machines.length})
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="categories" 
+                  value="updates" 
                   className="relative px-3 md:px-6 py-2 md:py-3 text-xs md:text-sm font-medium text-gray-600 hover:text-gray-900 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 transition-all whitespace-nowrap"
                 >
-                  <Tag className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                  Categories
-                  {activeTab === "categories" && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 z-[-1]"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
+                  <Building className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden xs:inline">Updates</span>
+                  <span className="xs:hidden">Upd</span> ({machineUpdates.length})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -1060,440 +1148,208 @@ const InventoryPage = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <CardTitle className="text-base md:text-xl font-bold text-gray-900">Inventory Items</CardTitle>
-                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Manage all inventory items across departments</p>
+                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Manage and track all inventory items across departments</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button 
-                          variant="outline"
-                          onClick={() => setImportDialogOpen(true)}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
-                        >
-                          <Upload className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                          <span className="hidden xs:inline">Import</span>
-                        </Button>
-                        <Button 
-                          variant="outline"
-                          onClick={refreshData}
-                          disabled={refreshing}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
-                        >
-                          <RefreshCw className={`mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                          <span className="hidden xs:inline">Refresh</span>
-                        </Button>
-                        <Button 
-                          onClick={() => {
-                            setEditItem(null);
-                            setItemDialogOpen(true);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
-                        >
-                          <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                          <span className="hidden xs:inline">Add</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {/* Filters - Stack on Mobile */}
-                    <div className="px-3 md:px-6 py-3 md:py-4 border-b border-gray-100 bg-gray-50/50">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <div className="relative">
-                          <Search className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                          <Input
-                            placeholder="Search items..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-7 md:pl-10 h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          />
-                        </div>
-                        
-                        <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                          <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <SelectValue placeholder="All Departments" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-lg">
-                            <SelectItem value="all">All Departments</SelectItem>
-                            {departments.map(dept => {
-                              const Icon = dept.icon;
-                              return (
-                                <SelectItem key={dept.value} value={dept.value} className="rounded-md">
-                                  <div className="flex items-center gap-2">
-                                    <Icon className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />
-                                    <span className="text-xs md:text-sm">{dept.label}</span>
-                                  </div>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                        
-                        <Select 
-                          value={selectedCategory} 
-                          onValueChange={setSelectedCategory}
-                          disabled={selectedDepartment === "all"}
-                        >
-                          <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <SelectValue placeholder="All Categories" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-lg">
-                            <SelectItem value="all">All Categories</SelectItem>
-                            {selectedDepartment !== "all" && 
-                              getCategoriesForDepartment(selectedDepartment).map(cat => (
-                                <SelectItem key={cat} value={cat} className="rounded-md text-xs md:text-sm">{cat}</SelectItem>
-                              ))
-                            }
-                          </SelectContent>
-                        </Select>
-                        
-                        <Select value={selectedSite} onValueChange={setSelectedSite}>
-                          <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <SelectValue placeholder="All Sites" />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-lg">
-                            <SelectItem value="all">All Sites</SelectItem>
-                            {sites.map(site => (
-                              <SelectItem key={site.id} value={site.id} className="rounded-md text-xs md:text-sm">{site.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {/* Table - Horizontal Scroll on Mobile */}
-                    {loading.items ? (
-                      <div className="flex justify-center items-center py-8 md:py-12">
-                        <div className="text-center">
-                          <Loader2 className="h-6 w-6 md:h-8 md:w-8 animate-spin mx-auto text-blue-500" />
-                          <p className="text-xs md:text-sm text-gray-500 mt-2">Loading inventory items...</p>
-                        </div>
-                      </div>
-                    ) : filteredItems.length === 0 ? (
-                      <div className="text-center py-8 md:py-12 px-4">
-                        <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
-                          <Package className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-sm md:text-lg font-semibold text-gray-900">No items found</h3>
-                        <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">
-                          Add your first item or import from CSV to get started
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader className="bg-gray-50">
-                            <TableRow className="hover:bg-gray-50">
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">SKU</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Department</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Quantity</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Value</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredItems.map((item, index) => {
-                              const DeptIcon = getDepartmentIcon(item.department);
-                              const isLowStock = item.quantity <= item.reorderLevel;
-                              
-                              return (
-                                <TableRow 
-                                  key={item.id} 
-                                  className={`hover:bg-blue-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                                >
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    <div className="flex items-center">
-                                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center mr-2 md:mr-3">
-                                        <span className="text-blue-600 font-semibold text-xs md:text-sm">{item.name.charAt(0)}</span>
-                                      </div>
-                                      <div className="min-w-0">
-                                        <div className="font-medium text-gray-900 text-xs md:text-sm truncate max-w-[80px] md:max-w-none">{item.name}</div>
-                                        <div className="text-xs text-gray-500 truncate max-w-[80px] md:max-w-none">{item.supplier}</div>
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    <div className="font-mono text-xs md:text-sm text-blue-600">{item.sku}</div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden md:table-cell">
-                                    <Badge variant="outline" className="flex items-center gap-1 w-fit border-gray-300 bg-gray-50 text-gray-700 text-xs">
-                                      <DeptIcon className="h-3 w-3" />
-                                      {departments.find(d => d.value === item.department)?.label}
-                                    </Badge>
-                                    <div className="text-xs text-gray-500 mt-1">{item.category}</div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2">
-                                      <span className={`font-medium text-xs md:text-sm ${isLowStock ? 'text-amber-600' : 'text-blue-600'}`}>
-                                        {item.quantity}
-                                      </span>
-                                      <div className="text-[10px] md:text-xs text-gray-500">
-                                        Reorder: {item.reorderLevel}
-                                      </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden sm:table-cell">
-                                    <div className="font-medium text-blue-600 text-xs md:text-sm">{formatCurrency(item.price)}</div>
-                                    <div className="text-[10px] md:text-xs text-gray-500">
-                                      Cost: {formatCurrency(item.costPrice)}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    {isLowStock ? (
-                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5">
-                                        Low
-                                      </Badge>
-                                    ) : (
-                                      <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5">
-                                        In Stock
-                                      </Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 text-right">
-                                    <div className="flex items-center justify-end gap-1 md:gap-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => openEditDialog(item)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                        title="Edit"
-                                      >
-                                        <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                      
-                                      <Dialog>
-                                        <DialogTrigger asChild>
-                                          <Button 
-                                            variant="ghost" 
-                                            size="sm"
-                                            className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                            title="View Details"
-                                          >
-                                            <Eye className="h-3 w-3 md:h-4 md:w-4" />
-                                          </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-sm md:max-w-2xl bg-white rounded-xl md:rounded-2xl">
-                                          <DialogHeader>
-                                            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Item Details</DialogTitle>
-                                          </DialogHeader>
-                                          <div className="space-y-4 md:space-y-6">
-                                            <div className="flex items-center gap-3 md:gap-4">
-                                              <div className="w-10 h-10 md:w-14 md:h-14 rounded-full bg-blue-100 flex items-center justify-center">
-                                                <span className="text-blue-600 font-bold text-sm md:text-xl">{item.name.charAt(0)}</span>
-                                              </div>
-                                              <div className="min-w-0">
-                                                <h3 className="text-base md:text-xl font-bold text-gray-900 truncate">{item.name}</h3>
-                                                <p className="text-xs md:text-sm text-gray-500">{item.sku}</p>
-                                              </div>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                                              <div className="space-y-3 md:space-y-4">
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Department</Label>
-                                                  <div className="flex items-center gap-2 text-xs md:text-sm text-gray-900">
-                                                    <DeptIcon className="h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                                                    {departments.find(d => d.value === item.department)?.label}
-                                                  </div>
-                                                </div>
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Category</Label>
-                                                  <p className="text-xs md:text-sm text-gray-900">{item.category}</p>
-                                                </div>
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Manager</Label>
-                                                  <p className="text-xs md:text-sm text-gray-900">{item.assignedManager}</p>
-                                                </div>
-                                              </div>
-                                              <div className="space-y-3 md:space-y-4">
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Quantity</Label>
-                                                  <p className="text-base md:text-lg font-bold text-blue-600">{item.quantity}</p>
-                                                </div>
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Price</Label>
-                                                  <p className="text-base md:text-lg font-bold text-green-600">{formatCurrency(item.price)}</p>
-                                                </div>
-                                                <div>
-                                                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Status</Label>
-                                                  <Badge 
-                                                    className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs ${
-                                                      isLowStock
-                                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                                        : 'bg-green-100 text-green-800 border-green-200'
-                                                    }`}
-                                                  >
-                                                    {isLowStock ? 'Low Stock' : 'In Stock'}
-                                                  </Badge>
-                                                </div>
-                                              </div>
-                                            </div>
-                                            
-                                            {item.description && (
-                                              <div>
-                                                <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Description</Label>
-                                                <div className="mt-1 md:mt-2 p-2 md:p-3 bg-gray-50 rounded-lg">
-                                                  <p className="text-xs md:text-sm text-gray-900">{item.description}</p>
-                                                </div>
-                                              </div>
-                                            )}
-                                            
-                                            <div className="flex flex-col md:flex-row items-start md:items-center justify-between text-[10px] md:text-sm text-gray-500 pt-3 md:pt-4 border-t gap-1 md:gap-0">
-                                              <span>Supplier: {item.supplier}</span>
-                                              <span>Reorder Level: {item.reorderLevel}</span>
-                                            </div>
-                                          </div>
-                                        </DialogContent>
-                                      </Dialog>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setChangeHistoryDialogOpen(item.id)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                        title="History"
-                                      >
-                                        <History className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDeleteItem(item.id)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-red-100 hover:text-red-600"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* LOW STOCK TAB */}
-          <AnimatePresence mode="wait">
-            {activeTab === "low-stock" && (
-              <motion.div
-                key="low-stock"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl overflow-hidden">
-                  <CardHeader className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-base md:text-xl font-bold text-gray-900">Low Stock Items</CardTitle>
-                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Items that need immediate reordering</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline"
-                          onClick={handleExport}
-                          disabled={stats.lowStockItems === 0}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleExport} 
+                          disabled={items.length === 0}
+                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 h-8 md:h-10"
                         >
                           <Download className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                           <span className="hidden xs:inline">Export</span>
                         </Button>
+                        
+                        {isMobileView && (
+                          <div className="flex items-center gap-1 border border-gray-200 rounded-lg">
+                            <Button
+                              variant={viewMode === 'table' ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 px-2 rounded-lg"
+                              onClick={() => setViewMode('table')}
+                            >
+                              <List className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 px-2 rounded-lg"
+                              onClick={() => setViewMode('grid')}
+                            >
+                              <Grid3x3 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-0">
-                    {stats.lowStockItems === 0 ? (
-                      <div className="text-center py-8 md:py-12 px-4">
-                        <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-green-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
-                          <AlertTriangle className="h-6 w-6 md:h-8 md:w-8 text-green-600" />
-                        </div>
-                        <h3 className="text-sm md:text-lg font-semibold text-gray-900">All items are in stock!</h3>
-                        <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">No items need reordering at this time.</p>
+                  <CardContent className="p-4 md:p-6">
+                    {/* Filters */}
+                    <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 md:h-4 md:w-4 text-gray-400" />
+                        <Input 
+                          placeholder="Search items..." 
+                          value={searchQuery} 
+                          onChange={(e) => setSearchQuery(e.target.value)} 
+                          className="pl-8 md:pl-10 h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
                       </div>
+                      
+                      <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                        <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300">
+                          <SelectValue placeholder="All Departments" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg">
+                          <SelectItem value="all">All Departments</SelectItem>
+                          {departments.map(dept => {
+                            const Icon = dept.icon;
+                            return (
+                              <SelectItem key={dept.value} value={dept.value}>
+                                <div className="flex items-center gap-2"><Icon className="h-3 w-3 md:h-4 md:w-4" /><span className="text-xs md:text-sm">{dept.label}</span></div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={selectedDepartment === "all"}>
+                        <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300">
+                          <SelectValue placeholder="All Categories" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg">
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {selectedDepartment !== "all" && getCategoriesForDepartment(selectedDepartment).map(cat => (
+                            <SelectItem key={cat} value={cat} className="text-xs md:text-sm">{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedSite} onValueChange={setSelectedSite}>
+                        <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300">
+                          <SelectValue placeholder="All Sites" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg">
+                          <SelectItem value="all">All Sites</SelectItem>
+                          {sites.map(site => (
+                            <SelectItem key={site._id} value={site.name} className="text-xs md:text-sm">{site.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedManager} onValueChange={setSelectedManager}>
+                        <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300">
+                          <SelectValue placeholder="All Managers" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg">
+                          <SelectItem value="all">All Managers</SelectItem>
+                          {uniqueManagers.map(manager => (
+                            <SelectItem key={manager} value={manager} className="text-xs md:text-sm">{manager}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Table/Grid View */}
+                    {isMobileView && viewMode === 'grid' ? (
+                      <InventoryGridView />
                     ) : (
-                      <div className="overflow-x-auto">
+                      <div className="rounded-lg border border-gray-200 overflow-x-auto">
                         <Table>
-                          <TableHeader className="bg-amber-50">
-                            <TableRow className="hover:bg-amber-50">
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Current Stock</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Reorder Level</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Deficit</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Urgency</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 hover:bg-gray-50">
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">SKU</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Item Name</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Department</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Manager</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Site</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Quantity</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Price</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {items
-                              .filter(item => item.quantity <= item.reorderLevel)
-                              .map((item, index) => {
-                                const deficit = item.reorderLevel - item.quantity;
-                                const urgency = deficit >= 10 ? 'High' : deficit >= 5 ? 'Medium' : 'Low';
+                            {filteredItems.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={9} className="text-center py-8 md:py-12">
+                                  <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
+                                    <Package className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
+                                  </div>
+                                  <p className="text-sm md:text-lg font-semibold text-gray-900">No items found</p>
+                                  <p className="text-xs md:text-sm text-gray-500 mt-1">Try adjusting your search or filters</p>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              filteredItems.map((item, index) => {
+                                const DeptIcon = getDepartmentIcon(item.department);
+                                const isLowStock = item.quantity <= item.reorderLevel;
                                 
                                 return (
                                   <TableRow 
                                     key={item.id} 
-                                    className={`hover:bg-amber-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-amber-50/30'}`}
+                                    className={`hover:bg-blue-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                                   >
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                      <div className="flex items-center">
-                                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-amber-100 flex items-center justify-center mr-2 md:mr-3">
-                                          <span className="text-amber-600 font-semibold text-xs md:text-sm">{item.name.charAt(0)}</span>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <span className="font-mono font-medium text-xs md:text-sm text-gray-900">{item.sku}</span>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                                          <Package className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
                                         </div>
-                                        <div className="min-w-0">
-                                          <div className="font-medium text-gray-900 text-xs md:text-sm truncate max-w-[80px] md:max-w-none">{item.name}</div>
-                                          <div className="text-xs text-gray-500 truncate max-w-[80px] md:max-w-none">{item.sku}</div>
+                                        <div>
+                                          <span className="font-medium text-xs md:text-sm text-gray-900">{item.name}</span>
+                                          {item.description && <p className="text-[10px] md:text-xs text-gray-500 truncate max-w-[150px]">{item.description}</p>}
                                         </div>
                                       </div>
                                     </TableCell>
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                      <div className="text-base md:text-lg font-bold text-amber-600">{item.quantity}</div>
-                                    </TableCell>
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden md:table-cell">
-                                      <div className="text-xs md:text-sm text-gray-700">{item.reorderLevel}</div>
-                                    </TableCell>
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden sm:table-cell">
-                                      <div className="font-bold text-red-600 text-xs md:text-sm">-{deficit}</div>
-                                    </TableCell>
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                      <Badge 
-                                        className={`text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 ${
-                                          urgency === 'High' 
-                                            ? 'bg-red-100 text-red-800 border-red-200'
-                                            : urgency === 'Medium'
-                                            ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                            : 'bg-blue-100 text-blue-800 border-blue-200'
-                                        } border-0`}
-                                      >
-                                        {urgency}
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden sm:table-cell">
+                                      <Badge variant="outline" className="flex items-center gap-1 w-fit border-gray-200 bg-gray-50 text-xs">
+                                        <DeptIcon className="h-3 w-3" />
+                                        {departments.find(d => d.value === item.department)?.label}
                                       </Badge>
+                                      <div className="text-[10px] md:text-xs text-gray-500 mt-1">{item.category}</div>
                                     </TableCell>
-                                    <TableCell className="py-2 md:py-4 px-3 md:px-6 text-right">
-                                      <div className="flex items-center justify-end gap-1 md:gap-2">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => openEditDialog(item)}
-                                          className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                          title="Edit"
-                                        >
-                                          <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden md:table-cell">
+                                      <div className="flex items-center gap-1 text-xs text-gray-700">
+                                        <UserCheck className="h-3 w-3 text-gray-400" />
+                                        {item.assignedManager}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden lg:table-cell">
+                                      <div className="flex items-center gap-1 text-xs text-gray-700">
+                                        <Building className="h-3 w-3 text-gray-400" />
+                                        {item.site}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`font-medium text-xs md:text-sm ${isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>{item.quantity}</span>
+                                        {isLowStock && <Badge variant="outline" className="text-[8px] md:text-xs border-amber-200 bg-amber-50 text-amber-700"><AlertTriangle className="h-2 w-2 md:h-3 md:w-3 mr-1" />Low</Badge>}
+                                      </div>
+                                      <div className="text-[10px] md:text-xs text-gray-500">Reorder: {item.reorderLevel}</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <div className="font-medium text-xs md:text-sm text-green-600">{formatCurrency(item.price)}</div>
+                                      <div className="text-[10px] md:text-xs text-gray-500">Cost: {formatCurrency(item.costPrice)}</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      {isLowStock ? 
+                                        <Badge variant="destructive" className="text-[8px] md:text-xs px-1.5 md:px-2 py-0.5 rounded-full">Low Stock</Badge> : 
+                                        <Badge variant="outline" className="text-[8px] md:text-xs bg-green-50 text-green-700 border-green-200 px-1.5 md:px-2 py-0.5 rounded-full">In Stock</Badge>
+                                      }
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
                                           onClick={() => setChangeHistoryDialogOpen(item.id)}
-                                          className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                          title="History"
+                                          className="w-6 h-6 md:w-8 md:h-8 rounded-full hover:bg-blue-100 hover:text-blue-600"
+                                          title="View History"
                                         >
                                           <History className="h-3 w-3 md:h-4 md:w-4" />
                                         </Button>
@@ -1501,7 +1357,8 @@ const InventoryPage = () => {
                                     </TableCell>
                                   </TableRow>
                                 );
-                              })}
+                              })
+                            )}
                           </TableBody>
                         </Table>
                       </div>
@@ -1526,191 +1383,153 @@ const InventoryPage = () => {
                   <CardHeader className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <CardTitle className="text-base md:text-xl font-bold text-gray-900">Machinery & Equipment</CardTitle>
-                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Manage all machinery and equipment across sites</p>
-                        {usingLocalMachineStats && (
-                          <div className="mt-1 md:mt-2">
-                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-[10px] md:text-xs">
-                              <Database className="h-2 w-2 md:h-3 md:w-3 mr-0.5 md:mr-1" />
-                              Using locally calculated statistics
-                            </Badge>
-                          </div>
-                        )}
+                        <CardTitle className="text-base md:text-xl font-bold text-gray-900">Machine Management</CardTitle>
+                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Track and monitor all machinery equipment across sites</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button 
-                          variant="outline"
-                          onClick={handleExportMachines}
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleExportMachines} 
                           disabled={machines.length === 0}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
+                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 h-8 md:h-10"
                         >
                           <Download className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                           <span className="hidden xs:inline">Export</span>
                         </Button>
-                        <Button 
-                          variant="outline"
-                          onClick={() => setMaintenanceDialogOpen(true)}
-                          disabled={machines.length === 0}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
-                        >
-                          <Wrench className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                          <span className="hidden xs:inline">Maintenance</span>
-                        </Button>
-                        <Button 
-                          onClick={() => {
-                            setEditMachine(null);
-                            resetNewMachineForm();
-                            setMachineDialogOpen(true);
-                          }}
-                          className="bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm px-2 md:px-4 py-1 md:py-2 h-8 md:h-10"
-                        >
-                          <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                          <span className="hidden xs:inline">Add</span>
-                        </Button>
+                        
+                        {isMobileView && (
+                          <div className="flex items-center gap-1 border border-gray-200 rounded-lg">
+                            <Button
+                              variant={viewMode === 'table' ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 px-2 rounded-lg"
+                              onClick={() => setViewMode('table')}
+                            >
+                              <List className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 px-2 rounded-lg"
+                              onClick={() => setViewMode('grid')}
+                            >
+                              <Grid3x3 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-0">
-                    {/* Machine Search */}
-                    <div className="px-3 md:px-6 py-3 md:py-4 border-b border-gray-100 bg-gray-50/50">
+                  <CardContent className="p-4 md:p-6">
+                    {/* Search */}
+                    <div className="mb-6">
                       <div className="relative">
-                        <Search className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                        <Input
-                          placeholder="Search machines..."
-                          value={machineSearchQuery}
-                          onChange={(e) => setMachineSearchQuery(e.target.value)}
-                          className="pl-7 md:pl-10 h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 md:h-4 md:w-4 text-gray-400" />
+                        <Input 
+                          placeholder="Search machines by name, model, location..." 
+                          value={machineSearchQuery} 
+                          onChange={(e) => setMachineSearchQuery(e.target.value)} 
+                          className="pl-8 md:pl-10 h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
 
-                    {/* Machines Table */}
-                    {loading.machines ? (
-                      <div className="flex justify-center items-center py-8 md:py-12">
-                        <div className="text-center">
-                          <Loader2 className="h-6 w-6 md:h-8 md:w-8 animate-spin mx-auto text-blue-500" />
-                          <p className="text-xs md:text-sm text-gray-500 mt-2">Loading machines...</p>
-                        </div>
-                      </div>
-                    ) : filteredMachines.length === 0 ? (
-                      <div className="text-center py-8 md:py-12 px-4">
-                        <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
-                          <Cpu className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
-                        </div>
-                        <h3 className="text-sm md:text-lg font-semibold text-gray-900">No machines found</h3>
-                        <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">
-                          {machines.length === 0 
-                            ? "No machines in database. Add your first machine!" 
-                            : "Try adjusting your search"}
-                        </p>
-                      </div>
+                    {/* Table/Grid View */}
+                    {isMobileView && viewMode === 'grid' ? (
+                      <MachinesGridView />
                     ) : (
-                      <div className="overflow-x-auto">
+                      <div className="rounded-lg border border-gray-200 overflow-x-auto">
                         <Table>
-                          <TableHeader className="bg-gray-50">
-                            <TableRow className="hover:bg-gray-50">
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Machine</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Model & Serial</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Cost</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Purchase Date</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</TableHead>
-                              <TableHead className="py-2 md:py-3 px-3 md:px-6 text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 hover:bg-gray-50">
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Machine Name</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Model</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Qty</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Cost</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Purchase Date</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell">Location</TableHead>
+                              <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filteredMachines.map((machine, index) => {
-                              const statusOption = machineStatusOptions.find(s => s.value === machine.status);
-                              const StatusIcon = statusOption?.icon || CheckCircle;
-                              
-                              return (
-                                <TableRow 
-                                  key={machine.id} 
-                                  className={`hover:bg-blue-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                                >
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    <div className="flex items-center">
-                                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center mr-2 md:mr-3">
-                                        <span className="text-blue-600 font-semibold text-xs md:text-sm">{machine.name.charAt(0)}</span>
+                            {filteredMachines.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={8} className="text-center py-8 md:py-12">
+                                  <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
+                                    <Cpu className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
+                                  </div>
+                                  <p className="text-sm md:text-lg font-semibold text-gray-900">No machines found</p>
+                                  <p className="text-xs md:text-sm text-gray-500 mt-1">Add your first machine to get started</p>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              filteredMachines.map((machine, index) => {
+                                const statusOption = machineStatusOptions.find(s => s.value === machine.status);
+                                const StatusIcon = statusOption?.icon || CheckCircle;
+                                const machineAge = calculateMachineAge(machine.purchaseDate);
+                                
+                                return (
+                                  <TableRow 
+                                    key={machine.id} 
+                                    className={`hover:bg-purple-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                                  >
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                                          <Cpu className="h-3 w-3 md:h-4 md:w-4 text-purple-600" />
+                                        </div>
+                                        <span className="font-medium text-xs md:text-sm text-gray-900">{machine.name}</span>
                                       </div>
-                                      <div className="min-w-0">
-                                        <div className="font-medium text-gray-900 text-xs md:text-sm truncate max-w-[100px] md:max-w-none">{machine.name}</div>
-                                        <div className="text-[10px] md:text-xs text-gray-500 truncate max-w-[100px] md:max-w-none">{machine.manufacturer}</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden sm:table-cell">
+                                      <span className="text-xs text-gray-700">{machine.model || 'N/A'}</span>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <span className="font-medium text-xs md:text-sm text-gray-900">{machine.quantity}</span>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden md:table-cell">
+                                      <div className="font-medium text-xs md:text-sm text-green-600">{formatCurrency(machine.cost)}</div>
+                                      <div className="text-[10px] md:text-xs text-gray-500">Total: {formatCurrency(machine.cost * machine.quantity)}</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden lg:table-cell">
+                                      <div className="flex items-center gap-1 text-xs text-gray-700">
+                                        <Calendar className="h-3 w-3 text-gray-400" />
+                                        {formatDate(machine.purchaseDate)}
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden md:table-cell">
-                                    <div className="text-xs md:text-sm text-gray-700">{machine.model || 'N/A'}</div>
-                                    {machine.serialNumber && (
-                                      <div className="text-[10px] md:text-xs text-gray-500">SN: {machine.serialNumber}</div>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden sm:table-cell">
-                                    <div className="font-medium text-blue-600 text-xs md:text-sm">{formatCurrency(machine.cost)}</div>
-                                    <div className="text-[10px] md:text-xs text-gray-500">
-                                      Total: {formatCurrency(machine.cost * machine.quantity)}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 hidden lg:table-cell">
-                                    <div className="flex items-center gap-1">
-                                      <Calendar className="h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                                      <span className="text-xs md:text-sm text-gray-700">{formatDate(machine.purchaseDate)}</span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6">
-                                    <Badge className={`${statusOption?.color} border-0 flex items-center gap-1 text-[10px] md:text-xs px-1.5 md:px-2 py-0.5`}>
-                                      <StatusIcon className="h-2 w-2 md:h-3 md:w-3" />
-                                      <span className="hidden xs:inline">{statusOption?.label}</span>
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="py-2 md:py-4 px-3 md:px-6 text-right">
-                                    <div className="flex items-center justify-end gap-1 md:gap-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleViewMachine(machine.id)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                        title="View Details"
-                                      >
-                                        <Eye className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleEditMachine(machine)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                        title="Edit"
-                                      >
-                                        <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          setSelectedMachineForMaintenance(machine.id);
-                                          setMaintenanceDialogOpen(true);
-                                        }}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-blue-100 hover:text-blue-600"
-                                        title="Maintenance"
-                                      >
-                                        <Wrench className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDeleteMachine(machine.id)}
-                                        className="w-6 h-6 md:w-8 md:h-8 p-0 rounded-full hover:bg-red-100 hover:text-red-600"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
+                                      <div className="text-[10px] md:text-xs text-gray-500">Age: {machineAge} year{machineAge !== 1 ? 's' : ''}</div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                      <Badge className={`${statusOption?.color} border-0 flex items-center gap-1 w-fit text-[8px] md:text-xs px-1.5 md:px-2 py-0.5 rounded-full`}>
+                                        <StatusIcon className="h-2 w-2 md:h-3 md:w-3" />
+                                        {statusOption?.label}
+                                      </Badge>
+                                      {machine.nextMaintenanceDate && <div className="text-[10px] md:text-xs text-gray-500 mt-1">Next: {formatDate(machine.nextMaintenanceDate)}</div>}
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden xl:table-cell">
+                                      <div className="flex items-center gap-1 text-xs text-gray-700">
+                                        <MapPin className="h-3 w-3 text-gray-400" />
+                                        {machine.location || 'Not assigned'}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-2 md:py-3 px-2 md:px-4 text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          onClick={() => handleViewMachine(machine.id)}
+                                          className="w-6 h-6 md:w-8 md:h-8 rounded-full hover:bg-purple-100 hover:text-purple-600"
+                                          title="View Details"
+                                        >
+                                          <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            )}
                           </TableBody>
                         </Table>
                       </div>
@@ -1721,11 +1540,11 @@ const InventoryPage = () => {
             )}
           </AnimatePresence>
 
-          {/* CATEGORIES TAB */}
+          {/* UPDATES TAB */}
           <AnimatePresence mode="wait">
-            {activeTab === "categories" && (
+            {activeTab === "updates" && (
               <motion.div
-                key="categories"
+                key="updates"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -1733,64 +1552,127 @@ const InventoryPage = () => {
               >
                 <Card className="border-0 shadow-lg rounded-xl md:rounded-2xl overflow-hidden">
                   <CardHeader className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base md:text-xl font-bold text-gray-900">Categories & Departments</CardTitle>
-                        <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Browse inventory by categories and departments</p>
-                      </div>
+                    <div>
+                      <CardTitle className="text-base md:text-xl font-bold text-gray-900">Site Updates</CardTitle>
+                      <p className="text-xs md:text-sm text-gray-500 mt-0.5 md:mt-1">Track all machine assignments and status updates across all sites</p>
                     </div>
                   </CardHeader>
                   <CardContent className="p-4 md:p-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                      {departments.map(dept => {
-                        const Icon = dept.icon;
-                        const deptItems = items.filter(item => item.department === dept.value);
-                        const deptCategories = [...new Set(deptItems.map(item => item.category))];
-                        const deptValue = deptItems.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
-                        
-                        return (
-                          <Card key={dept.value} className="border-0 shadow-sm hover:shadow-md transition-shadow duration-300">
-                            <CardHeader className="pb-2 md:pb-3">
-                              <div className="flex items-center gap-2 md:gap-3">
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                                  <Icon className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
+                    <div className="rounded-lg border border-gray-200 overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 hover:bg-gray-50">
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Machine Name</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">Model</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Site</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Description</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Photos</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell">Updated By</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</TableHead>
+                            <TableHead className="py-2 md:py-3 px-2 md:px-4 text-[10px] md:text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {machineUpdates.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-center py-8 md:py-12">
+                                <div className="mx-auto w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 md:mb-4">
+                                  <Building className="h-6 w-6 md:h-8 md:w-8 text-gray-400" />
                                 </div>
-                                <div className="min-w-0">
-                                  <CardTitle className="text-sm md:text-lg text-gray-900 truncate">{dept.label}</CardTitle>
-                                  <CardDescription className="text-[10px] md:text-xs truncate">
-                                    {deptItems.length} items • {deptCategories.length} categories
-                                  </CardDescription>
-                                </div>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="p-3 md:p-4 pt-0">
-                              <div className="space-y-2 md:space-y-3">
-                                <div className="flex justify-between items-center text-[10px] md:text-xs">
-                                  <span className="text-gray-600">Total Value:</span>
-                                  <span className="font-semibold text-blue-600 text-xs md:text-sm">{formatCurrency(deptValue)}</span>
-                                </div>
-                                <div className="space-y-1 md:space-y-2">
-                                  <div className="text-[10px] md:text-xs font-medium text-gray-700">Categories:</div>
-                                  {deptCategories.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1 md:gap-2">
-                                      {deptCategories.map(category => {
-                                        const categoryItems = deptItems.filter(item => item.category === category);
-                                        return (
-                                          <Badge key={category} variant="outline" className="bg-gray-50 text-gray-700 text-[8px] md:text-xs px-1.5 md:px-2 py-0.5">
-                                            {category} ({categoryItems.length})
-                                          </Badge>
-                                        );
-                                      })}
+                                <p className="text-sm md:text-lg font-semibold text-gray-900">No updates found</p>
+                                <p className="text-xs md:text-sm text-gray-500 mt-1">Updates will appear here when supervisors record site updates.</p>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            machineUpdates.map((update, index) => {
+                              const statusOption = machineStatusOptions.find(s => s.value === update.status);
+                              const StatusIcon = statusOption?.icon || CheckCircle;
+                              
+                              return (
+                                <TableRow 
+                                  key={update.id} 
+                                  className={`hover:bg-blue-50/50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                                >
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                                        <Cpu className="h-3 w-3 md:h-4 md:w-4 text-blue-600" />
+                                      </div>
+                                      <span className="font-medium text-xs md:text-sm text-gray-900">{update.machineName}</span>
                                     </div>
-                                  ) : (
-                                    <p className="text-[10px] md:text-xs text-gray-500">No items in this department</p>
-                                  )}
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden sm:table-cell">
+                                    <span className="text-xs text-gray-700">{update.modelNumber || 'N/A'}</span>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden md:table-cell">
+                                    <div className="flex items-center gap-1 text-xs text-gray-700">
+                                      <MapPin className="h-3 w-3 text-gray-400" />
+                                      {update.site}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                    <Badge className={`${statusOption?.color} border-0 flex items-center gap-1 w-fit text-[8px] md:text-xs px-1.5 md:px-2 py-0.5 rounded-full`}>
+                                      <StatusIcon className="h-2 w-2 md:h-3 md:w-3" />
+                                      {statusOption?.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden lg:table-cell">
+                                    <span className="text-xs text-gray-600 truncate block max-w-[200px]" title={update.description}>
+                                      {update.description || '-'}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                    <div className="flex -space-x-2">
+                                      {update.photoUrls && update.photoUrls.slice(0, 3).map((url, idx) => (
+                                        <img 
+                                          key={idx}
+                                          src={url} 
+                                          alt={`Photo ${idx + 1}`} 
+                                          className="h-6 w-6 md:h-8 md:w-8 rounded-full object-cover border-2 border-white cursor-pointer hover:scale-110 transition-transform"
+                                          onClick={() => window.open(url, '_blank')}
+                                        />
+                                      ))}
+                                      {update.photoUrls && update.photoUrls.length > 3 && (
+                                        <div className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-gray-200 flex items-center justify-center text-[8px] md:text-xs font-medium border-2 border-white">
+                                          +{update.photoUrls.length - 3}
+                                        </div>
+                                      )}
+                                      {(!update.photoUrls || update.photoUrls.length === 0) && (
+                                        <div className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                          <ImageIcon className="h-3 w-3 md:h-4 md:w-4 text-gray-400" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4 hidden xl:table-cell">
+                                    <div className="flex items-center gap-1 text-xs text-gray-700">
+                                      <UserCheck className="h-3 w-3 text-gray-400" />
+                                      {update.updatedBy}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4">
+                                    <span className="text-xs text-gray-700">{formatDate(update.updatedAt)}</span>
+                                  </TableCell>
+                                  <TableCell className="py-2 md:py-3 px-2 md:px-4 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => handleViewUpdate(update)}
+                                        className="w-6 h-6 md:w-8 md:h-8 rounded-full hover:bg-blue-100 hover:text-blue-600"
+                                        title="View Details"
+                                      >
+                                        <Eye className="h-3 w-3 md:h-4 md:w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
                   </CardContent>
                 </Card>
@@ -1798,795 +1680,55 @@ const InventoryPage = () => {
             )}
           </AnimatePresence>
         </div>
-      </div>
 
-      {/* ADD/EDIT ITEM DIALOG */}
-      <Dialog open={itemDialogOpen} onOpenChange={(open) => {
-        setItemDialogOpen(open);
-        if (!open) {
-          setEditItem(null);
-          resetNewItemForm();
-        }
-      }}>
-        <DialogContent className="max-w-sm md:max-w-2xl bg-white rounded-xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">
-              {editItem ? 'Edit Item' : 'Add New Item'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            editItem ? handleEditItem() : handleAddItem();
-          }} className="space-y-4 md:space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="name" className="text-xs md:text-sm font-medium text-gray-700">Item Name *</Label>
-                <Input
-                  id="name"
-                  value={editItem ? editItem.name : newItem.name}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, name: e.target.value})
-                      : setNewItem({...newItem, name: e.target.value})
-                  }
-                  placeholder="Enter item name"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="sku" className="text-xs md:text-sm font-medium text-gray-700">SKU *</Label>
-                <Input
-                  id="sku"
-                  value={editItem ? editItem.sku : newItem.sku}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, sku: e.target.value.toUpperCase()})
-                      : setNewItem({...newItem, sku: e.target.value.toUpperCase()})
-                  }
-                  placeholder="Enter SKU (e.g., INV-001)"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="department" className="text-xs md:text-sm font-medium text-gray-700">Department *</Label>
-                <Select
-                  value={editItem ? editItem.department : newItem.department}
-                  onValueChange={(value) => 
-                    editItem 
-                      ? setEditItem({...editItem, department: value, category: ''})
-                      : setNewItem({...newItem, department: value, category: ''})
-                  }
-                >
-                  <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {departments.map(dept => {
-                      const Icon = dept.icon;
-                      return (
-                        <SelectItem key={dept.value} value={dept.value} className="rounded-md">
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />
-                            <span className="text-xs md:text-sm">{dept.label}</span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="category" className="text-xs md:text-sm font-medium text-gray-700">Category *</Label>
-                <Select
-                  value={editItem ? editItem.category : newItem.category}
-                  onValueChange={(value) => 
-                    editItem 
-                      ? setEditItem({...editItem, category: value})
-                      : setNewItem({...newItem, category: value})
-                  }
-                  disabled={!editItem?.department && !newItem.department}
-                >
-                  <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {(editItem ? getCategoriesForDepartment(editItem.department) : 
-                      getCategoriesForDepartment(newItem.department || '')).map(cat => (
-                      <SelectItem key={cat} value={cat} className="rounded-md text-xs md:text-sm">{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="quantity" className="text-xs md:text-sm font-medium text-gray-700">Quantity *</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="0"
-                  value={editItem ? editItem.quantity : newItem.quantity}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, quantity: parseInt(e.target.value) || 0})
-                      : setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})
-                  }
-                  placeholder="Enter quantity"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="reorderLevel" className="text-xs md:text-sm font-medium text-gray-700">Reorder Level *</Label>
-                <Input
-                  id="reorderLevel"
-                  type="number"
-                  min="0"
-                  value={editItem ? editItem.reorderLevel : newItem.reorderLevel}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, reorderLevel: parseInt(e.target.value) || 0})
-                      : setNewItem({...newItem, reorderLevel: parseInt(e.target.value) || 0})
-                  }
-                  placeholder="Enter reorder level"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="price" className="text-xs md:text-sm font-medium text-gray-700">Price *</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editItem ? editItem.price : newItem.price}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, price: parseFloat(e.target.value) || 0})
-                      : setNewItem({...newItem, price: parseFloat(e.target.value) || 0})
-                  }
-                  placeholder="Enter price"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="costPrice" className="text-xs md:text-sm font-medium text-gray-700">Cost Price *</Label>
-                <Input
-                  id="costPrice"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editItem ? editItem.costPrice : newItem.costPrice}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, costPrice: parseFloat(e.target.value) || 0})
-                      : setNewItem({...newItem, costPrice: parseFloat(e.target.value) || 0})
-                  }
-                  placeholder="Enter cost price"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="assignedManager" className="text-xs md:text-sm font-medium text-gray-700">Assigned Manager</Label>
-                <Select
-                  value={editItem ? editItem.assignedManager : newItem.assignedManager}
-                  onValueChange={(value) => 
-                    editItem 
-                      ? setEditItem({...editItem, assignedManager: value})
-                      : setNewItem({...newItem, assignedManager: value})
-                  }
-                >
-                  <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                    <SelectValue placeholder="Select manager" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {managers.map(manager => (
-                      <SelectItem key={manager} value={manager} className="rounded-md text-xs md:text-sm">{manager}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="supplier" className="text-xs md:text-sm font-medium text-gray-700">Supplier *</Label>
-                <Input
-                  id="supplier"
-                  value={editItem ? editItem.supplier : newItem.supplier}
-                  onChange={(e) => 
-                    editItem 
-                      ? setEditItem({...editItem, supplier: e.target.value})
-                      : setNewItem({...newItem, supplier: e.target.value})
-                  }
-                  placeholder="Enter supplier name"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-1 md:space-y-2">
-              <Label htmlFor="description" className="text-xs md:text-sm font-medium text-gray-700">Description</Label>
-              <Textarea
-                id="description"
-                value={editItem ? editItem.description : newItem.description}
-                onChange={(e) => 
-                  editItem 
-                    ? setEditItem({...editItem, description: e.target.value})
-                    : setNewItem({...newItem, description: e.target.value})
-                }
-                placeholder="Enter item description"
-                rows={2}
-                className="text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            
-            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button 
-                type="button"
-                variant="outline" 
-                onClick={() => {
-                  setItemDialogOpen(false);
-                  setEditItem(null);
-                  resetNewItemForm();
-                }}
-                className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit"
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                {editItem ? 'Update Item' : 'Add Item'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {/* Machine View Dialog */}
+        <MachineViewDialog 
+          machine={viewMachine} 
+          open={viewMachineDialogOpen} 
+          onClose={() => setViewMachineDialogOpen(false)} 
+        />
 
-      {/* ADD/EDIT MACHINE DIALOG */}
-      <Dialog open={machineDialogOpen} onOpenChange={(open) => {
-        setMachineDialogOpen(open);
-        if (!open) {
-          setEditMachine(null);
-          resetNewMachineForm();
-        }
-      }}>
-        <DialogContent className="max-w-sm md:max-w-2xl bg-white rounded-xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">
-              {editMachine ? 'Edit Machine' : 'Add New Machine'}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleAddMachine();
-          }} className="space-y-4 md:space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="machineName" className="text-xs md:text-sm font-medium text-gray-700">Machine Name *</Label>
-                <Input
-                  id="machineName"
-                  value={newMachine.name}
-                  onChange={(e) => setNewMachine({...newMachine, name: e.target.value})}
-                  placeholder="Enter machine name"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="machineCost" className="text-xs md:text-sm font-medium text-gray-700">Cost/Price *</Label>
-                <Input
-                  id="machineCost"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newMachine.cost}
-                  onChange={(e) => setNewMachine({...newMachine, cost: parseFloat(e.target.value) || 0})}
-                  placeholder="Enter cost"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="purchaseDate" className="text-xs md:text-sm font-medium text-gray-700">Purchase Date *</Label>
-                <Input
-                  id="purchaseDate"
-                  type="date"
-                  value={newMachine.purchaseDate}
-                  onChange={(e) => setNewMachine({...newMachine, purchaseDate: e.target.value})}
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="machineQuantity" className="text-xs md:text-sm font-medium text-gray-700">Quantity *</Label>
-                <Input
-                  id="machineQuantity"
-                  type="number"
-                  min="1"
-                  value={newMachine.quantity}
-                  onChange={(e) => setNewMachine({...newMachine, quantity: parseInt(e.target.value) || 1})}
-                  placeholder="Enter quantity"
-                  required
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="machineStatus" className="text-xs md:text-sm font-medium text-gray-700">Status *</Label>
-                <Select
-                  value={newMachine.status}
-                  onValueChange={(value: 'operational' | 'maintenance' | 'out-of-service') => 
-                    setNewMachine({...newMachine, status: value})
-                  }
-                >
-                  <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {machineStatusOptions.map(status => (
-                      <SelectItem key={status.value} value={status.value} className="rounded-md text-xs md:text-sm">
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="machineLocation" className="text-xs md:text-sm font-medium text-gray-700">Location</Label>
-                <Input
-                  id="machineLocation"
-                  value={newMachine.location}
-                  onChange={(e) => setNewMachine({...newMachine, location: e.target.value})}
-                  placeholder="Enter location"
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="manufacturer" className="text-xs md:text-sm font-medium text-gray-700">Manufacturer</Label>
-                <Input
-                  id="manufacturer"
-                  value={newMachine.manufacturer}
-                  onChange={(e) => setNewMachine({...newMachine, manufacturer: e.target.value})}
-                  placeholder="Enter manufacturer"
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="model" className="text-xs md:text-sm font-medium text-gray-700">Model</Label>
-                <Input
-                  id="model"
-                  value={newMachine.model} 
-                  onChange={(e) => setNewMachine({...newMachine, model: e.target.value})} 
-                  placeholder="Enter model"
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="serialNumber" className="text-xs md:text-sm font-medium text-gray-700">Serial Number</Label>
-                <Input
-                  id="serialNumber"
-                  value={newMachine.serialNumber}
-                  onChange={(e) => setNewMachine({...newMachine, serialNumber: e.target.value})}
-                  placeholder="Enter serial number"
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div className="space-y-1 md:space-y-2">
-                <Label htmlFor="department" className="text-xs md:text-sm font-medium text-gray-700">Department</Label>
-                <Input
-                  id="department"
-                  value={newMachine.department}
-                  onChange={(e) => setNewMachine({...newMachine, department: e.target.value})}
-                  placeholder="Enter department"
-                  className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-1 md:space-y-2">
-              <Label htmlFor="machineDescription" className="text-xs md:text-sm font-medium text-gray-700">Description</Label>
-              <Textarea
-                id="machineDescription"
-                value={newMachine.description}
-                onChange={(e) => setNewMachine({...newMachine, description: e.target.value})}
-                placeholder="Enter machine description"
-                rows={2}
-                className="text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            
-            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button 
-                type="button"
-                variant="outline" 
-                onClick={() => {
-                  setMachineDialogOpen(false);
-                  setEditMachine(null);
-                  resetNewMachineForm();
-                }}
-                className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit"
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                {editMachine ? 'Update Machine' : 'Add Machine'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {/* Update View Dialog */}
+        <UpdateViewDialog 
+          update={viewUpdate} 
+          open={viewUpdateDialogOpen} 
+          onClose={() => setViewUpdateDialogOpen(false)} 
+        />
 
-      {/* VIEW MACHINE DETAILS DIALOG */}
-      <Dialog open={!!viewMachine} onOpenChange={() => setViewMachine(null)}>
-        <DialogContent className="max-w-sm md:max-w-2xl bg-white rounded-xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Machine Details</DialogTitle>
-          </DialogHeader>
-          {viewMachine && (
-            <div className="space-y-4 md:space-y-6">
-              <div className="flex items-center gap-3 md:gap-4">
-                <div className="w-10 h-10 md:w-14 md:h-14 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-blue-600 font-bold text-sm md:text-xl">{viewMachine.name.charAt(0)}</span>
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-base md:text-xl font-bold text-gray-900 truncate">{viewMachine.name}</h3>
-                  <p className="text-xs md:text-sm text-gray-500 truncate">{viewMachine.manufacturer} • {viewMachine.model}</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div className="space-y-3 md:space-y-4">
-                  <div>
-                    <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Cost</Label>
-                    <p className="text-base md:text-lg font-bold text-blue-600">{formatCurrency(viewMachine.cost)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Total Value</Label>
-                    <p className="text-base md:text-lg font-bold text-green-600">{formatCurrency(viewMachine.cost * viewMachine.quantity)}</p>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Quantity</Label>
-                    <p className="text-xs md:text-sm text-gray-900">{viewMachine.quantity}</p>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Purchase Date</Label>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                      <span className="text-xs md:text-sm text-gray-900">{formatDate(viewMachine.purchaseDate)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3 md:space-y-4">
-                  <div>
-                    <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Status</Label>
-                    <Badge className={`${machineStatusOptions.find(s => s.value === viewMachine.status)?.color} border-0 text-[10px] md:text-xs`}>
-                      {machineStatusOptions.find(s => s.value === viewMachine.status)?.label}
-                    </Badge>
-                  </div>
-                  {viewMachine.location && (
-                    <div>
-                      <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Location</Label>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3 md:h-4 md:w-4 text-gray-400" />
-                        <span className="text-xs md:text-sm text-gray-900">{viewMachine.location}</span>
-                      </div>
-                    </div>
-                  )}
-                  {viewMachine.department && (
-                    <div>
-                      <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Department</Label>
-                      <p className="text-xs md:text-sm text-gray-900">{viewMachine.department}</p>
-                    </div>
-                  )}
-                  {viewMachine.assignedTo && (
-                    <div>
-                      <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Assigned To</Label>
-                      <p className="text-xs md:text-sm text-gray-900">{viewMachine.assignedTo}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {viewMachine.description && (
-                <div>
-                  <Label className="text-[10px] md:text-xs text-gray-500 uppercase font-medium">Description</Label>
-                  <div className="mt-1 md:mt-2 p-2 md:p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs md:text-sm text-gray-900">{viewMachine.description}</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Maintenance History */}
-              {viewMachine.maintenanceHistory && viewMachine.maintenanceHistory.length > 0 && (
-                <div>
-                  <h4 className="text-xs md:text-sm font-semibold mb-2 text-gray-900">Maintenance History</h4>
-                  <div className="space-y-1 md:space-y-2 max-h-32 md:max-h-40 overflow-y-auto">
-                    {viewMachine.maintenanceHistory.map((record, index) => (
-                      <div key={index} className="flex flex-col p-2 md:p-3 bg-gray-50 rounded-lg border border-gray-100 text-[10px] md:text-xs">
-                        <div className="flex justify-between">
-                          <span className="font-medium text-blue-700">{record.type}</span>
-                          <span className="text-blue-600">{formatDate(record.date)}</span>
-                        </div>
-                        <div className="text-gray-600 mt-0.5 md:mt-1">{record.description}</div>
-                        <div className="flex justify-between text-[8px] md:text-xs mt-1 md:mt-2">
-                          <span className="text-gray-500">Performed by: {record.performedBy}</span>
-                          <span className="text-blue-600">Cost: {formatCurrency(record.cost)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ADD MAINTENANCE RECORD DIALOG */}
-      <Dialog open={maintenanceDialogOpen} onOpenChange={(open) => {
-        setMaintenanceDialogOpen(open);
-        if (!open) {
-          setSelectedMachineForMaintenance(null);
-          setMaintenanceRecord({
-            type: "Routine",
-            description: "",
-            cost: 0,
-            performedBy: "",
-          });
-        }
-      }}>
-        <DialogContent className="max-w-sm md:max-w-md bg-white rounded-xl md:rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Add Maintenance Record</DialogTitle>
-          </DialogHeader>
-          
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleAddMaintenance();
-          }} className="space-y-3 md:space-y-4">
-            <div className="space-y-1 md:space-y-2">
-              <Label htmlFor="maintenanceMachine" className="text-xs md:text-sm font-medium text-gray-700">Select Machine</Label>
-              <Select
-                value={selectedMachineForMaintenance || ""}
-                onValueChange={setSelectedMachineForMaintenance}
-              >
-                <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                  <SelectValue placeholder="Select machine" />
-                </SelectTrigger>
-                <SelectContent className="rounded-lg">
-                  {machines.map(machine => (
-                    <SelectItem key={machine.id} value={machine.id} className="rounded-md text-xs md:text-sm">
-                      {machine.name} {machine.model ? `(${machine.model})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {selectedMachineForMaintenance && (
-              <>
-                <div className="space-y-1 md:space-y-2">
-                  <Label htmlFor="maintenanceType" className="text-xs md:text-sm font-medium text-gray-700">Maintenance Type *</Label>
-                  <Select
-                    value={maintenanceRecord.type}
-                    onValueChange={(value) => setMaintenanceRecord({...maintenanceRecord, type: value})}
-                  >
-                    <SelectTrigger className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg">
-                      {maintenanceTypes.map(type => (
-                        <SelectItem key={type} value={type} className="rounded-md text-xs md:text-sm">{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-1 md:space-y-2">
-                  <Label htmlFor="maintenanceDescription" className="text-xs md:text-sm font-medium text-gray-700">Description *</Label>
-                  <Textarea
-                    id="maintenanceDescription"
-                    value={maintenanceRecord.description}
-                    onChange={(e) => setMaintenanceRecord({...maintenanceRecord, description: e.target.value})}
-                    placeholder="Describe the maintenance performed"
-                    rows={2}
-                    className="text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                  <div className="space-y-1 md:space-y-2">
-                    <Label htmlFor="maintenanceCost" className="text-xs md:text-sm font-medium text-gray-700">Cost</Label>
-                    <Input
-                      id="maintenanceCost"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={maintenanceRecord.cost}
-                      onChange={(e) => setMaintenanceRecord({...maintenanceRecord, cost: parseFloat(e.target.value) || 0})}
-                      placeholder="Enter cost"
-                      className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1 md:space-y-2">
-                    <Label htmlFor="performedBy" className="text-xs md:text-sm font-medium text-gray-700">Performed By *</Label>
-                    <Input
-                      id="performedBy"
-                      value={maintenanceRecord.performedBy}
-                      onChange={(e) => setMaintenanceRecord({...maintenanceRecord, performedBy: e.target.value})}
-                      placeholder="Enter technician name"
-                      className="h-8 md:h-10 text-xs md:text-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-            
-            <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
-              <Button 
-                type="button"
-                variant="outline" 
-                onClick={() => setMaintenanceDialogOpen(false)}
-                className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit"
-                disabled={!selectedMachineForMaintenance || maintenanceLoading}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                {maintenanceLoading ? "Adding..." : "Add Maintenance"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* IMPORT DIALOG */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="max-w-sm md:max-w-md bg-white rounded-xl md:rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Import Data from CSV</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 md:space-y-4">
-            <div className="space-y-1 md:space-y-2">
-              <Label htmlFor="csv-file" className="text-xs md:text-sm font-medium text-gray-700">Upload CSV File</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 md:p-6 text-center hover:border-blue-400 transition-colors bg-gray-50">
-                <Input 
-                  id="csv-file"
-                  type="file" 
-                  accept=".csv"
-                  className="hidden"
-                />
-                <Label htmlFor="csv-file" className="cursor-pointer">
-                  <UploadCloud className="h-8 w-8 md:h-10 md:w-10 mx-auto mb-2 text-gray-400" />
-                  <p className="text-xs md:text-sm font-medium text-gray-700">Click to upload</p>
-                  <p className="text-[10px] md:text-xs text-gray-500 mt-1">
-                    Supports .csv files
-                  </p>
-                </Label>
-              </div>
-            </div>
-            
-            <div className="p-3 md:p-4 border border-gray-200 rounded-xl bg-gray-50">
-              <h4 className="font-medium text-gray-900 text-xs md:text-sm mb-2">CSV Format (Inventory)</h4>
-              <div className="text-[10px] md:text-xs space-y-1 md:space-y-2 text-gray-600">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-2 w-2 md:h-3 md:w-3 text-green-500" />
-                  <span>Required fields: SKU, Name, Department, Category</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1 md:gap-2 mt-2">
-                  <div><span className="font-medium">SKU</span> <span className="text-red-500">*</span></div>
-                  <div><span className="font-medium">Name</span> <span className="text-red-500">*</span></div>
-                  <div><span className="font-medium">Department</span> <span className="text-red-500">*</span></div>
-                  <div><span className="font-medium">Category</span> <span className="text-red-500">*</span></div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button 
-                onClick={handleExport}
-                disabled={items.length === 0}
-                variant="outline"
-                className="w-full sm:flex-1 border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                <Download className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                Export Template
-              </Button>
-              
-              <Button 
-                disabled={true}
-                className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg md:rounded-xl text-xs md:text-sm h-8 md:h-10"
-              >
-                Import Data
-              </Button>
-            </div>
-            
-            <p className="text-[10px] md:text-xs text-gray-500 text-center">
-              Note: Import functionality is under development
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* CHANGE HISTORY DIALOG */}
-      <Dialog open={!!changeHistoryDialogOpen} onOpenChange={() => setChangeHistoryDialogOpen(null)}>
-        <DialogContent className="max-w-sm md:max-w-md bg-white rounded-xl md:rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Change History</DialogTitle>
-          </DialogHeader>
-          {changeHistoryDialogOpen && (
-            <div className="space-y-1 md:space-y-2 max-h-40 md:max-h-60 overflow-y-auto">
-              {(() => {
-                const item = items.find(item => item.id === changeHistoryDialogOpen);
-                return item?.changeHistory && item.changeHistory.length > 0 ? (
+        {/* Change History Dialog */}
+        <Dialog open={!!changeHistoryDialogOpen} onOpenChange={() => setChangeHistoryDialogOpen(null)}>
+          <DialogContent className="max-w-sm md:max-w-md bg-white rounded-xl md:rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base md:text-lg font-semibold text-gray-900">Change History</DialogTitle>
+              <DialogDescription className="text-xs md:text-sm text-gray-500">
+                Track all changes made to this item
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {changeHistoryDialogOpen && (() => { 
+                const item = items.find(item => item.id === changeHistoryDialogOpen); 
+                return item?.changeHistory && item.changeHistory.length > 0 ? 
                   item.changeHistory.map((change, index) => (
-                    <div key={index} className="flex flex-col md:flex-row md:items-center justify-between text-[10px] md:text-xs p-2 md:p-3 bg-gray-50/50 rounded-lg border border-gray-100 gap-1 md:gap-0">
-                      <span className="text-blue-600">{change.date}</span>
-                      <span className="text-gray-700">{change.change}</span>
-                      <span className="text-gray-600">by {change.user}</span>
-                      <span className={`font-medium ${change.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between text-xs p-2 md:p-3 bg-gray-50 rounded-lg gap-1 border border-gray-100">
+                      <span className="text-gray-500">{change.date}</span>
+                      <span className="font-medium text-gray-700">{change.change}</span>
+                      <span className="text-gray-500">by {change.user}</span>
+                      <span className={`font-semibold ${change.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {change.quantity > 0 ? '+' : ''}{change.quantity}
                       </span>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs md:text-sm text-gray-500 text-center py-4">
-                    No change history available for this item
-                  </p>
-                );
+                  )) : 
+                  <p className="text-sm text-gray-500 text-center py-8">No change history available</p>;
               })()}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button onClick={() => setChangeHistoryDialogOpen(null)} className="bg-blue-600 hover:bg-blue-700 rounded-lg">Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 };
 
-export default InventoryPage;
+export default SuperAdminInventoryPage;

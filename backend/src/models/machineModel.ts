@@ -19,7 +19,7 @@ export interface IMachine extends Document {
   nextMaintenanceDate?: Date;
   location?: string;
   manufacturer?: string;
-  modelName?: string; // renamed from 'model' to avoid TS conflict
+  modelNumber?: string;
   serialNumber?: string;
   department?: string;
   assignedTo?: string;
@@ -42,25 +42,52 @@ const MachineSchema: Schema<IMachine> = new Schema(
     name: { type: String, required: true },
     cost: { type: Number, required: true },
     purchaseDate: { type: Date, required: true },
-    quantity: { type: Number, required: true },
-    description: String,
+    quantity: { type: Number, required: true, default: 1 },
+    description: { type: String },
     status: {
       type: String,
       enum: ['operational', 'maintenance', 'out-of-service'],
       default: 'operational',
     },
-    lastMaintenanceDate: Date,
-    nextMaintenanceDate: Date,
-    location: String,
-    manufacturer: String,
-    modelName: String, // renamed field
-    serialNumber: { type: String, unique: true, sparse: true },
-    department: String,
-    assignedTo: String,
-    maintenanceHistory: [MaintenanceSchema],
+    lastMaintenanceDate: { type: Date },
+    nextMaintenanceDate: { type: Date },
+    location: { type: String },
+    manufacturer: { type: String },
+    modelNumber: { type: String },
+    // IMPORTANT: Remove unique constraint or use sparse + unique with filter
+    serialNumber: { 
+      type: String, 
+      unique: true, 
+      sparse: true,  // This allows multiple null/undefined values
+      index: true 
+    },
+    department: { type: String },
+    assignedTo: { type: String },
+    maintenanceHistory: { type: [MaintenanceSchema], default: [] },
   },
   { timestamps: true }
 );
+
+// Create text index for search
+MachineSchema.index({ name: 'text', modelNumber: 'text', location: 'text', department: 'text' });
+
+// Add a pre-save middleware to handle empty serial numbers
+MachineSchema.pre('save', function(next) {
+  // If serialNumber is empty string or null/undefined, set to undefined to avoid unique constraint issues
+  if (this.serialNumber === '' || this.serialNumber === null) {
+    this.serialNumber = undefined;
+  }
+  next();
+});
+
+// Also handle update operations
+MachineSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate() as any;
+  if (update.serialNumber === '' || update.serialNumber === null) {
+    update.serialNumber = undefined;
+  }
+  next();
+});
 
 const Machine: Model<IMachine> =
   mongoose.models.Machine || mongoose.model<IMachine>('Machine', MachineSchema);
