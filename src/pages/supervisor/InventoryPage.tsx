@@ -109,7 +109,7 @@ interface MachineUpdate {
 type InventoryItem = FrontendInventoryItem;
 type Machine = FrontendMachine;
 
-const API_URL = `http://${window.location.hostname}:5001/api`;
+const API_URL = `https://${window.location.hostname}:5001/api`;
 
 const machineStatusOptions = [
   { value: 'operational', label: 'Operational', color: 'bg-green-100 text-green-800', icon: CheckCircle },

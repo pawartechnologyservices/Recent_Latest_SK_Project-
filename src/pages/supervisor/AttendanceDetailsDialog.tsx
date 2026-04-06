@@ -48,7 +48,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 
 const API_URL = process.env.NODE_ENV === 'development'
-  ? `http://${window.location.hostname}:5001/api`
+  ? `https://${window.location.hostname}:5001/api`
   : '/api';
 
 interface Employee {
