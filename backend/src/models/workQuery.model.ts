@@ -1,3 +1,4 @@
+// models/workQuery.model.ts
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IWorkQuery extends Document {
@@ -34,6 +35,11 @@ export interface IWorkQuery extends Document {
     name: string;
     comment: string;
     timestamp: Date;
+  }>;
+  images: Array<{
+    url: string;
+    publicId: string;
+    uploadedAt: Date;
   }>;
   createdAt: Date;
   updatedAt: Date;
@@ -123,12 +129,17 @@ const WorkQuerySchema = new Schema({
     name: { type: String, required: true },
     comment: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
+  }],
+  images: [{
+    url: { type: String, required: true },
+    publicId: { type: String, required: true },
+    uploadedAt: { type: Date, default: Date.now }
   }]
 }, {
   timestamps: true
 });
 
-// Create indexes for better query performance
+// Create indexes
 WorkQuerySchema.index({ supervisorId: 1, createdAt: -1 });
 WorkQuerySchema.index({ status: 1 });
 WorkQuerySchema.index({ priority: 1 });

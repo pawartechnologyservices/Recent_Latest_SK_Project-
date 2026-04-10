@@ -1,5 +1,6 @@
+// src/pages/superadmin/billing/ExpensesSection.tsx
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,15 +9,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Trash2, Edit, Eye, DollarSign, Calendar, Building,
   Loader2, AlertCircle, X, Receipt, ChevronDown, ChevronUp,
-  TrendingUp, PieChart, Search, RefreshCw,
-  ChevronLeft, ChevronRight, Filter, ArrowLeft
+  TrendingUp, PieChart, Search, RefreshCw, CheckCircle,
+  ChevronLeft, ChevronRight, Clock, Wrench,
+  Check, XCircle, MapPin
 } from "lucide-react";
 import { toast } from "sonner";
 import { siteService, Site } from "@/services/SiteService";
 import { expenseService, Expense, CreateExpenseRequest, MonthlyExpense } from "@/services/expenseService";
+import { machineService, FrontendMachine } from "@/services/machineService";
+import { useRole } from '@/context/RoleContext';
 
 // Expense Types and Categories
 const ExpenseTypes = [
@@ -53,40 +58,61 @@ const PaymentMethods = [
   { value: "upi", label: "UPI", icon: "📱" }
 ];
 
-// Month names for display
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
 ];
 
+interface PendingMaintenanceItem {
+  machine: FrontendMachine;
+  maintenanceIndex: number;
+  record: {
+    date: string;
+    type: string;
+    description: string;
+    cost: number;
+    performedBy: string;
+    status?: string;
+  };
+}
+
 const ExpensesSection = () => {
+  const { role, user } = useRole();
   const [sites, setSites] = useState<Site[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState<MonthlyExpense[]>([]);
   const [filteredSites, setFilteredSites] = useState<Site[]>([]);
+  const [pendingMaintenance, setPendingMaintenance] = useState<PendingMaintenanceItem[]>([]);
+  const [machines, setMachines] = useState<FrontendMachine[]>([]);
   
-  // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [monthlyDialogOpen, setMonthlyDialogOpen] = useState(false);
   const [monthDetailsDialogOpen, setMonthDetailsDialogOpen] = useState(false);
   const [siteExpensesDialogOpen, setSiteExpensesDialogOpen] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [selectedPendingItem, setSelectedPendingItem] = useState<PendingMaintenanceItem | null>(null);
   
-  // Selected items
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<MonthlyExpense | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [editMode, setEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState("expenses");
   
-  // UI states
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   
-  // Form state
+  const [approvalFormData, setApprovalFormData] = useState({
+    category: "maintenance",
+    paymentMethod: "bank transfer",
+    vendor: "",
+    notes: ""
+  });
+  
   const [formData, setFormData] = useState({
     expenseType: "",
     category: "",
@@ -97,23 +123,20 @@ const ExpensesSection = () => {
     paymentMethod: ""
   });
   
-  // Custom fields state
   const [customFields, setCustomFields] = useState<Array<{ fieldName: string; fieldValue: string }>>([]);
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
 
-  // Stats state
   const [stats, setStats] = useState({
     totalExpenses: 0,
     averageExpense: 0,
     expenseCount: 0,
-    categoryCount: 0
+    categoryCount: 0,
+    pendingMaintenanceCount: 0,
+    approvedMaintenanceTotal: 0
   });
 
-  // Available years for filter
   const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
-
-  // Mobile view state
   const [isMobileView, setIsMobileView] = useState(false);
 
   useEffect(() => {
@@ -136,23 +159,104 @@ const ExpensesSection = () => {
   useEffect(() => {
     calculateStats();
     updateAvailableYears();
-  }, [expenses]);
+  }, [expenses, pendingMaintenance]);
 
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [sitesData, expensesData] = await Promise.all([
+      const [sitesData, expensesData, machinesData] = await Promise.all([
         siteService.getAllSites(),
-        expenseService.getExpenses()
+        expenseService.getExpenses(),
+        machineService.getMachines()
       ]);
       setSites(sitesData || []);
       setFilteredSites(sitesData || []);
       setExpenses(expensesData || []);
+      setMachines(machinesData || []);
+      
+      await loadPendingMaintenance();
+      
     } catch (error: any) {
+      console.error('Error loading data:', error);
       setError(error.message || "Failed to load data");
       toast.error(error.message || "Failed to load data");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Helper function to get site name from machine location
+  const getSiteNameFromMachine = (machineLocation: string): string => {
+    if (!machineLocation) return 'No site assigned';
+    
+    // First try to find exact match by site name
+    const exactMatch = sites.find(site => 
+      site.name.toLowerCase() === machineLocation.toLowerCase()
+    );
+    if (exactMatch) return exactMatch.name;
+    
+    // Then try to find by location (city)
+    const locationMatch = sites.find(site => 
+      site.location?.toLowerCase() === machineLocation.toLowerCase()
+    );
+    if (locationMatch) return locationMatch.name;
+    
+    // If no match found, return the original location value
+    return machineLocation;
+  };
+
+  // Helper function to get site ID from machine location
+  const getSiteIdFromMachine = (machineLocation: string): string | null => {
+    if (!machineLocation) return null;
+    
+    const exactMatch = sites.find(site => 
+      site.name.toLowerCase() === machineLocation.toLowerCase()
+    );
+    if (exactMatch) return exactMatch._id;
+    
+    const locationMatch = sites.find(site => 
+      site.location?.toLowerCase() === machineLocation.toLowerCase()
+    );
+    if (locationMatch) return locationMatch._id;
+    
+    return null;
+  };
+
+  const loadPendingMaintenance = async () => {
+    try {
+      const allMachines = await machineService.getMachines();
+      const pending: PendingMaintenanceItem[] = [];
+      
+      allMachines.forEach(machine => {
+        if (machine.maintenanceHistory && Array.isArray(machine.maintenanceHistory)) {
+          machine.maintenanceHistory.forEach((record, index) => {
+            if (record.status === 'pending') {
+              pending.push({
+                machine,
+                maintenanceIndex: index,
+                record: {
+                  date: record.date,
+                  type: record.type,
+                  description: record.description,
+                  cost: record.cost,
+                  performedBy: record.performedBy,
+                  status: record.status
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      setPendingMaintenance(pending);
+      console.log(`Loaded ${pending.length} pending maintenance records`);
+      
+      pending.forEach(item => {
+        const siteName = getSiteNameFromMachine(item.machine.location || '');
+        console.log(`Pending: ${item.machine.name} - Machine Location: ${item.machine.location} -> Site Name: ${siteName}`);
+      });
+    } catch (error) {
+      console.error('Failed to load pending maintenance:', error);
     }
   };
 
@@ -176,11 +280,18 @@ const ExpensesSection = () => {
     const avg = expenses.length > 0 ? total / expenses.length : 0;
     const categories = new Set(expenses.map(exp => exp.category));
     
+    const maintenanceExpenses = expenses.filter(exp => 
+      exp.expenseType === 'maintenance' || exp.category === 'maintenance'
+    );
+    const approvedMaintenanceTotal = maintenanceExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    
     setStats({
       totalExpenses: total,
       averageExpense: avg,
       expenseCount: expenses.length,
-      categoryCount: categories.size
+      categoryCount: categories.size,
+      pendingMaintenanceCount: pendingMaintenance.length,
+      approvedMaintenanceTotal: approvedMaintenanceTotal
     });
   };
 
@@ -234,7 +345,6 @@ const ExpensesSection = () => {
 
   const handleViewMonthDetails = async (site: Site, month: number, year: number) => {
     try {
-      // Filter expenses for the selected month and year
       const monthExpenses = expenses.filter(e => {
         const date = new Date(e.date);
         const expenseSiteId = typeof e.siteId === 'object' ? e.siteId._id : e.siteId;
@@ -243,7 +353,6 @@ const ExpensesSection = () => {
                date.getFullYear() === year;
       });
       
-      // Create a monthly expense object
       const monthData: MonthlyExpense = {
         _id: { month, year },
         month,
@@ -265,12 +374,10 @@ const ExpensesSection = () => {
   const handleEditExpense = (expense: Expense) => {
     setSelectedExpense(expense);
     
-    // Find the site
     const siteId = typeof expense.siteId === 'object' ? expense.siteId._id : expense.siteId;
     const site = sites.find(s => s._id === siteId);
     setSelectedSite(site || null);
     
-    // Populate form
     setFormData({
       expenseType: expense.expenseType,
       category: expense.category,
@@ -299,7 +406,6 @@ const ExpensesSection = () => {
       return;
     }
     
-    // Validate form
     const requiredFields = ['expenseType', 'category', 'description', 'amount', 'vendor', 'paymentMethod'];
     for (const field of requiredFields) {
       if (!formData[field as keyof typeof formData]) {
@@ -320,32 +426,20 @@ const ExpensesSection = () => {
       customFields: customFields.filter(f => f.fieldName && f.fieldValue)
     };
     
-    console.log('📤 Submitting expense:', expensePayload);
-    
     try {
       setIsSubmitting(true);
       
       if (editMode && selectedExpense) {
-        // Update existing expense
         const updated = await expenseService.updateExpense(selectedExpense._id, expensePayload);
-        console.log('📥 Updated expense response:', updated);
-        
         if (updated) {
-          // Update the expenses array with the updated expense
           setExpenses(prevExpenses => 
-            prevExpenses.map(exp => 
-              exp._id === updated._id ? updated : exp
-            )
+            prevExpenses.map(exp => exp._id === updated._id ? updated : exp)
           );
           toast.success("Expense updated successfully!");
         }
       } else {
-        // Create new expense
         const created = await expenseService.createExpense(expensePayload);
-        console.log('📥 Created expense response:', created);
-        
         if (created) {
-          // Add the new expense to the expenses array
           setExpenses(prevExpenses => [created, ...prevExpenses]);
           toast.success("Expense added successfully!");
         }
@@ -354,7 +448,6 @@ const ExpensesSection = () => {
       setAddDialogOpen(false);
       resetForm();
       
-      // Refresh monthly data if needed
       if (selectedSite) {
         try {
           const monthly = await expenseService.getMonthlyExpenses(selectedSite._id);
@@ -365,10 +458,117 @@ const ExpensesSection = () => {
       }
       
     } catch (error: any) {
-      console.error('❌ Error in handleSubmit:', error);
+      console.error('Error in handleSubmit:', error);
       toast.error(error.message || "Failed to save expense");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleApproveMaintenance = async () => {
+    if (!selectedPendingItem) return;
+    
+    if (!approvalFormData.vendor) {
+      toast.error("Please enter vendor name");
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      
+      const { machine, maintenanceIndex, record } = selectedPendingItem;
+      
+      // Get the site name from machine location using the helper function
+      const siteName = getSiteNameFromMachine(machine.location || '');
+      const siteId = getSiteIdFromMachine(machine.location || '');
+      
+      if (!siteId) {
+        toast.error(`Site not found for machine location: "${machine.location}". Please check the site configuration.`);
+        return;
+      }
+      
+      console.log(`Creating expense for machine: ${machine.name}, Location: ${machine.location} -> Site: ${siteName}, Site ID: ${siteId}`);
+      
+      const expensePayload: CreateExpenseRequest = {
+        siteId: siteId,
+        expenseType: "maintenance",
+        category: approvalFormData.category,
+        description: `Maintenance: ${record.description} (Machine: ${machine.name})`,
+        amount: record.cost,
+        date: new Date().toISOString().split('T')[0],
+        vendor: approvalFormData.vendor,
+        paymentMethod: approvalFormData.paymentMethod,
+        customFields: [
+          { fieldName: "Machine Name", fieldValue: machine.name },
+          { fieldName: "Machine Location", fieldValue: machine.location || 'Not specified' },
+          { fieldName: "Maintenance Type", fieldValue: record.type },
+          { fieldName: "Performed By", fieldValue: record.performedBy },
+          { fieldName: "Notes", fieldValue: approvalFormData.notes }
+        ]
+      };
+      
+      const createdExpense = await expenseService.createExpense(expensePayload);
+      
+      if (createdExpense) {
+        const updatedMachine = { ...machine };
+        if (updatedMachine.maintenanceHistory && updatedMachine.maintenanceHistory[maintenanceIndex]) {
+          updatedMachine.maintenanceHistory[maintenanceIndex].status = 'approved';
+          updatedMachine.maintenanceHistory[maintenanceIndex].expenseId = createdExpense._id;
+          
+          await machineService.updateMachine(machine.id, {
+            maintenanceHistory: updatedMachine.maintenanceHistory
+          });
+        }
+        
+        setExpenses(prevExpenses => [createdExpense, ...prevExpenses]);
+        await loadPendingMaintenance();
+        
+        const updatedMachines = await machineService.getMachines();
+        setMachines(updatedMachines);
+        
+        toast.success(`Maintenance approved and expense created successfully for site: ${siteName}!`);
+        setApproveDialogOpen(false);
+        setSelectedPendingItem(null);
+        setApprovalFormData({
+          category: "maintenance",
+          paymentMethod: "bank transfer",
+          vendor: "",
+          notes: ""
+        });
+      }
+    } catch (error: any) {
+      console.error('Error approving maintenance:', error);
+      toast.error(error.message || "Failed to approve maintenance");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRejectMaintenance = async (item: PendingMaintenanceItem) => {
+    if (!confirm("Are you sure you want to reject this maintenance request?")) {
+      return;
+    }
+    
+    try {
+      const { machine, maintenanceIndex } = item;
+      
+      const updatedMachine = { ...machine };
+      if (updatedMachine.maintenanceHistory && updatedMachine.maintenanceHistory[maintenanceIndex]) {
+        updatedMachine.maintenanceHistory[maintenanceIndex].status = 'rejected';
+        
+        await machineService.updateMachine(machine.id, {
+          maintenanceHistory: updatedMachine.maintenanceHistory
+        });
+      }
+      
+      await loadPendingMaintenance();
+      const updatedMachines = await machineService.getMachines();
+      setMachines(updatedMachines);
+      
+      toast.success("Maintenance request rejected");
+    } catch (error: any) {
+      console.error('Error rejecting maintenance:', error);
+      toast.error(error.message || "Failed to reject maintenance");
     }
   };
 
@@ -380,11 +580,8 @@ const ExpensesSection = () => {
     try {
       const result = await expenseService.deleteExpense(expenseId);
       if (result?.success) {
-        // Remove the expense from the local state
         setExpenses(prevExpenses => prevExpenses.filter(exp => exp._id !== expenseId));
         toast.success("Expense deleted successfully!");
-        
-        // Close any open dialogs
         setViewDialogOpen(false);
         setMonthDetailsDialogOpen(false);
       }
@@ -422,26 +619,26 @@ const ExpensesSection = () => {
     });
   };
 
-  const getMonthExpenses = (siteId: string, month: number, year: number) => {
-    return expenses.filter(e => {
-      const date = new Date(e.date);
-      const expenseSiteId = typeof e.siteId === 'object' ? e.siteId._id : e.siteId;
-      return expenseSiteId === siteId && 
-             date.getMonth() + 1 === month && 
-             date.getFullYear() === year;
-    });
-  };
-
   const formatCurrency = (amount: number) => {
-    return expenseService.formatCurrency(amount);
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
-    return expenseService.formatDate(dateString);
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   const getMonthName = (month: number) => {
-    return expenseService.getMonthName(month);
+    return MONTHS[month - 1] || "Unknown";
   };
 
   const getCategoryIcon = (category: string) => {
@@ -454,14 +651,11 @@ const ExpensesSection = () => {
     return pm?.icon || "💳";
   };
 
-  const getExpenseTypeColor = (type: string) => {
-    const expenseType = ExpenseTypes.find(t => t.value === type);
-    return expenseType?.color || "gray";
-  };
-
   const changeYear = (increment: number) => {
     setSelectedYear(prev => prev + increment);
   };
+
+  const isAdmin = role === 'admin' || role === 'superadmin';
 
   if (isLoading) {
     return (
@@ -474,7 +668,6 @@ const ExpensesSection = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6 px-2 sm:px-4 max-w-full overflow-x-hidden">
-      {/* Error Display */}
       {error && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-3 sm:p-4">
@@ -494,8 +687,8 @@ const ExpensesSection = () => {
         </Card>
       )}
 
-      {/* Stats Cards - Responsive Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center justify-between">
@@ -512,7 +705,7 @@ const ExpensesSection = () => {
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Average</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Avg</p>
                 <p className="text-sm sm:text-lg lg:text-2xl font-bold truncate">{formatCurrency(stats.averageExpense)}</p>
               </div>
               <TrendingUp className="h-5 w-5 sm:h-8 sm:w-8 text-green-500 flex-shrink-0" />
@@ -536,185 +729,341 @@ const ExpensesSection = () => {
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Categ</p>
-                <p className="text-sm sm:text-lg lg:text-2xl font-bold">{stats.categoryCount}</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Maint. Pending</p>
+                <p className="text-sm sm:text-lg lg:text-2xl font-bold text-amber-600">{stats.pendingMaintenanceCount}</p>
               </div>
-              <PieChart className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500 flex-shrink-0" />
+              <Wrench className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500 flex-shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Maint. Approved</p>
+                <p className="text-sm sm:text-lg lg:text-2xl font-bold text-green-600 truncate">{formatCurrency(stats.approvedMaintenanceTotal)}</p>
+              </div>
+              <CheckCircle className="h-5 w-5 sm:h-8 sm:w-8 text-green-500 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search Bar - Responsive */}
-      <Card>
-        <CardContent className="p-2 sm:p-4">
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search sites..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-full text-sm"
-              />
-            </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <TabsList className="w-full sm:w-auto grid grid-cols-2 h-auto">
+            <TabsTrigger value="expenses" className="text-xs sm:text-sm py-2">
+              <Receipt className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Expenses</span>
+              <span className="xs:hidden">Exp</span>
+            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="pending" className="text-xs sm:text-sm py-2 relative">
+                <Clock className="mr-1 h-3 w-3 sm:mr-2 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Pending Approval</span>
+                <span className="xs:hidden">Pending</span>
+                {stats.pendingMaintenanceCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-red-500">
+                    {stats.pendingMaintenanceCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
+          
+          {activeTab === "expenses" && (
             <Button 
-              variant="outline" 
-              onClick={loadData}
-              size={isMobileView ? "default" : "default"}
+              onClick={() => { resetForm(); setSelectedSite(null); setAddDialogOpen(true); }} 
+              size={isMobileView ? "sm" : "default"}
               className="w-full sm:w-auto"
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              <Plus className="mr-2 h-4 w-4" />
+              Add Expense
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </div>
 
-      {/* Sites List - Responsive Cards */}
-      <div className="space-y-2 sm:space-y-4">
-        {filteredSites.length === 0 ? (
+        {/* Expenses Tab */}
+        <TabsContent value="expenses" className="space-y-4">
           <Card>
-            <CardContent className="p-6 sm:p-8 text-center">
-              <Building className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
-              <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Sites Found</h3>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {searchQuery ? "Try adjusting your search" : "No sites available"}
-              </p>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search sites..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-full text-sm"
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={loadData}
+                  size={isMobileView ? "default" : "default"}
+                  className="w-full sm:w-auto"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          filteredSites.map((site) => {
-            const siteExpenses = getSiteExpenses(site._id);
-            const siteTotal = siteExpenses.reduce((sum, e) => sum + e.amount, 0);
-            const isExpanded = expandedSections.has(site._id);
-            
-            return (
-              <Card key={site._id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-3 sm:p-4">
-                  {/* Site Header - Responsive */}
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                          <Building className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 flex-shrink-0" />
-                          <h3 className="font-semibold text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">{site.name}</h3>
-                          <Badge variant={site.status === "active" ? "default" : "secondary"} className="text-xs px-1.5 py-0">
-                            {site.status}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          <p className="truncate">{site.clientName}</p>
-                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                            <span className="flex items-center">
-                              <Receipt className="h-3 w-3 mr-1" />
-                              {siteExpenses.length}
-                            </span>
-                            <span className="flex items-center font-medium text-green-600">
-                              <DollarSign className="h-3 w-3 mr-1" />
-                              {formatCurrency(siteTotal)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {siteExpenses.length > 0 && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => toggleSection(site._id)}
-                          className="h-7 w-7 p-0 flex-shrink-0"
-                        >
-                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </Button>
-                      )}
-                    </div>
 
-                    {/* Action Buttons - Responsive Grid */}
-                    <div className="grid grid-cols-3 gap-1 sm:flex sm:gap-2 mt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleViewMonthlyExpenses(site)}
-                        className="text-xs px-1 sm:px-3"
-                      >
-                        <Calendar className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Monthly</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleViewSiteExpenses(site)}
-                        className="text-xs px-1 sm:px-3"
-                      >
-                        <Eye className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">View</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAddExpense(site)}
-                        className="text-xs px-1 sm:px-3"
-                      >
-                        <Plus className="h-3 w-3 sm:mr-1" />
-                        <span className="hidden sm:inline">Add</span>
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Recent Expenses - Expandable Section */}
-                  {isExpanded && siteExpenses.length > 0 && (
-                    <div className="mt-3 pt-3 border-t">
-                      <h4 className="text-xs font-medium mb-2">Recent Expenses</h4>
-                      
-                      {/* Mobile View: Card Layout */}
-                      <div className="space-y-2">
-                        {siteExpenses.slice(0, 3).map((expense) => (
-                          <div key={expense._id} className="border rounded-lg p-2 space-y-1.5">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-xs truncate">{expense.description}</div>
-                                <div className="text-xs text-muted-foreground">{formatDate(expense.date)}</div>
-                              </div>
-                              <Badge variant="secondary" className="text-xs ml-1">
-                                {getCategoryIcon(expense.category)}
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-muted-foreground truncate max-w-[100px]">{expense.vendor}</span>
-                              <span className="font-medium">{formatCurrency(expense.amount)}</span>
-                            </div>
-                            <div className="flex justify-end gap-1 pt-1">
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleViewExpense(expense)}>
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEditExpense(expense)}>
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDeleteExpense(expense._id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {siteExpenses.length > 3 && (
-                        <div className="mt-2 text-center">
-                          <Button variant="link" size="sm" className="text-xs" onClick={() => handleViewSiteExpenses(site)}>
-                            View all {siteExpenses.length} expenses
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+          <div className="space-y-2 sm:space-y-4">
+            {filteredSites.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 sm:p-8 text-center">
+                  <Building className="h-8 w-8 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-2 sm:mb-4" />
+                  <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">No Sites Found</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {searchQuery ? "Try adjusting your search" : "No sites available"}
+                  </p>
                 </CardContent>
               </Card>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              filteredSites.map((site) => {
+                const siteExpenses = getSiteExpenses(site._id);
+                const siteTotal = siteExpenses.reduce((sum, e) => sum + e.amount, 0);
+                const isExpanded = expandedSections.has(site._id);
+                
+                return (
+                  <Card key={site._id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                              <Building className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 flex-shrink-0" />
+                              <h3 className="font-semibold text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">{site.name}</h3>
+                              <Badge variant={site.status === "active" ? "default" : "secondary"} className="text-xs px-1.5 py-0">
+                                {site.status}
+                              </Badge>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              <p className="truncate">{site.clientName}</p>
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                <span className="flex items-center">
+                                  <Receipt className="h-3 w-3 mr-1" />
+                                  {siteExpenses.length}
+                                </span>
+                                <span className="flex items-center font-medium text-green-600">
+                                  <DollarSign className="h-3 w-3 mr-1" />
+                                  {formatCurrency(siteTotal)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {siteExpenses.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleSection(site._id)}
+                              className="h-7 w-7 p-0 flex-shrink-0"
+                            >
+                              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
+                          )}
+                        </div>
 
-      {/* Add/Edit Expense Dialog - Mobile Responsive */}
+                        <div className="grid grid-cols-3 gap-1 sm:flex sm:gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewMonthlyExpenses(site)}
+                            className="text-xs px-1 sm:px-3"
+                          >
+                            <Calendar className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Monthly</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewSiteExpenses(site)}
+                            className="text-xs px-1 sm:px-3"
+                          >
+                            <Eye className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">View</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddExpense(site)}
+                            className="text-xs px-1 sm:px-3"
+                          >
+                            <Plus className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Add</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {isExpanded && siteExpenses.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <h4 className="text-xs font-medium mb-2">Recent Expenses</h4>
+                          <div className="space-y-2">
+                            {siteExpenses.slice(0, 3).map((expense) => (
+                              <div key={expense._id} className="border rounded-lg p-2 space-y-1.5">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-xs truncate">{expense.description}</div>
+                                    <div className="text-xs text-muted-foreground">{formatDate(expense.date)}</div>
+                                  </div>
+                                  <Badge variant="secondary" className="text-xs ml-1">
+                                    {getCategoryIcon(expense.category)}
+                                  </Badge>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="text-muted-foreground truncate max-w-[100px]">{expense.vendor}</span>
+                                  <span className="font-medium">{formatCurrency(expense.amount)}</span>
+                                </div>
+                                <div className="flex justify-end gap-1 pt-1">
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleViewExpense(expense)}>
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEditExpense(expense)}>
+                                    <Edit className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDeleteExpense(expense._id)}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {siteExpenses.length > 3 && (
+                            <div className="mt-2 text-center">
+                              <Button variant="link" size="sm" className="text-xs" onClick={() => handleViewSiteExpenses(site)}>
+                                View all {siteExpenses.length} expenses
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Pending Maintenance Tab - With Correct Site Name Display */}
+        {isAdmin && (
+          <TabsContent value="pending" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg sm:text-xl">Pending Maintenance Approvals</CardTitle>
+                <CardDescription>
+                  Review and approve maintenance requests from supervisors. Approved requests will be added as expenses.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {pendingMaintenance.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                    <p className="text-muted-foreground">No pending maintenance requests</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      When supervisors add maintenance records, they will appear here for approval.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingMaintenance.map((item, idx) => {
+                      // Get the actual site name from machine location
+                      const machineLocationValue = item.machine.location || '';
+                      const displaySiteName = getSiteNameFromMachine(machineLocationValue);
+                      const associatedSite = sites.find(s => 
+                        s.name === displaySiteName || 
+                        s.location?.toLowerCase() === machineLocationValue.toLowerCase()
+                      );
+                      const isSiteValid = displaySiteName !== 'No site assigned' && associatedSite;
+                      
+                      return (
+                        <div key={`${item.machine.id}-${item.maintenanceIndex}`} className="border rounded-lg p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Wrench className="h-5 w-5 text-amber-500" />
+                                <h4 className="font-semibold">{item.machine.name}</h4>
+                                <Badge variant="outline" className="text-xs">
+                                  {item.machine.model || 'No Model'}
+                                </Badge>
+                              </div>
+                              <div className="mt-2 space-y-1 text-sm">
+                                <p><span className="text-muted-foreground">Type:</span> {item.record.type}</p>
+                                <p><span className="text-muted-foreground">Description:</span> {item.record.description}</p>
+                                <p><span className="text-muted-foreground">Performed By:</span> {item.record.performedBy}</p>
+                                <p><span className="text-muted-foreground">Date:</span> {formatDate(item.record.date)}</p>
+                                <p className="font-bold text-green-600">Amount: {formatCurrency(item.record.cost)}</p>
+                              </div>
+                              {/* Site Information - Display actual site name */}
+                              <div className="mt-3 pt-2 border-t">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Building className="h-4 w-4 text-blue-500" />
+                                  <span className="font-medium">Working Site:</span>
+                                  <span className={`${!isSiteValid ? 'text-red-500' : 'text-green-600'} font-semibold`}>
+                                    {displaySiteName}
+                                  </span>
+                                  {associatedSite && associatedSite.status === 'active' && (
+                                    <Badge variant="secondary" className="text-xs bg-green-100">
+                                      Active
+                                    </Badge>
+                                  )}
+                                </div>
+                                {machineLocationValue && displaySiteName !== machineLocationValue && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    📍 Location: {machineLocationValue}
+                                  </p>
+                                )}
+                                {!isSiteValid && (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    ⚠️ This machine is not assigned to any valid site. Please update the machine location.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => {
+                                  setSelectedPendingItem(item);
+                                  setApprovalFormData({
+                                    category: "maintenance",
+                                    paymentMethod: "bank transfer",
+                                    vendor: "",
+                                    notes: ""
+                                  });
+                                  setApproveDialogOpen(true);
+                                }}
+                                disabled={!isSiteValid}
+                                className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
+                              >
+                                <Check className="h-4 w-4 mr-2" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                onClick={() => handleRejectMaintenance(item)}
+                                className="flex-1 sm:flex-none"
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* Add/Edit Expense Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="w-full max-w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
           <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
@@ -736,7 +1085,6 @@ const ExpensesSection = () => {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-4">
-            {/* Form Fields - Responsive Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="expenseType" className="text-sm font-medium">Type *</Label>
@@ -842,7 +1190,6 @@ const ExpensesSection = () => {
               </Select>
             </div>
 
-            {/* Custom Fields - Responsive */}
             <div className="border rounded-lg p-4 space-y-3">
               <Label className="text-sm font-medium">Custom Fields</Label>
               
@@ -887,7 +1234,6 @@ const ExpensesSection = () => {
               </div>
             </div>
 
-            {/* Form Actions - Fixed at bottom on mobile */}
             <div className="flex flex-col sm:flex-row gap-3 pt-4 pb-2 sm:pb-0 sticky bottom-0 bg-background border-t sm:border-0 mt-4">
               <Button 
                 type="submit" 
@@ -917,7 +1263,133 @@ const ExpensesSection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* View Site Expenses Dialog - Mobile Responsive */}
+      {/* Approve Maintenance Dialog */}
+      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
+        <DialogContent className="w-full max-w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
+          <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
+            <DialogTitle className="text-lg sm:text-xl pr-8">
+              Approve Maintenance Request
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              This will create an expense record for the maintenance
+            </DialogDescription>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4 h-8 w-8"
+              onClick={() => setApproveDialogOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+            {selectedPendingItem && (
+              <>
+                <div className="bg-muted/30 rounded-lg p-3 space-y-1 text-sm">
+                  <p><span className="text-muted-foreground">Machine:</span> {selectedPendingItem.machine.name}</p>
+                  <p><span className="text-muted-foreground">Working Site:</span> 
+                    <span className="font-medium ml-2 text-blue-600">
+                      {getSiteNameFromMachine(selectedPendingItem.machine.location || '')}
+                    </span>
+                  </p>
+                  <p><span className="text-muted-foreground">Maintenance Type:</span> {selectedPendingItem.record.type}</p>
+                  <p><span className="text-muted-foreground">Description:</span> {selectedPendingItem.record.description}</p>
+                  <p><span className="text-muted-foreground">Performed By:</span> {selectedPendingItem.record.performedBy}</p>
+                  <p><span className="text-muted-foreground">Amount:</span> <span className="font-bold text-green-600">{formatCurrency(selectedPendingItem.record.cost)}</span></p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Category *</Label>
+                    <Select 
+                      value={approvalFormData.category} 
+                      onValueChange={(v) => setApprovalFormData({...approvalFormData, category: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="maintenance">🔧 Maintenance</SelectItem>
+                        <SelectItem value="equipment">🔨 Equipment</SelectItem>
+                        <SelectItem value="other">📌 Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Payment Method *</Label>
+                    <Select 
+                      value={approvalFormData.paymentMethod} 
+                      onValueChange={(v) => setApprovalFormData({...approvalFormData, paymentMethod: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PaymentMethods.map(method => (
+                          <SelectItem key={method.value} value={method.value}>
+                            {method.icon} {method.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Vendor *</Label>
+                    <Input
+                      value={approvalFormData.vendor}
+                      onChange={(e) => setApprovalFormData({...approvalFormData, vendor: e.target.value})}
+                      placeholder="Enter vendor name"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Notes (Optional)</Label>
+                    <Textarea
+                      value={approvalFormData.notes}
+                      onChange={(e) => setApprovalFormData({...approvalFormData, notes: e.target.value})}
+                      placeholder="Additional notes..."
+                      rows={2}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                  <Button 
+                    onClick={handleApproveMaintenance} 
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Approve & Create Expense
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setApproveDialogOpen(false)}
+                    className="w-full"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Site Expenses Dialog */}
       <Dialog open={siteExpensesDialogOpen} onOpenChange={setSiteExpensesDialogOpen}>
         <DialogContent className="w-full max-w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
           <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
@@ -954,7 +1426,6 @@ const ExpensesSection = () => {
                   </div>
                 ) : (
                   <>
-                    {/* Mobile View */}
                     <div className="sm:hidden space-y-3">
                       {getSiteExpenses(selectedSite._id).map((expense) => (
                         <div key={expense._id} className="border rounded-lg p-4 space-y-3">
@@ -1003,18 +1474,17 @@ const ExpensesSection = () => {
                       ))}
                     </div>
 
-                    {/* Desktop View */}
                     <div className="hidden sm:block overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="whitespace-nowrap">Date</TableHead>
-                            <TableHead className="whitespace-nowrap">Description</TableHead>
-                            <TableHead className="whitespace-nowrap">Category</TableHead>
-                            <TableHead className="whitespace-nowrap">Vendor</TableHead>
-                            <TableHead className="whitespace-nowrap">Payment</TableHead>
-                            <TableHead className="whitespace-nowrap">Amount</TableHead>
-                            <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Vendor</TableHead>
+                            <TableHead>Payment</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1032,12 +1502,12 @@ const ExpensesSection = () => {
                                   {getCategoryIcon(expense.category)} {expense.category.replace('_', ' ')}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="whitespace-nowrap">{expense.vendor}</TableCell>
-                              <TableCell className="whitespace-nowrap">
+                              <TableCell>{expense.vendor}</TableCell>
+                              <TableCell>
                                 {getPaymentMethodIcon(expense.paymentMethod)} {expense.paymentMethod}
                               </TableCell>
-                              <TableCell className="whitespace-nowrap font-medium">{formatCurrency(expense.amount)}</TableCell>
-                              <TableCell className="text-right whitespace-nowrap">
+                              <TableCell className="font-medium">{formatCurrency(expense.amount)}</TableCell>
+                              <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => handleViewExpense(expense)}>
                                     <Eye className="h-4 w-4" />
@@ -1066,7 +1536,7 @@ const ExpensesSection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Monthly Summary Dialog - Mobile Responsive */}
+      {/* Monthly Summary Dialog */}
       <Dialog open={monthlyDialogOpen} onOpenChange={setMonthlyDialogOpen}>
         <DialogContent className="w-full max-w-full sm:max-w-4xl h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
           <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
@@ -1089,25 +1559,14 @@ const ExpensesSection = () => {
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             {selectedSite && (
               <div className="space-y-4">
-                {/* Year Navigation - Mobile Friendly */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg sm:text-xl font-semibold">{selectedYear}</h3>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={() => changeYear(-1)}
-                      className="h-11 px-4 text-sm"
-                    >
+                    <Button variant="outline" size="default" onClick={() => changeYear(-1)}>
                       <ChevronLeft className="h-4 w-4 mr-1" />
                       Prev
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={() => changeYear(1)}
-                      className="h-11 px-4 text-sm"
-                    >
+                    <Button variant="outline" size="default" onClick={() => changeYear(1)}>
                       Next
                       <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
@@ -1123,111 +1582,69 @@ const ExpensesSection = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Monthly Summary Cards - Mobile View */}
-                    <div className="sm:hidden space-y-3">
-                      {monthlyExpenses
-                        .filter(m => m.year === selectedYear)
-                        .sort((a, b) => a.month - b.month)
-                        .map((monthData) => (
-                          <Card 
-                            key={`${monthData.year}-${monthData.month}`} 
-                            className="hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => {
-                              handleViewMonthDetails(selectedSite, monthData.month, monthData.year);
-                              setMonthlyDialogOpen(false);
-                            }}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-center mb-2">
-                                <h4 className="font-semibold text-base">
-                                  {getMonthName(monthData.month)} {monthData.year}
-                                </h4>
-                                <Badge variant="secondary" className="text-sm">
-                                  {monthData.count} {monthData.count === 1 ? 'expense' : 'expenses'}
-                                </Badge>
-                              </div>
-                              
-                              <div className="text-xl font-bold text-green-600 mb-3">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead>Year</TableHead>
+                          <TableHead>Expenses</TableHead>
+                          <TableHead>Categories</TableHead>
+                          <TableHead>Total Amount</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {monthlyExpenses
+                          .filter(m => m.year === selectedYear)
+                          .sort((a, b) => a.month - b.month)
+                          .map((monthData) => (
+                            <TableRow 
+                              key={`${monthData.year}-${monthData.month}`}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                handleViewMonthDetails(selectedSite, monthData.month, monthData.year);
+                                setMonthlyDialogOpen(false);
+                              }}
+                            >
+                              <TableCell className="font-medium">{getMonthName(monthData.month)}</TableCell>
+                              <TableCell>{monthData.year}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{monthData.count}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  {monthData.categories.slice(0, 2).map((cat, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                      {getCategoryIcon(cat)}
+                                    </Badge>
+                                  ))}
+                                  {monthData.categories.length > 2 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{monthData.categories.length - 2}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium text-green-600">
                                 {formatCurrency(monthData.totalAmount)}
-                              </div>
-                              
-                              <div className="flex flex-wrap gap-1.5">
-                                {monthData.categories.map((cat, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-sm py-1">
-                                    {getCategoryIcon(cat)} {cat.replace('_', ' ')}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                    </div>
-
-                    {/* Desktop Table View */}
-                    <div className="hidden sm:block overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Month</TableHead>
-                            <TableHead>Year</TableHead>
-                            <TableHead>Expenses</TableHead>
-                            <TableHead>Categories</TableHead>
-                            <TableHead>Total Amount</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {monthlyExpenses
-                            .filter(m => m.year === selectedYear)
-                            .sort((a, b) => a.month - b.month)
-                            .map((monthData) => (
-                              <TableRow 
-                                key={`${monthData.year}-${monthData.month}`}
-                                className="cursor-pointer hover:bg-muted/50"
-                                onClick={() => handleViewMonthDetails(selectedSite, monthData.month, monthData.year)}
-                              >
-                                <TableCell className="font-medium">{getMonthName(monthData.month)}</TableCell>
-                                <TableCell>{monthData.year}</TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary">
-                                    {monthData.count}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex flex-wrap gap-1">
-                                    {monthData.categories.slice(0, 2).map((cat, idx) => (
-                                      <Badge key={idx} variant="outline" className="text-xs">
-                                        {getCategoryIcon(cat)}
-                                      </Badge>
-                                    ))}
-                                    {monthData.categories.length > 2 && (
-                                      <Badge variant="outline" className="text-xs">
-                                        +{monthData.categories.length - 2}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="font-medium text-green-600">
-                                  {formatCurrency(monthData.totalAmount)}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewMonthDetails(selectedSite, monthData.month, monthData.year);
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewMonthDetails(selectedSite, monthData.month, monthData.year);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </div>
@@ -1236,7 +1653,7 @@ const ExpensesSection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Month Details Dialog - Mobile Responsive */}
+      {/* Month Details Dialog */}
       <Dialog open={monthDetailsDialogOpen} onOpenChange={setMonthDetailsDialogOpen}>
         <DialogContent className="w-full max-w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
           <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
@@ -1261,76 +1678,23 @@ const ExpensesSection = () => {
               <div className="space-y-4">
                 {selectedMonth.expenses && selectedMonth.expenses.length > 0 ? (
                   <>
-                    {/* Mobile View */}
-                    <div className="sm:hidden space-y-3">
-                      {selectedMonth.expenses.map((expense) => (
-                        <div key={expense._id} className="border rounded-lg p-4 space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-base truncate">{expense.description}</div>
-                              <div className="text-sm text-muted-foreground">{formatDate(expense.date)}</div>
-                            </div>
-                            <Badge variant="secondary" className="text-sm ml-2">
-                              {getCategoryIcon(expense.category)}
-                            </Badge>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground block">Vendor</span>
-                              <span className="font-medium">{expense.vendor}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block">Amount</span>
-                              <span className="font-bold text-green-600">{formatCurrency(expense.amount)}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-muted-foreground block">Payment</span>
-                              <span className="inline-flex items-center gap-1">
-                                {getPaymentMethodIcon(expense.paymentMethod)} {expense.paymentMethod}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-end gap-2 pt-2 border-t">
-                            <Button variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => {
-                              setMonthDetailsDialogOpen(false);
-                              handleViewExpense(expense);
-                            }}>
-                              <Eye className="h-4 w-4 mr-2" /> View
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-10 px-3 text-sm" onClick={() => {
-                              setMonthDetailsDialogOpen(false);
-                              handleEditExpense(expense);
-                            }}>
-                              <Edit className="h-4 w-4 mr-2" /> Edit
-                            </Button>
-                            <Button variant="destructive" size="sm" className="h-10 px-3 text-sm" onClick={() => handleDeleteExpense(expense._id)}>
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop View */}
-                    <div className="hidden sm:block overflow-x-auto">
+                    <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="whitespace-nowrap">Date</TableHead>
-                            <TableHead className="whitespace-nowrap">Description</TableHead>
-                            <TableHead className="whitespace-nowrap">Category</TableHead>
-                            <TableHead className="whitespace-nowrap">Vendor</TableHead>
-                            <TableHead className="whitespace-nowrap">Payment</TableHead>
-                            <TableHead className="whitespace-nowrap">Amount</TableHead>
-                            <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Category</TableHead>
+                            <TableHead>Vendor</TableHead>
+                            <TableHead>Payment</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {selectedMonth.expenses.map((expense) => (
                             <TableRow key={expense._id}>
-                              <TableCell className="whitespace-nowrap">{formatDate(expense.date)}</TableCell>
+                              <TableCell>{formatDate(expense.date)}</TableCell>
                               <TableCell className="max-w-[250px]">
                                 <div className="font-medium truncate">{expense.description}</div>
                                 <div className="text-xs text-muted-foreground">
@@ -1338,16 +1702,16 @@ const ExpensesSection = () => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="secondary" className="whitespace-nowrap">
+                                <Badge variant="secondary">
                                   {getCategoryIcon(expense.category)} {expense.category.replace('_', ' ')}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="whitespace-nowrap">{expense.vendor}</TableCell>
-                              <TableCell className="whitespace-nowrap">
+                              <TableCell>{expense.vendor}</TableCell>
+                              <TableCell>
                                 {getPaymentMethodIcon(expense.paymentMethod)} {expense.paymentMethod}
                               </TableCell>
-                              <TableCell className="whitespace-nowrap font-medium">{formatCurrency(expense.amount)}</TableCell>
-                              <TableCell className="text-right whitespace-nowrap">
+                              <TableCell className="font-medium">{formatCurrency(expense.amount)}</TableCell>
+                              <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => {
                                     setMonthDetailsDialogOpen(false);
@@ -1372,12 +1736,11 @@ const ExpensesSection = () => {
                       </Table>
                     </div>
 
-                    {/* Month Total - Mobile Friendly */}
-                    <div className="flex justify-between sm:justify-end items-center gap-4 pt-4 border-t">
-                      <span className="text-base sm:text-sm text-muted-foreground">
+                    <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                      <span className="text-muted-foreground">
                         Total for {getMonthName(selectedMonth.month)}:
                       </span>
-                      <span className="text-2xl sm:text-2xl font-bold text-green-600">
+                      <span className="text-2xl font-bold text-green-600">
                         {formatCurrency(selectedMonth.totalAmount)}
                       </span>
                     </div>
@@ -1404,7 +1767,7 @@ const ExpensesSection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* View Expense Dialog - Mobile Responsive */}
+      {/* View Expense Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="w-full max-w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[90vh] m-0 p-0 sm:p-6 rounded-none sm:rounded-lg overflow-hidden flex flex-col">
           <DialogHeader className="p-4 sm:p-6 pb-2 border-b sticky top-0 bg-background z-10">
@@ -1425,7 +1788,7 @@ const ExpensesSection = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Date</p>
-                    <p className="font-medium text-base">{formatDate(selectedExpense.date)}</p>
+                    <p className="font-medium">{formatDate(selectedExpense.date)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Amount</p>
@@ -1435,13 +1798,13 @@ const ExpensesSection = () => {
 
                 <div>
                   <p className="text-sm text-muted-foreground">Description</p>
-                  <p className="font-medium text-base break-words">{selectedExpense.description}</p>
+                  <p className="font-medium break-words">{selectedExpense.description}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Site</p>
-                    <p className="font-medium text-base break-words">
+                    <p className="font-medium break-words">
                       {typeof selectedExpense.siteId === 'object' 
                         ? selectedExpense.siteId.name 
                         : sites.find(s => s._id === selectedExpense.siteId)?.name || 'Unknown'}
@@ -1449,20 +1812,18 @@ const ExpensesSection = () => {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Vendor</p>
-                    <p className="font-medium text-base break-words">{selectedExpense.vendor}</p>
+                    <p className="font-medium break-words">{selectedExpense.vendor}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Expense Type</p>
-                    <Badge variant="secondary" className="text-sm py-1 px-3">
-                      {selectedExpense.expenseType}
-                    </Badge>
+                    <Badge variant="secondary">{selectedExpense.expenseType}</Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Category</p>
-                    <Badge variant="outline" className="text-sm py-1 px-3">
+                    <Badge variant="outline">
                       {getCategoryIcon(selectedExpense.category)} {selectedExpense.category.replace('_', ' ')}
                     </Badge>
                   </div>
@@ -1470,7 +1831,7 @@ const ExpensesSection = () => {
 
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Payment Method</p>
-                  <Badge variant="outline" className="text-sm py-1 px-3">
+                  <Badge variant="outline">
                     {getPaymentMethodIcon(selectedExpense.paymentMethod)} {selectedExpense.paymentMethod}
                   </Badge>
                 </div>
@@ -1499,7 +1860,6 @@ const ExpensesSection = () => {
                       setViewDialogOpen(false);
                       handleEditExpense(selectedExpense);
                     }}
-                    className="w-full sm:w-auto h-12 text-base"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Edit
@@ -1510,7 +1870,6 @@ const ExpensesSection = () => {
                       setViewDialogOpen(false);
                       handleDeleteExpense(selectedExpense._id);
                     }}
-                    className="w-full sm:w-auto h-12 text-base"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete

@@ -1,3 +1,4 @@
+// services/workQuery.service.ts
 import { WorkQuery, IWorkQuery } from '../models/workQuery.model';
 
 // Update the interface to match what controller sends
@@ -16,6 +17,11 @@ interface CreateWorkQueryData {
   supervisorName: string;
   serviceTitle?: string;
   serviceType?: string;
+  images?: Array<{
+    url: string;
+    publicId: string;
+    uploadedAt: string;
+  }>;
 }
 
 interface Service {
@@ -81,10 +87,11 @@ interface AssignData {
 
 class WorkQueryService {
   
-  // CREATE WORK QUERY - Without file upload
+  // CREATE WORK QUERY - Fixed signature (single parameter)
   async createWorkQuery(data: CreateWorkQueryData): Promise<IWorkQuery> {
     try {
-      console.log('🚀 Creating work query with data:', data);
+      console.log('🚀 Creating work query with data:', JSON.stringify(data, null, 2));
+      console.log('Images received:', data.images?.length || 0);
       
       // Generate unique query ID
       const timestamp = Date.now();
@@ -119,7 +126,16 @@ class WorkQueryService {
         workQueryData.serviceType = data.serviceType;
       }
       
-      console.log('💾 Saving to MongoDB with data:', JSON.stringify(workQueryData, null, 2));
+      // Handle images if provided
+      if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+        workQueryData.images = data.images;
+        console.log(`Adding ${data.images.length} images to the query`);
+      } else {
+        workQueryData.images = [];
+        console.log('No images to add');
+      }
+      
+      console.log('💾 Saving to MongoDB with images:', workQueryData.images.length);
       
       // Create and save the work query
       const workQuery = new WorkQuery(workQueryData);
@@ -128,6 +144,7 @@ class WorkQueryService {
       console.log('✅ Work query saved successfully!');
       console.log('📋 Query ID:', savedQuery.queryId);
       console.log('🆔 MongoDB ID:', savedQuery._id);
+      console.log('🖼️ Images saved:', savedQuery.images?.length || 0);
       
       return savedQuery;
     } catch (error: any) {
@@ -247,6 +264,11 @@ class WorkQueryService {
       
       console.log(`✅ Found ${queries.length} queries out of ${total}`);
       
+      // Log image counts for debugging
+      queries.forEach((q: any, index: number) => {
+        console.log(`Query ${index + 1}: ${q.queryId} has ${q.images?.length || 0} images`);
+      });
+      
       return {
         queries: queries as IWorkQuery[],
         total
@@ -349,7 +371,7 @@ class WorkQueryService {
         return null;
       }
       
-      console.log(`✅ Query ${id} found`);
+      console.log(`✅ Query ${id} found with ${query.images?.length || 0} images`);
       return query as IWorkQuery;
     } catch (error: any) {
       console.error('❌ Error fetching work query by ID:', error);
@@ -369,7 +391,7 @@ class WorkQueryService {
         return null;
       }
       
-      console.log(`✅ Query ${queryId} found`);
+      console.log(`✅ Query ${queryId} found with ${query.images?.length || 0} images`);
       return query as IWorkQuery;
     } catch (error: any) {
       console.error('❌ Error fetching work query by queryId:', error);
@@ -507,6 +529,162 @@ class WorkQueryService {
       return null;
     }
   }
+  // services/workQuery.service.ts - Add these methods
+
+// GET ALL WORK QUERIES FOR SUPERADMIN
+async getAllWorkQueriesForSuperadmin(filters: FilterParams): Promise<{ queries: IWorkQuery[]; total: number }> {
+  try {
+    console.log('🔍 Fetching all work queries for superadmin');
+    console.log('📋 Filters:', filters);
+    
+    // Build query
+    const query: any = {};
+    
+    // Apply search filter
+    if (filters.search) {
+      query.$or = [
+        { title: { $regex: filters.search, $options: 'i' } },
+        { description: { $regex: filters.search, $options: 'i' } },
+        { queryId: { $regex: filters.search, $options: 'i' } },
+        { serviceId: { $regex: filters.search, $options: 'i' } },
+        { supervisorName: { $regex: filters.search, $options: 'i' } }
+      ];
+    }
+    
+    // Apply status filter
+    if (filters.status && filters.status !== 'all') {
+      query.status = filters.status;
+    }
+    
+    // Apply priority filter
+    if (filters.priority && filters.priority !== 'all') {
+      query.priority = filters.priority;
+    }
+    
+    // Apply service type filter
+    if (filters.serviceType && filters.serviceType !== 'all') {
+      query.serviceType = filters.serviceType;
+    }
+    
+    // Apply supervisor filter
+    if (filters.supervisorId) {
+      query.supervisorId = filters.supervisorId;
+    }
+    
+    console.log('🔍 MongoDB query:', JSON.stringify(query, null, 2));
+    
+    // Calculate skip for pagination
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
+    const skip = (page - 1) * limit;
+    
+    // Determine sort order
+    const sort: any = {};
+    if (filters.sortBy) {
+      sort[filters.sortBy] = filters.sortOrder === 'asc' ? 1 : -1;
+    } else {
+      sort.createdAt = -1;
+    }
+    
+    // Execute query
+    const [queries, total] = await Promise.all([
+      WorkQuery.find(query)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      WorkQuery.countDocuments(query)
+    ]);
+    
+    console.log(`✅ Found ${queries.length} queries out of ${total}`);
+    
+    return {
+      queries: queries as IWorkQuery[],
+      total
+    };
+  } catch (error: any) {
+    console.error('❌ Error getting all work queries for superadmin:', error);
+    return {
+      queries: [],
+      total: 0
+    };
+  }
+}
+
+// GET SUPERADMIN STATISTICS
+async getSuperadminStatistics(): Promise<any> {
+  try {
+    console.log('📊 Getting superadmin statistics');
+    
+    // Get all queries
+    const queries = await WorkQuery.find().lean();
+    
+    // Calculate status counts
+    const statusCounts = {
+      pending: queries.filter((q: any) => q.status === 'pending').length,
+      'in-progress': queries.filter((q: any) => q.status === 'in-progress').length,
+      resolved: queries.filter((q: any) => q.status === 'resolved').length,
+      rejected: queries.filter((q: any) => q.status === 'rejected').length
+    };
+    
+    // Calculate priority counts
+    const priorityCounts = {
+      low: queries.filter((q: any) => q.priority === 'low').length,
+      medium: queries.filter((q: any) => q.priority === 'medium').length,
+      high: queries.filter((q: any) => q.priority === 'high').length,
+      critical: queries.filter((q: any) => q.priority === 'critical').length
+    };
+    
+    // Calculate supervisor stats
+    const supervisorMap = new Map();
+    queries.forEach((q: any) => {
+      const supervisorId = q.supervisorId;
+      const supervisorName = q.supervisorName;
+      
+      if (!supervisorMap.has(supervisorId)) {
+        supervisorMap.set(supervisorId, {
+          supervisorId,
+          supervisorName,
+          total: 0,
+          pending: 0,
+          resolved: 0
+        });
+      }
+      
+      const stats = supervisorMap.get(supervisorId);
+      stats.total++;
+      if (q.status === 'pending') stats.pending++;
+      if (q.status === 'resolved') stats.resolved++;
+    });
+    
+    const supervisorStats = Array.from(supervisorMap.values());
+    
+    return {
+      total: queries.length,
+      statusCounts,
+      priorityCounts,
+      supervisorStats
+    };
+  } catch (error: any) {
+    console.error('❌ Error getting superadmin statistics:', error);
+    return {
+      total: 0,
+      statusCounts: {
+        pending: 0,
+        'in-progress': 0,
+        resolved: 0,
+        rejected: 0
+      },
+      priorityCounts: {
+        low: 0,
+        medium: 0,
+        high: 0,
+        critical: 0
+      },
+      supervisorStats: []
+    };
+  }
+}
 
   // GET SERVICES BY SUPERVISOR
   async getServicesBySupervisor(supervisorId: string): Promise<any[]> {

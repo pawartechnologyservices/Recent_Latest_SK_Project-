@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2 } from "lucide-react";
-import { Invoice, InvoiceItem, clients, formatCurrency } from "../Billing";
+import { Plus, Trash2, Loader2, Building2, Users, AlertCircle } from "lucide-react";
+import { siteService, Site } from "../../../services/SiteService";
+import { Invoice, InvoiceItem } from "../Billing";
 
 interface TaxInvoiceItem {
   description: string;
@@ -25,27 +25,47 @@ interface TaxInvoiceFormProps {
   onClose: () => void;
   onInvoiceCreate: (invoice: Invoice) => void;
   taxInvoicesCount: number;
-  userId?: string;  // Add this
-  userRole?: string; // Add this
+  userId?: string;
+  userRole?: string;
+}
+
+interface SiteOption {
+  _id: string;
+  name: string;
+  clientName: string;
+  location: string;
+  clientDetails?: {
+    company: string;
+    email: string;
+    phone: string;
+    city: string;
+    state: string;
+  };
 }
 
 export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
   isOpen,
   onClose,
   onInvoiceCreate,
-  taxInvoicesCount
+  taxInvoicesCount,
+  userId = "current-user",
+  userRole = "admin"
 }) => {
   const [items, setItems] = useState<TaxInvoiceItem[]>([
-    { description: "", designation: "", quantity: 0, days: 0, hours: 0, rate: 0, amount: 0 }
+    { description: "Garbage Disposal Charges", designation: "", quantity: 1, days: 1, hours: 1, rate: 7500, amount: 7500 }
   ]);
-  const [managementFeesPercent, setManagementFeesPercent] = useState<number>(5);
+  const [managementFeesPercent, setManagementFeesPercent] = useState<number>(0);
   const [roundUp, setRoundUp] = useState<number>(0);
+  const [sites, setSites] = useState<SiteOption[]>([]);
+  const [loadingSites, setLoadingSites] = useState(false);
+  const [sitesError, setSitesError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState({
     clientName: "",
     clientAddress: "",
     invoiceNumber: "",
-    invoiceDate: "",
+    invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: "",
     panNumber: "",
     serviceTaxCategory: "",
@@ -53,77 +73,177 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
     gstNumber: "",
     lwfNumber: "",
     pfNumber: "",
-    sacCode: "9985",
-    serviceLocation: "Pune",
+    sacCode: "999424",
+    serviceLocation: "Maharashtra",
     servicePeriodFrom: "",
     servicePeriodTo: "",
     bankName: "BANK OF MAHARASHTRA",
-    accountNumber: "CA 60168661338",
-    ifscCode: "MAHB0001233",
+    accountNumber: "61068661338",
+    ifscCode: "MAHB0001223",
     branch: "KALYANI NAGAR",
-    termsConditions: "We declare that this invoice shows the actual price of the goods & service described and that all particulars are true and correct."
+    termsConditions: "We declare that this invoice shows the actual price of the goods & service described and that all particulars are true and correct.",
+    selectedSiteId: "",
+    consigneeName: "",
+    consigneeAddress: "",
+    consigneeGSTIN: "",
+    buyerName: "",
+    buyerAddress: "",
+    buyerGSTIN: "",
+    buyerState: "",
+    buyerStateCode: "",
+    enterpriseName: "S.K. ENTERPRISES",
+    enterpriseAddress: "Office No.505, 5th Floor, Global Square Building, Deccan College Road, Yerawada, Pune - 411006",
+    enterprisePhone: "+91 9158984091 / +91 7028577271",
+    enterpriseEmail: "s.k.enterprises7583@gmail.com",
+    enterprisePan: "ALKPK7734N",
+    enterpriseGst: "27ALKPK7734NL2E",
+    enterpriseEsic: "33000457830001001",
+    enterpriseLwf: "PUN60715PROV",
+    enterprisePf: "PUPUN1012226",
+    serviceCategory: "Manpower",
+    clientEmail: "client@example.com"
   });
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (isOpen) {
+      fetchSites();
+    }
+  }, [isOpen]);
+
+  const fetchSites = async () => {
+    try {
+      setLoadingSites(true);
+      setSitesError(null);
+      const allSites = await siteService.getAllSites();
+      
+      const siteOptions = allSites.map((site: Site) => ({
+        _id: site._id,
+        name: site.name,
+        clientName: site.clientName,
+        location: site.location,
+        clientDetails: site.clientDetails
+      }));
+      
+      setSites(siteOptions);
+    } catch (error) {
+      console.error("Error fetching sites:", error);
+      setSitesError("Failed to load sites. Please try again.");
+    } finally {
+      setLoadingSites(false);
+    }
+  };
+
+  const handleSiteSelect = (siteId: string) => {
+    const selectedSite = sites.find(site => site._id === siteId);
+    if (selectedSite) {
+      setFormData(prev => ({
+        ...prev,
+        selectedSiteId: siteId,
+        clientName: selectedSite.clientName,
+        clientAddress: `Gala No.3, Sr No 234, 235, Tal - Mulshi, Hingjwadi, Pune-411057`,
+        consigneeName: selectedSite.clientName,
+        consigneeAddress: selectedSite.location,
+        buyerName: selectedSite.clientName,
+        buyerAddress: selectedSite.location,
+        serviceLocation: "Maharashtra",
+        panNumber: "ALKPK7734N",
+        gstNumber: "27AAHFH01651J12D",
+        esicNumber: "33000457830001001",
+        lwfNumber: "PUN60715PROV",
+        pfNumber: "PUPUN1012226",
+        clientEmail: selectedSite.clientDetails?.email || "client@example.com"
+      }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    const taxableValue = items.reduce((sum, item) => sum + item.amount, 0);
-    const managementFees = (taxableValue * managementFeesPercent) / 100;
-    const netTaxableValue = taxableValue + managementFees;
-    const sgst = netTaxableValue * 0.09;
-    const cgst = netTaxableValue * 0.09;
-    const totalAmountBeforeRound = netTaxableValue + sgst + cgst;
-    const roundedTotalAmount = Math.round(totalAmountBeforeRound + roundUp);
-    const finalRoundUp = roundedTotalAmount - totalAmountBeforeRound;
+    try {
+      const taxableValue = items.reduce((sum, item) => sum + item.amount, 0);
+      const managementFees = (taxableValue * managementFeesPercent) / 100;
+      const netTaxableValue = taxableValue + managementFees;
+      const sgst = netTaxableValue * 0.09;
+      const cgst = netTaxableValue * 0.09;
+      const totalAmountBeforeRound = netTaxableValue + sgst + cgst;
+      const roundedTotalAmount = Math.round(totalAmountBeforeRound + roundUp);
+      const finalRoundUp = roundedTotalAmount - totalAmountBeforeRound;
 
-    const invoiceItems: InvoiceItem[] = items.map(item => ({
-      description: `${item.description} - ${item.designation}`,
-      quantity: item.quantity,
-      rate: item.rate,
-      amount: item.amount
-    }));
+      const invoiceItems: InvoiceItem[] = items
+        .filter(item => item.amount > 0)
+        .map(item => ({
+          description: `${item.description}${item.designation ? ` - ${item.designation}` : ''}`,
+          quantity: item.quantity * item.days * item.hours || 1,
+          rate: item.rate,
+          amount: item.amount
+        }));
 
-    const newInvoice: Invoice = {
-      id: formData.invoiceNumber || `TAX-${(taxInvoicesCount + 1).toString().padStart(3, '0')}`,
-      client: formData.clientName,
-      clientEmail: "",
-      amount: roundedTotalAmount,
-      status: "pending",
-      date: formData.invoiceDate,
-      dueDate: formData.dueDate,
-      items: invoiceItems,
-      tax: sgst + cgst,
-      discount: 0,
-      serviceType: formData.serviceTaxCategory,
-      site: formData.clientAddress,
-      invoiceType: "tax",
-      sacCode: formData.sacCode,
-      panNumber: formData.panNumber,
-      gstNumber: formData.gstNumber,
-      serviceLocation: formData.serviceLocation,
-      esicNumber: formData.esicNumber,
-      lwfNumber: formData.lwfNumber,
-      pfNumber: formData.pfNumber,
-      servicePeriodFrom: formData.servicePeriodFrom,
-      servicePeriodTo: formData.servicePeriodTo,
-      managementFeesPercent,
-      managementFeesAmount: managementFees,
-      roundUp: finalRoundUp,
-      bankName: formData.bankName,
-      accountNumber: formData.accountNumber,
-      ifscCode: formData.ifscCode,
-      branch: formData.branch,
-      clientAddress: formData.clientAddress,
-      invoiceNumber: formData.invoiceNumber,
-    };
-    
-    onInvoiceCreate(newInvoice);
-    onClose();
-    resetForm();
+      const invoiceNumber = formData.invoiceNumber || `SK-2425-G${String(taxInvoicesCount + 1).padStart(3, '0')}`;
+
+      const newInvoice: Invoice = {
+        id: invoiceNumber,
+        invoiceNumber: invoiceNumber,
+        client: formData.clientName,
+        clientEmail: formData.clientEmail,
+        clientAddress: formData.clientAddress,
+        amount: roundedTotalAmount,
+        status: "pending",
+        date: formData.invoiceDate,
+        dueDate: formData.dueDate || formData.invoiceDate,
+        items: invoiceItems,
+        tax: Number((sgst + cgst).toFixed(2)),
+        discount: 0,
+        subtotal: taxableValue,
+        serviceType: formData.serviceCategory,
+        site: formData.clientAddress,
+        siteId: formData.selectedSiteId,
+        invoiceType: "tax",
+        sacCode: formData.sacCode,
+        panNumber: formData.panNumber,
+        gstNumber: formData.gstNumber,
+        serviceLocation: formData.serviceLocation,
+        esicNumber: formData.esicNumber,
+        lwfNumber: formData.lwfNumber,
+        pfNumber: formData.pfNumber,
+        servicePeriodFrom: formData.servicePeriodFrom,
+        servicePeriodTo: formData.servicePeriodTo,
+        managementFeesPercent: managementFeesPercent,
+        managementFeesAmount: Number(managementFees.toFixed(2)),
+        roundUp: Number(finalRoundUp.toFixed(2)),
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber,
+        ifscCode: formData.ifscCode,
+        branch: formData.branch,
+        consigneeName: formData.consigneeName,
+        consigneeAddress: formData.consigneeAddress,
+        consigneeGSTIN: formData.consigneeGSTIN,
+        buyerName: formData.buyerName,
+        buyerAddress: formData.buyerAddress,
+        buyerGSTIN: formData.buyerGSTIN,
+        buyerState: formData.buyerState,
+        buyerStateCode: formData.buyerStateCode,
+        termsConditions: formData.termsConditions,
+        createdBy: userRole,
+        userId: userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      console.log("Submitting invoice:", newInvoice);
+      onInvoiceCreate(newInvoice);
+      onClose();
+      resetForm();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+      alert(error instanceof Error ? error.message : "Failed to create invoice");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const addItem = () => {
-    setItems([...items, { description: "", designation: "", quantity: 0, days: 0, hours: 0, rate: 0, amount: 0 }]);
+    setItems([...items, { description: "", designation: "", quantity: 1, days: 1, hours: 1, rate: 0, amount: 0 }]);
   };
 
   const removeItem = (index: number) => {
@@ -145,8 +265,8 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
 
     if (field === 'rate' || field === 'quantity' || field === 'days' || field === 'hours') {
       const item = newItems[index];
-      const totalHours = item.days * item.hours;
-      newItems[index].amount = totalHours * item.rate;
+      const totalUnits = (item.quantity || 1) * (item.days || 1) * (item.hours || 1);
+      newItems[index].amount = Number((totalUnits * (item.rate || 0)).toFixed(2));
     }
 
     setItems(newItems);
@@ -160,14 +280,14 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
   };
 
   const resetForm = () => {
-    setItems([{ description: "", designation: "", quantity: 0, days: 0, hours: 0, rate: 0, amount: 0 }]);
-    setManagementFeesPercent(5);
+    setItems([{ description: "Garbage Disposal Charges", designation: "", quantity: 1, days: 1, hours: 1, rate: 7500, amount: 7500 }]);
+    setManagementFeesPercent(0);
     setRoundUp(0);
     setFormData({
       clientName: "",
       clientAddress: "",
       invoiceNumber: "",
-      invoiceDate: "",
+      invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: "",
       panNumber: "",
       serviceTaxCategory: "",
@@ -175,15 +295,35 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
       gstNumber: "",
       lwfNumber: "",
       pfNumber: "",
-      sacCode: "9985",
-      serviceLocation: "Pune",
+      sacCode: "999424",
+      serviceLocation: "Maharashtra",
       servicePeriodFrom: "",
       servicePeriodTo: "",
       bankName: "BANK OF MAHARASHTRA",
-      accountNumber: "CA 60168661338",
-      ifscCode: "MAHB0001233",
+      accountNumber: "61068661338",
+      ifscCode: "MAHB0001223",
       branch: "KALYANI NAGAR",
-      termsConditions: "We declare that this invoice shows the actual price of the goods & service described and that all particulars are true and correct."
+      termsConditions: "We declare that this invoice shows the actual price of the goods & service described and that all particulars are true and correct.",
+      selectedSiteId: "",
+      consigneeName: "",
+      consigneeAddress: "",
+      consigneeGSTIN: "",
+      buyerName: "",
+      buyerAddress: "",
+      buyerGSTIN: "",
+      buyerState: "",
+      buyerStateCode: "",
+      enterpriseName: "S.K. ENTERPRISES",
+      enterpriseAddress: "Office No.505, 5th Floor, Global Square Building, Deccan College Road, Yerawada, Pune - 411006",
+      enterprisePhone: "+91 9158984091 / +91 7028577271",
+      enterpriseEmail: "s.k.enterprises7583@gmail.com",
+      enterprisePan: "ALKPK7734N",
+      enterpriseGst: "27ALKPK7734NL2E",
+      enterpriseEsic: "33000457830001001",
+      enterpriseLwf: "PUN60715PROV",
+      enterprisePf: "PUPUN1012226",
+      serviceCategory: "Manpower",
+      clientEmail: "client@example.com"
     });
   };
 
@@ -198,20 +338,19 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
     const finalRoundUp = roundedTotalAmount - totalAmountBeforeRound;
 
     return {
-      taxableValue,
-      managementFees,
-      netTaxableValue,
-      sgst,
-      cgst,
-      roundUp: finalRoundUp,
+      taxableValue: Number(taxableValue.toFixed(2)),
+      managementFees: Number(managementFees.toFixed(2)),
+      netTaxableValue: Number(netTaxableValue.toFixed(2)),
+      sgst: Number(sgst.toFixed(2)),
+      cgst: Number(cgst.toFixed(2)),
+      roundUp: Number(finalRoundUp.toFixed(2)),
       totalAmount: roundedTotalAmount,
-      totalAmountBeforeRound
+      totalAmountBeforeRound: Number(totalAmountBeforeRound.toFixed(2))
     };
   };
 
   const summary = calculateSummary();
 
-  // Number to words converter
   const convertToIndianWords = (num: number) => {
     const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
     const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
@@ -284,49 +423,185 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
     return result.toUpperCase();
   };
 
+  const getFormattedServicePeriod = () => {
+    if (formData.servicePeriodFrom && formData.servicePeriodTo) {
+      const fromDate = new Date(formData.servicePeriodFrom);
+      const toDate = new Date(formData.servicePeriodTo);
+      const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+      return `${fromDate.toLocaleDateString('en-IN', options)} to ${toDate.toLocaleDateString('en-IN', options)}`;
+    }
+    return "";
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Tax Invoice</DialogTitle>
+          <DialogTitle className="text-2xl font-bold text-center">TAX INVOICE</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Client and Service Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Enterprise Header Section */}
+          <div className="border rounded-lg p-4 bg-muted/20 text-center">
+            <div className="text-center mb-2">
+              <h2 className="text-2xl font-bold tracking-wider">{formData.enterpriseName}</h2>
+              <div className="flex justify-center gap-4 text-sm mt-1">
+                <span>Housekeeping</span>
+                <span>Parking</span>
+                <span>Waste Management</span>
+              </div>
+              <p className="text-sm mt-2">{formData.enterpriseAddress}</p>
+              <p className="text-sm">{formData.enterprisePhone}</p>
+              <p className="text-sm">{formData.enterpriseEmail}</p>
+            </div>
+          </div>
+
+          {/* Invoice Title */}
+          <div className="text-center">
+            <h3 className="text-xl font-bold border-y-2 border-black py-2 inline-block px-8">TAX INVOICE</h3>
+          </div>
+
+          {/* Service Period Line */}
+          {getFormattedServicePeriod() && (
+            <div className="text-center text-sm font-medium">
+              <div className="bg-muted/30 py-1 px-3 rounded-md inline-block">
+                {getFormattedServicePeriod()}
+              </div>
+            </div>
+          )}
+
+          {/* Site Selection Dropdown */}
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="flex items-center gap-2 mb-4">
+              <Building2 className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-lg">Select Site / Client</h3>
+            </div>
+            
+            {sitesError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg mb-4">
+                <AlertCircle className="h-5 w-5" />
+                <span className="text-sm">{sitesError}</span>
+                <Button type="button" variant="outline" size="sm" onClick={fetchSites} className="ml-auto">
+                  Retry
+                </Button>
+              </div>
+            )}
+            
             <div className="space-y-2">
-              <Label htmlFor="clientName">Client Name </Label>
+              <Label htmlFor="siteSelect" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Select Site (Site Name - Client Name) *
+              </Label>
               <Select 
-                value={formData.clientName}
-                onValueChange={(value) => handleInputChange("clientName", value)}
-                required
+                value={formData.selectedSiteId}
+                onValueChange={handleSiteSelect}
+                disabled={loadingSites}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select client" />
+                <SelectTrigger id="siteSelect" className="w-full">
+                  <SelectValue placeholder={loadingSites ? "Loading sites..." : "Select a site to auto-fill client details"} />
                 </SelectTrigger>
-                <SelectContent>
-                  {clients.map(client => (
-                    <SelectItem key={client} value={client}>{client}</SelectItem>
-                  ))}
+                <SelectContent className="max-h-[300px]">
+                  {loadingSites ? (
+                    <div className="flex items-center justify-center p-4">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span className="ml-2">Loading sites...</span>
+                    </div>
+                  ) : sites.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">
+                      No sites found. Please add sites first.
+                    </div>
+                  ) : (
+                    sites.map((site) => (
+                      <SelectItem key={site._id} value={site._id} className="py-3">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{site.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Client: {site.clientName} | Location: {site.location}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Selecting a site will automatically fill client details, PAN, GST, and registration numbers
+              </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="clientAddress">Client Address</Label>
+          </div>
+
+          {/* Client and Invoice Details Grid */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm border rounded-lg p-4">
+            <div className="font-semibold">Client Name</div>
+            <div>
+              <Input 
+                value={formData.clientName}
+                onChange={(e) => handleInputChange("clientName", e.target.value)}
+                placeholder="Client Name"
+                className="h-7"
+                required
+              />
+            </div>
+            
+            <div className="font-semibold">Invoice No</div>
+            <div>
+              <Input 
+                value={formData.invoiceNumber}
+                onChange={(e) => handleInputChange("invoiceNumber", e.target.value)}
+                placeholder="SK-2425-G301"
+                className="h-7"
+              />
+            </div>
+            
+            <div className="font-semibold">Address</div>
+            <div>
               <Textarea 
                 value={formData.clientAddress}
                 onChange={(e) => handleInputChange("clientAddress", e.target.value)}
-                placeholder="Client address..."
+                placeholder="Client address"
                 rows={2}
+                className="resize-none text-sm"
+                required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="serviceTaxCategory">Service Tax Category *</Label>
-              <Select 
-                value={formData.serviceTaxCategory}
-                onValueChange={(value) => handleInputChange("serviceTaxCategory", value)}
+            
+            <div className="font-semibold">Date</div>
+            <div>
+              <Input 
+                type="date"
+                value={formData.invoiceDate}
+                onChange={(e) => handleInputChange("invoiceDate", e.target.value)}
+                className="h-7"
                 required
+              />
+            </div>
+            
+            <div className="font-semibold">PAN NO</div>
+            <div>
+              <Input 
+                value={formData.panNumber}
+                onChange={(e) => handleInputChange("panNumber", e.target.value)}
+                placeholder="ALKPK7734N"
+                className="h-7"
+              />
+            </div>
+            
+            <div className="font-semibold">ST NO</div>
+            <div>
+              <Input 
+                value={formData.gstNumber}
+                onChange={(e) => handleInputChange("gstNumber", e.target.value)}
+                placeholder="27ALKPK7734NL2E"
+                className="h-7"
+              />
+            </div>
+            
+            <div className="font-semibold">Service Tax Category</div>
+            <div>
+              <Select 
+                value={formData.serviceCategory}
+                onValueChange={(value) => handleInputChange("serviceCategory", value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-7">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -334,53 +609,58 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                   <SelectItem value="Housekeeping">Housekeeping</SelectItem>
                   <SelectItem value="Parking">Parking</SelectItem>
                   <SelectItem value="Waste Management">Waste Management</SelectItem>
+                  <SelectItem value="Security">Security Services</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="serviceLocation">Service Location</Label>
+            
+            <div className="font-semibold">ESIC NO</div>
+            <div>
               <Input 
-                value={formData.serviceLocation}
-                onChange={(e) => handleInputChange("serviceLocation", e.target.value)}
-                placeholder="Service location"
+                value={formData.esicNumber}
+                onChange={(e) => handleInputChange("esicNumber", e.target.value)}
+                placeholder="33000457830001001"
+                className="h-7"
               />
             </div>
-          </div>
-
-          {/* Invoice Details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="invoiceNumber">Invoice Number</Label>
+            
+            <div className="font-semibold">GST</div>
+            <div>
               <Input 
-                value={formData.invoiceNumber}
-                onChange={(e) => handleInputChange("invoiceNumber", e.target.value)}
-                placeholder="Auto-generated if empty"
+                value={formData.enterpriseGst}
+                onChange={(e) => handleInputChange("enterpriseGst", e.target.value)}
+                placeholder="27ALKPK7734NL2E"
+                className="h-7"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="invoiceDate">Invoice Date *</Label>
+            
+            <div className="font-semibold">LWF NO</div>
+            <div>
               <Input 
-                type="date" 
-                value={formData.invoiceDate}
-                onChange={(e) => handleInputChange("invoiceDate", e.target.value)}
-                required 
+                value={formData.lwfNumber}
+                onChange={(e) => handleInputChange("lwfNumber", e.target.value)}
+                placeholder="PUN60715PROV"
+                className="h-7"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">Due Date</Label>
+            
+            <div className="font-semibold">PF NO</div>
+            <div>
               <Input 
-                type="date" 
-                value={formData.dueDate}
-                onChange={(e) => handleInputChange("dueDate", e.target.value)}
+                value={formData.pfNumber}
+                onChange={(e) => handleInputChange("pfNumber", e.target.value)}
+                placeholder="PUPUN1012226"
+                className="h-7"
               />
             </div>
           </div>
 
           {/* Service Period */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="servicePeriodFrom">Service Period From *</Label>
               <Input 
+                id="servicePeriodFrom"
                 type="date" 
                 value={formData.servicePeriodFrom}
                 onChange={(e) => handleInputChange("servicePeriodFrom", e.target.value)}
@@ -390,6 +670,7 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
             <div className="space-y-2">
               <Label htmlFor="servicePeriodTo">Service Period To *</Label>
               <Input 
+                id="servicePeriodTo"
                 type="date" 
                 value={formData.servicePeriodTo}
                 onChange={(e) => handleInputChange("servicePeriodTo", e.target.value)}
@@ -398,61 +679,9 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
             </div>
           </div>
 
-          {/* Tax and Registration Numbers */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="panNumber">PAN Number</Label>
-              <Input 
-                value={formData.panNumber}
-                onChange={(e) => handleInputChange("panNumber", e.target.value)}
-                placeholder="PAN Number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gstNumber">GST Number</Label>
-              <Input 
-                value={formData.gstNumber}
-                onChange={(e) => handleInputChange("gstNumber", e.target.value)}
-                placeholder="GST Number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sacCode">SAC Code</Label>
-              <Input 
-                value={formData.sacCode}
-                onChange={(e) => handleInputChange("sacCode", e.target.value)}
-                placeholder="SAC Code"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="esicNumber">ESIC Number</Label>
-              <Input 
-                value={formData.esicNumber}
-                onChange={(e) => handleInputChange("esicNumber", e.target.value)}
-                placeholder="ESIC Number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lwfNumber">LWF Number</Label>
-              <Input 
-                value={formData.lwfNumber}
-                onChange={(e) => handleInputChange("lwfNumber", e.target.value)}
-                placeholder="LWF Number"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pfNumber">PF Number</Label>
-              <Input 
-                value={formData.pfNumber}
-                onChange={(e) => handleInputChange("pfNumber", e.target.value)}
-                placeholder="PF Number"
-              />
-            </div>
-          </div>
-
-          {/* Invoice Items Table */}
+          {/* Service Items Table */}
           <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div className="flex justify-between items-center">
               <Label className="text-lg font-semibold">Service Items</Label>
               <Button type="button" variant="outline" size="sm" onClick={addItem}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -463,28 +692,28 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Sr.</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead>Days</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead className="w-12">Action</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-12 text-center">Sr. No.</TableHead>
+                    <TableHead className="min-w-[200px]">Description</TableHead>
+                    <TableHead className="min-w-[150px]">Designation</TableHead>
+                    <TableHead className="w-20 text-center">Qty</TableHead>
+                    <TableHead className="w-20 text-center">Days</TableHead>
+                    <TableHead className="w-20 text-center">Hours</TableHead>
+                    <TableHead className="w-24 text-right">Rate (₹)</TableHead>
+                    <TableHead className="w-32 text-right">Amount (₹)</TableHead>
+                    <TableHead className="w-12 text-center">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((item, index) => (
                     <TableRow key={index}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell className="text-center">{index + 1}</TableCell>
                       <TableCell>
                         <Input
                           value={item.description}
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          placeholder="Service description"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-[150px]"
+                          placeholder="e.g., Garbage Disposal Charges"
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8"
                           required
                         />
                       </TableCell>
@@ -493,8 +722,7 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                           value={item.designation}
                           onChange={(e) => updateItem(index, 'designation', e.target.value)}
                           placeholder="Designation"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 min-w-[100px]"
-                          required
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8"
                         />
                       </TableCell>
                       <TableCell>
@@ -502,10 +730,9 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                           type="number"
                           value={item.quantity || ''}
                           onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                          min="0"
-                          step="0.01"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-20"
-                          required
+                          min="1"
+                          step="1"
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8 text-center"
                         />
                       </TableCell>
                       <TableCell>
@@ -513,10 +740,9 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                           type="number"
                           value={item.days || ''}
                           onChange={(e) => updateItem(index, 'days', e.target.value)}
-                          min="0"
-                          step="0.01"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-20"
-                          required
+                          min="1"
+                          step="1"
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8 text-center"
                         />
                       </TableCell>
                       <TableCell>
@@ -524,10 +750,9 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                           type="number"
                           value={item.hours || ''}
                           onChange={(e) => updateItem(index, 'hours', e.target.value)}
-                          min="0"
-                          step="0.01"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-20"
-                          required
+                          min="1"
+                          step="1"
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8 text-center"
                         />
                       </TableCell>
                       <TableCell>
@@ -537,23 +762,23 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
                           onChange={(e) => updateItem(index, 'rate', e.target.value)}
                           min="0"
                           step="0.01"
-                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 w-24"
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-8 text-right"
                           required
                         />
                       </TableCell>
-                      <TableCell className="font-medium min-w-[100px]">
+                      <TableCell className="text-right font-medium">
                         ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => removeItem(index)}
                           disabled={items.length === 1}
-                          className="h-8 w-8 p-0"
+                          className="h-6 w-6 p-0"
                         >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <Trash2 className="h-3 w-3 text-red-500" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -563,148 +788,101 @@ export const TaxInvoiceForm: React.FC<TaxInvoiceFormProps> = ({
             </div>
           </div>
 
-          {/* Fees and Round Up */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="managementFeesPercent">Management Fees (%)</Label>
-              <Input 
-                type="number"
-                value={managementFeesPercent}
-                onChange={(e) => setManagementFeesPercent(Number(e.target.value))}
-                min="0"
-                max="100"
-                step="0.1"
-              />
+          {/* SAC Code and Service Location */}
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">SAC Code-{formData.sacCode}</span>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="roundUp">Round Up (+/-)</Label>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Service Location:</span>
               <Input 
-                type="number"
-                value={roundUp}
-                onChange={(e) => setRoundUp(Number(e.target.value))}
-                placeholder="Round up amount"
-                step="1"
+                value={formData.serviceLocation}
+                onChange={(e) => handleInputChange("serviceLocation", e.target.value)}
+                className="h-7 w-40"
               />
             </div>
           </div>
 
-          {/* Bank Details */}
-          <div className="space-y-4 border-t pt-4">
-            <h4 className="font-semibold">Bank Details</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="bankName">Bank Name</Label>
-                <Input 
-                  value={formData.bankName}
-                  onChange={(e) => handleInputChange("bankName", e.target.value)}
-                  placeholder="Bank Name"
-                />
+          {/* Amount Summary Section */}
+          <div className="border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-2 border-b">
+              <div className="p-3 font-semibold bg-muted/30">Net Taxable Value</div>
+              <div className="p-3 text-right font-medium">
+                ₹{summary.taxableValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="accountNumber">Account Number</Label>
-                <Input 
-                  value={formData.accountNumber}
-                  onChange={(e) => handleInputChange("accountNumber", e.target.value)}
-                  placeholder="Account Number"
-                />
+            </div>
+            <div className="grid grid-cols-2 border-b">
+              <div className="p-3 font-semibold bg-muted/30">SGST @9%</div>
+              <div className="p-3 text-right font-medium">
+                ₹{summary.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="ifscCode">IFSC Code</Label>
-                <Input 
-                  value={formData.ifscCode}
-                  onChange={(e) => handleInputChange("ifscCode", e.target.value)}
-                  placeholder="IFSC Code"
-                />
+            </div>
+            <div className="grid grid-cols-2 border-b">
+              <div className="p-3 font-semibold bg-muted/30">CGST @9%</div>
+              <div className="p-3 text-right font-medium">
+                ₹{summary.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="branch">Branch</Label>
-                <Input 
-                  value={formData.branch}
-                  onChange={(e) => handleInputChange("branch", e.target.value)}
-                  placeholder="Branch"
-                />
+            </div>
+            <div className="grid grid-cols-2 bg-primary/5">
+              <div className="p-3 font-bold text-lg">Total Amount</div>
+              <div className="p-3 text-right font-bold text-lg text-primary">
+                ₹{summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </div>
 
-          {/* Terms and Conditions */}
+          {/* Amount in Words */}
+          <div className="p-3 bg-muted/20 rounded-lg">
+            <div className="font-semibold mb-1">Amount in words:</div>
+            <div className="text-sm font-medium">
+              {convertToIndianWords(summary.totalAmount)}
+            </div>
+          </div>
+
+          {/* Terms & Conditions */}
           <div className="space-y-2">
             <Label htmlFor="termsConditions">Terms & Conditions</Label>
             <Textarea 
+              id="termsConditions"
               value={formData.termsConditions}
               onChange={(e) => handleInputChange("termsConditions", e.target.value)}
-              placeholder="Terms and conditions..."
-              rows={3}
+              rows={2}
+              className="text-sm"
             />
           </div>
 
-          {/* Calculation Summary */}
-          <div className="border rounded-lg p-4 space-y-2">
-            <h3 className="font-semibold text-lg">Invoice Summary</h3>
-            <div className="space-y-1">
-              <div className="flex justify-between items-center">
-                <span>Taxable Value:</span>
-                <span className="font-medium">
-                  ₹{summary.taxableValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Management Fees ({managementFeesPercent}%):</span>
-                <span className="font-medium">
-                  ₹{summary.managementFees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Net Taxable Value:</span>
-                <span className="font-medium">
-                  ₹{summary.netTaxableValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>SGST @9%:</span>
-                <span className="font-medium">
-                  ₹{summary.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>CGST @9%:</span>
-                <span className="font-medium">
-                  ₹{summary.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Round Up:</span>
-                <span className="font-medium">
-                  {summary.roundUp >= 0 ? '+' : ''}₹{summary.roundUp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center border-t pt-2">
-                <span className="font-bold text-lg">Total Amount:</span>
-                <span className="text-xl font-bold text-primary">
-                  ₹{summary.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+          {/* Bank Details */}
+          <div className="text-xs text-muted-foreground border-t pt-3">
+            <div>Account No.: {formData.accountNumber} | IFSC Code: {formData.ifscCode}</div>
+            <div>Account Name: S.K. ENTERPRISES</div>
+          </div>
+
+          {/* Signatures */}
+          <div className="grid grid-cols-2 gap-8 pt-4 border-t">
+            <div className="text-center">
+              <div className="border-t border-black pt-2 w-48 mx-auto">
+                <p className="text-sm">Receiver's Signature</p>
               </div>
             </div>
-            
-            <div className="mt-4 p-3 bg-muted rounded-md text-sm">
-              <div className="font-medium mb-1">Amount in Words:</div>
-              <div>{convertToIndianWords(summary.totalAmount)}</div>
+            <div className="text-center">
+              <div className="border-t border-black pt-2 w-48 mx-auto">
+                <p className="text-sm">Authorized Signatory</p>
+              </div>
             </div>
           </div>
 
-          <Button type="submit" className="w-full">Create Tax Invoice</Button>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create Tax Invoice'
+            )}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
   );
 };
-
-
-
-
-
-
-
-
-
-

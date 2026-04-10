@@ -1,8 +1,9 @@
+// middleware/workQueryUpload.ts
 import multer from 'multer';
 import { Request } from 'express';
-import { validateWorkQueryFile } from '../utils/WorkQueryCloudinaryUtils';
+import { validateWorkQueryFile, MAX_FILE_SIZE } from '../utils/WorkQueryCloudinaryUtils';
 
-// Configure memory storage
+// Use memory storage for Cloudinary upload
 const storage = multer.memoryStorage();
 
 // Custom file filter
@@ -15,22 +16,18 @@ const workQueryFileFilter = (
     cb(null, true);
   } else {
     cb(new Error(
-      `File type ${file.mimetype} (${file.originalname}) is not allowed. ` +
-      `Allowed: Images (jpg, png, gif, webp, bmp), ` +
-      `Videos (mp4, mov, avi, webm), ` +
-      `Documents (pdf, doc, docx, txt, xlsx, ppt)`
+      `File type ${file.mimetype} is not allowed. Allowed: Images (jpg, png, gif, webp, bmp)`
     ));
   }
 };
 
 // Configure multer
-export const workQueryFileUpload = multer({
+export const workQueryUpload = multer({
   storage: storage,
   fileFilter: workQueryFileFilter,
   limits: {
-    fileSize: 25 * 1024 * 1024, // 25MB per file
-    files: 10, // Max 10 files
-    fields: 20 // Max 20 form fields
+    fileSize: MAX_FILE_SIZE, // 5MB per file
+    files: 5 // Max 5 files
   }
 });
 
@@ -49,19 +46,19 @@ export const handleFileUploadErrors = (
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum file size is 25MB.'
+        message: `File too large. Maximum file size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`
       });
     }
     if (err.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        message: 'Too many files. Maximum 10 files allowed per query.'
+        message: 'Too many files. Maximum 5 images allowed per query.'
       });
     }
-    if (err.code === 'LIMIT_FIELD_KEY') {
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
       return res.status(400).json({
         success: false,
-        message: 'Too many form fields.'
+        message: 'Unexpected field. Please use "images" as the field name.'
       });
     }
   } else if (err) {

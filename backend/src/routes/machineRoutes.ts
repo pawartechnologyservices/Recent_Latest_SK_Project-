@@ -7,11 +7,14 @@ const router = Router();
 router.get('/', machineController.getMachines.bind(machineController));
 router.get('/stats', machineController.getMachineStats.bind(machineController));
 router.get('/search', machineController.searchMachines.bind(machineController));
+router.get('/pending-maintenance', machineController.getPendingMaintenanceRecords.bind(machineController));
 router.get('/:id', machineController.getMachineById.bind(machineController));
 
 // POST routes
 router.post('/', machineController.createMachine.bind(machineController));
 router.post('/:id/maintenance', machineController.addMaintenanceRecord.bind(machineController));
+router.post('/:id/maintenance/:maintenanceIndex/approve', machineController.approveMaintenanceRecord.bind(machineController));
+router.post('/:id/maintenance/:maintenanceIndex/reject', machineController.rejectMaintenanceRecord.bind(machineController));
 
 // PUT routes
 router.put('/:id', machineController.updateMachine.bind(machineController));

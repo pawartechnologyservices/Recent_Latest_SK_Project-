@@ -97,7 +97,7 @@ class ShiftService {
 
       if (!response.ok) {
         throw new ApiError(
-          data.message || `HTTP error! status: ${response.status}`,
+          data.message || `https error! status: ${response.status}`,
           response.status,
           data
         );

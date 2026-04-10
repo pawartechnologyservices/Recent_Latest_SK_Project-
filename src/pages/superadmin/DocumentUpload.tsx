@@ -84,7 +84,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         if (response.status === 404) {
           return;
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`https error! status: ${response.status}`);
       }
       const data = await response.json();
       if (data.success) {
@@ -189,7 +189,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
           throw new Error('Document upload route not found. Please check if the backend server has the document routes configured.');
         }
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -229,7 +229,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     try {
       const response = await fetch(`${API_URL}/employees/${employeeId}/documents`);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`https error! status: ${response.status}`);
       }
       const data = await response.json();
       if (data.success) {
@@ -256,7 +256,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        throw new Error(data.message || `https error! status: ${response.status}`);
       }
 
       toast.success('Document deleted successfully');
@@ -282,7 +282,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        throw new Error(data.message || `https error! status: ${response.status}`);
       }
 
       toast.success('Document verified successfully');

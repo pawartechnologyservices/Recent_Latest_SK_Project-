@@ -28,7 +28,7 @@ class PaymentService {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`https error! status: ${response.status}`);
       }
       
       return await response.json();

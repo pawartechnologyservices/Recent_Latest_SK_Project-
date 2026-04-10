@@ -220,7 +220,7 @@ class DeductionService {
 
       // Check for network errors
       if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorMessage = `https error! status: ${response.status}`;
         try {
           // Try to parse error response as JSON
           const errorData = await response.json();
@@ -430,7 +430,7 @@ class DeductionService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`https error! status: ${response.status}`);
       }
 
       return await response.json();
@@ -454,7 +454,7 @@ class DeductionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -484,7 +484,7 @@ class DeductionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -512,7 +512,7 @@ class DeductionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -617,7 +617,7 @@ class DeductionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -647,7 +647,7 @@ class DeductionService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.message || `https error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -685,7 +685,7 @@ class DeductionService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`https error! status: ${response.status}`);
       }
 
       return await response.blob();

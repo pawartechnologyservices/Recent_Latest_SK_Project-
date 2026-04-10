@@ -150,7 +150,7 @@ class SiteService {
       if (!response.ok) {
         console.error(`❌ API Error [${response.status}]:`, data);
         throw new ApiError(
-          data.message || data.error || `HTTP error! status: ${response.status}`,
+          data.message || data.error || `https error! status: ${response.status}`,
           response.status,
           data
         );

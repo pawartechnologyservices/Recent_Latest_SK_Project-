@@ -411,27 +411,40 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
     calculateAllSalaries();
   }, [selectedMonth, employees, calculateAllSalaries]);
 
-  // Filter employees when site changes
-  useEffect(() => {
-    if (selectedSiteId) {
-      const selectedSite = sites.find(site => site._id === selectedSiteId);
-      if (selectedSite) {
-        const filtered = employees.filter(emp => emp.siteName === selectedSite.name);
-        setFilteredEmployees(filtered);
-      } else {
-        setFilteredEmployees(employees);
-      }
+  // Filter employees based on selected site ID - for deduction form
+  const filterEmployeesBySite = useCallback((siteId: string) => {
+    if (!siteId || siteId === "") {
+      setFilteredEmployees(employees);
+      return;
+    }
+    
+    const selectedSite = sites.find(site => site._id === siteId);
+    if (selectedSite && selectedSite.name) {
+      const filtered = employees.filter(emp => 
+        emp.siteName && emp.siteName.toLowerCase() === selectedSite.name.toLowerCase()
+      );
+      console.log(`Filtered employees for site "${selectedSite.name}": ${filtered.length} employees`);
+      console.log("Filtered employees:", filtered.map(e => ({ name: e.name, siteName: e.siteName })));
+      setFilteredEmployees(filtered);
     } else {
       setFilteredEmployees(employees);
     }
-  }, [selectedSiteId, employees, sites]);
+  }, [employees, sites]);
 
-  // Update filtered employees for advance form when site changes
+  // When deduction form site changes, filter employees
   useEffect(() => {
-    if (advanceForm.siteId) {
+    filterEmployeesBySite(deductionForm.siteId);
+  }, [deductionForm.siteId, filterEmployeesBySite]);
+
+  // When advance form site changes, filter employees
+  useEffect(() => {
+    if (advanceForm.siteId && advanceForm.siteId !== "") {
       const selectedSite = sites.find(site => site._id === advanceForm.siteId);
-      if (selectedSite) {
-        const filtered = employees.filter(emp => emp.siteName === selectedSite.name);
+      if (selectedSite && selectedSite.name) {
+        const filtered = employees.filter(emp => 
+          emp.siteName && emp.siteName.toLowerCase() === selectedSite.name.toLowerCase()
+        );
+        console.log(`Advance form - Filtered employees for site "${selectedSite.name}": ${filtered.length} employees`);
         setFilteredEmployees(filtered);
       } else {
         setFilteredEmployees(employees);
@@ -672,6 +685,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
           }));
 
         console.log(`Transformed ${transformedEmployees.length} employees`);
+        console.log("Employees with site names:", transformedEmployees.map(e => ({ name: e.name, siteName: e.siteName })));
         setEmployees(transformedEmployees);
         
         if (transformedEmployees.length > 0) {
@@ -709,8 +723,8 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
   // Fetch deduction statistics
   const fetchDeductionStats = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/deductions/stats`);
-      
+     const response = await fetch(`${API_URL}/deductions/deductions/stats`);
+        
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
@@ -1883,7 +1897,11 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
               </Label>
               <Select
                 value={advanceForm.siteId}
-                onValueChange={(value) => handleAdvanceFormChange("siteId", value)}
+                onValueChange={(value) => {
+                  handleAdvanceFormChange("siteId", value);
+                  // Reset employee selection when site changes
+                  handleAdvanceFormChange("employeeId", "");
+                }}
                 disabled={isLoadingSites}
               >
                 <SelectTrigger>
@@ -2221,7 +2239,6 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
             setIsAddingDeduction(false);
             setEditingDeduction(null);
             resetDeductionForm();
-            setSelectedSiteId("");
           }
         }}
       >
@@ -2270,7 +2287,11 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
               </Label>
               <Select
                 value={deductionForm.siteId}
-                onValueChange={(value) => handleFormChange("siteId", value)}
+                onValueChange={(value) => {
+                  handleFormChange("siteId", value);
+                  // Reset employee selection when site changes
+                  handleFormChange("employeeId", "");
+                }}
                 disabled={isLoadingSites}
               >
                 <SelectTrigger className="w-full">
@@ -2558,7 +2579,6 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
                 setIsAddingDeduction(false);
                 setEditingDeduction(null);
                 resetDeductionForm();
-                setSelectedSiteId("");
               }}
               disabled={isSubmitting}
               className="flex-1 sm:flex-none"
@@ -2566,7 +2586,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
               Cancel
             </Button>
             <Button
-              onClick={handleAddDeduction}
+              onClick={editingDeduction ? handleUpdateDeduction : handleAddDeduction}
               disabled={
                 isSubmitting ||
                 !deductionForm.employeeId ||

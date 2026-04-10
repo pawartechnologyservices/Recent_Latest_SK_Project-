@@ -83,7 +83,7 @@ const fetchApi = async <T>(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      throw new Error(errorData.message || `https error! status: ${response.status}`);
     }
 
     return await response.json();

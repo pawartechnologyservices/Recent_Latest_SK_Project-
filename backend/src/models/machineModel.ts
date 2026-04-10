@@ -6,6 +6,8 @@ export interface IMaintenanceRecord {
   cost: number;
   performedBy: string;
   date: Date;
+  status: 'pending' | 'approved' | 'rejected';
+  expenseId?: string;
 }
 
 export interface IMachine extends Document {
@@ -33,6 +35,12 @@ const MaintenanceSchema: Schema<IMaintenanceRecord> = new Schema(
     cost: { type: Number, required: true },
     performedBy: { type: String, required: true },
     date: { type: Date, default: Date.now },
+    status: { 
+      type: String, 
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    expenseId: { type: String }
   },
   { _id: false }
 );
@@ -54,11 +62,10 @@ const MachineSchema: Schema<IMachine> = new Schema(
     location: { type: String },
     manufacturer: { type: String },
     modelNumber: { type: String },
-    // IMPORTANT: Remove unique constraint or use sparse + unique with filter
     serialNumber: { 
       type: String, 
       unique: true, 
-      sparse: true,  // This allows multiple null/undefined values
+      sparse: true,
       index: true 
     },
     department: { type: String },
@@ -73,7 +80,6 @@ MachineSchema.index({ name: 'text', modelNumber: 'text', location: 'text', depar
 
 // Add a pre-save middleware to handle empty serial numbers
 MachineSchema.pre('save', function(next) {
-  // If serialNumber is empty string or null/undefined, set to undefined to avoid unique constraint issues
   if (this.serialNumber === '' || this.serialNumber === null) {
     this.serialNumber = undefined;
   }

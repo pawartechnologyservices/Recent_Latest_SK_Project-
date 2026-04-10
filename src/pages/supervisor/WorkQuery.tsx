@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// WorkQueryPage.tsx
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,6 @@ import {
 import { 
   Search, 
   Plus, 
-  FileText, 
   X, 
   Eye, 
   Clock, 
@@ -40,13 +40,11 @@ import {
   MessageCircle, 
   User, 
   Trash2,
-  Download,
   RefreshCw,
   Building2,
   Loader2,
   Mail,
   MapPin,
-  File,
   HardHat,
   Shield,
   Car,
@@ -59,7 +57,13 @@ import {
   BarChart3,
   LogOut,
   Settings,
-  ClipboardList
+  ClipboardList,
+  Camera,
+  Image as ImageIcon,
+  Upload,
+  Trash,
+  ZoomIn,
+  RotateCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -67,7 +71,7 @@ import { useWorkQuery } from "@/hooks/useWorkQuery";
 import { format } from "date-fns";
 import { useRole } from "@/context/RoleContext";
 
-// Dashboard Header Component with Hamburger Menu
+// Dashboard Header Component
 interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
@@ -97,7 +101,7 @@ const DashboardHeader = ({ title, subtitle, onMenuClick, showMenu = true }: Dash
           )}
           
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{title}</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Work Query Management</h1>
             {subtitle && (
               <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
                 {subtitle}
@@ -275,8 +279,20 @@ interface WorkQuery {
     comment: string;
     timestamp: string;
   }>;
+  images?: Array<{
+    url: string;
+    publicId: string;
+    uploadedAt: string;
+  }>;
   createdAt: string;
   updatedAt: string;
+}
+
+// Image File with Preview
+interface ImageFile {
+  file: File;
+  preview: string;
+  id: string;
 }
 
 // Reusable Components
@@ -339,15 +355,349 @@ const ServiceIcon = ({ type }: { type: string }) => {
   return icons[type as keyof typeof icons] || icons.default;
 };
 
-// Service Examples - for guidance only
+// Camera Modal Component
+interface CameraModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCapture: (file: File) => void;
+}
+
+const CameraModal = ({ isOpen, onClose, onCapture }: CameraModalProps) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      stopCamera();
+    };
+  }, [isOpen, facingMode]);
+
+  const startCamera = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: facingMode } }
+      });
+      
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err) {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true
+        });
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      } catch (fallbackErr) {
+        console.error('Error accessing camera:', fallbackErr);
+        setError('Unable to access camera. Please check permissions.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+  };
+
+  const switchCamera = () => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            onCapture(file);
+            onClose();
+          }
+        }, 'image/jpeg', 0.9);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-[95vw] md:max-w-2xl p-0 overflow-hidden">
+        <DialogHeader className="p-4 border-b">
+          <DialogTitle>Take Photo</DialogTitle>
+          <DialogDescription>
+            Position the camera and click capture
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="relative bg-black">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+            </div>
+          )}
+          
+          {error ? (
+            <div className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-500">{error}</p>
+              <Button onClick={startCamera} className="mt-4">
+                Try Again
+              </Button>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-auto max-h-[60vh] object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="rounded-full h-12 w-12"
+                  onClick={switchCamera}
+                >
+                  <RotateCw className="h-5 w-5" />
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="default"
+                  size="icon"
+                  className="rounded-full h-16 w-16 bg-white hover:bg-gray-200"
+                  onClick={capturePhoto}
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-gray-800 bg-white" />
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Photo Upload Component
+interface PhotoUploadProps {
+  images: ImageFile[];
+  onImagesChange: (images: ImageFile[]) => void;
+  maxImages?: number;
+  disabled?: boolean;
+}
+
+const PhotoUpload = ({ images, onImagesChange, maxImages = 5, disabled = false }: PhotoUploadProps) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImageForView, setSelectedImageForView] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    if (images.length + files.length > maxImages) {
+      toast.error(`You can only upload up to ${maxImages} images`);
+      return;
+    }
+
+    const newImages: ImageFile[] = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: Math.random().toString(36).substring(7)
+    }));
+
+    onImagesChange([...images, ...newImages]);
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCameraCapture = (file: File) => {
+    if (images.length + 1 > maxImages) {
+      toast.error(`You can only upload up to ${maxImages} images`);
+      return;
+    }
+    
+    const newImage: ImageFile = {
+      file,
+      preview: URL.createObjectURL(file),
+      id: Math.random().toString(36).substring(7)
+    };
+    
+    onImagesChange([...images, newImage]);
+    toast.success('Photo captured successfully');
+  };
+
+  const handleRemoveImage = (id: string) => {
+    const imageToRemove = images.find(img => img.id === id);
+    if (imageToRemove) {
+      URL.revokeObjectURL(imageToRemove.preview);
+    }
+    onImagesChange(images.filter(img => img.id !== id));
+  };
+
+  return (
+    <div className="space-y-3">
+      <Label className="text-sm">Photos (Optional)</Label>
+      <p className="text-xs text-muted-foreground">
+        Take photos or upload images to document the issue (Max {maxImages} images)
+      </p>
+      
+      {images.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {images.map((image) => (
+            <div key={image.id} className="relative group">
+              <div 
+                className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer"
+                onClick={() => setSelectedImageForView(image.preview)}
+              >
+                <img 
+                  src={image.preview} 
+                  alt="Preview" 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="secondary"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedImageForView(image.preview);
+                    }}
+                  >
+                    <ZoomIn className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="destructive"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveImage(image.id);
+                    }}
+                  >
+                    <Trash className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {images.length < maxImages && !disabled && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsCameraOpen(true)}
+            className="flex-1"
+          >
+            <Camera className="h-4 w-4 mr-2" />
+            Take Photo
+          </Button>
+          
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload from Gallery
+          </Button>
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+            disabled={disabled}
+          />
+        </div>
+      )}
+      
+      <CameraModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={handleCameraCapture}
+      />
+      
+      <Dialog open={!!selectedImageForView} onOpenChange={() => setSelectedImageForView(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden">
+          <div className="relative w-full h-full min-h-[300px] flex items-center justify-center bg-black">
+            {selectedImageForView && (
+              <img 
+                src={selectedImageForView} 
+                alt="Full size preview" 
+                className="max-w-full max-h-[85vh] object-contain"
+              />
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 text-white bg-black/50 hover:bg-black/70"
+              onClick={() => setSelectedImageForView(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Service Examples
 const SERVICE_EXAMPLES = [
   { id: "CLEAN001", name: "Office Cleaning Service", type: "cleaning" },
   { id: "WASTE001", name: "Biomedical Waste Collection", type: "waste-management" },
   { id: "PARK001", name: "Parking Lot Management", type: "parking-management" },
   { id: "SEC001", name: "Security Patrol Service", type: "security" },
   { id: "MAINT001", name: "HVAC Maintenance", type: "maintenance" },
-  { id: "CLEAN002", name: "Restroom Sanitization", type: "cleaning" },
-  { id: "WASTE002", name: "Recycling Collection", type: "waste-management" }
 ];
 
 // Main Component
@@ -405,8 +755,8 @@ const WorkQueryPage = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedQueryForView, setSelectedQueryForView] = useState<WorkQuery | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedImageForView, setSelectedImageForView] = useState<string | null>(null);
 
-  // New query form state
   const [newQuery, setNewQuery] = useState({
     title: "",
     description: "",
@@ -417,9 +767,9 @@ const WorkQueryPage = () => {
     supervisorName: ""
   });
 
+  const [queryImages, setQueryImages] = useState<ImageFile[]>([]);
   const [selectedServiceType, setSelectedServiceType] = useState<string>("other");
 
-  // Check if mobile view
   useEffect(() => {
     const checkMobile = () => {
       setIsMobileView(window.innerWidth < 768);
@@ -431,7 +781,14 @@ const WorkQueryPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Service types for radio buttons
+  useEffect(() => {
+    return () => {
+      queryImages.forEach(image => {
+        URL.revokeObjectURL(image.preview);
+      });
+    };
+  }, [queryImages]);
+
   const serviceTypes = [
     { value: "cleaning", label: "Cleaning", icon: <Sparkles className="h-4 w-4" /> },
     { value: "waste-management", label: "Waste Management", icon: <Trash2 className="h-4 w-4" /> },
@@ -441,7 +798,6 @@ const WorkQueryPage = () => {
     { value: "other", label: "Other", icon: <Truck className="h-4 w-4" /> }
   ];
 
-  // Fetch current supervisor data
   useEffect(() => {
     const fetchCurrentSupervisor = async () => {
       try {
@@ -450,8 +806,6 @@ const WorkQueryPage = () => {
         if (!authUser || !isAuthenticated) {
           throw new Error("User not authenticated");
         }
-        
-        console.log("👤 Auth User:", authUser);
         
         setCurrentSupervisor({
           id: authUser._id || authUser.id || "",
@@ -469,7 +823,7 @@ const WorkQueryPage = () => {
         }));
         
       } catch (error: any) {
-        console.error("❌ Error fetching supervisor data:", error);
+        console.error("Error fetching supervisor data:", error);
         
         try {
           const storedUser = localStorage.getItem('sk_user');
@@ -489,11 +843,9 @@ const WorkQueryPage = () => {
               supervisorId: parsedUser._id || parsedUser.id || "SUP001",
               supervisorName: parsedUser.name || "Supervisor User"
             }));
-          } else {
-            throw new Error("No user data found");
           }
         } catch (localError) {
-          console.error("❌ Error getting user from localStorage:", localError);
+          console.error("Error getting user from localStorage:", localError);
           toast.error("Failed to load user data. Please log in again.");
         }
       } finally {
@@ -506,7 +858,6 @@ const WorkQueryPage = () => {
     }
   }, [authUser, isAuthenticated, authLoading]);
 
-  // Check if user is a supervisor
   useEffect(() => {
     if (!authLoading && !loadingSupervisor && (!isAuthenticated || role !== 'supervisor')) {
       toast.error("Access denied. Only supervisors can access this page.");
@@ -525,7 +876,6 @@ const WorkQueryPage = () => {
     navigate(path);
   };
 
-  // Filter work queries
   const filteredQueries = workQueries.filter(query => {
     const matchesSearch = 
       query.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -538,9 +888,11 @@ const WorkQueryPage = () => {
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
-  // Reset form
   const handleDialogClose = () => {
     setIsCreateDialogOpen(false);
+    queryImages.forEach(image => {
+      URL.revokeObjectURL(image.preview);
+    });
     setTimeout(() => {
       setNewQuery({
         title: "",
@@ -551,11 +903,11 @@ const WorkQueryPage = () => {
         supervisorId: currentSupervisor.id,
         supervisorName: currentSupervisor.name
       });
+      setQueryImages([]);
       setSelectedServiceType("other");
     }, 300);
   };
 
-  // Handle form submission
   const handleSubmitQuery = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -596,6 +948,8 @@ const WorkQueryPage = () => {
       
       serviceId = serviceId.trim().toUpperCase();
       
+      const files = queryImages.map(img => img.file);
+      
       const result = await createWorkQuery({
         title: newQuery.title,
         description: newQuery.description,
@@ -606,10 +960,10 @@ const WorkQueryPage = () => {
         supervisorName: currentSupervisor.name,
         serviceTitle: serviceTitle,
         serviceType: selectedServiceType
-      }, []); // Empty array for files (no file uploads)
+      }, files);
       
       if (result.success) {
-        toast.success("Work query created successfully!");
+        toast.success(`Work query created successfully${files.length > 0 ? ` with ${files.length} photo(s)` : ''}`);
         handleDialogClose();
       } else {
         toast.error(result.error || "Failed to create work query");
@@ -620,7 +974,6 @@ const WorkQueryPage = () => {
     }
   };
 
-  // Handle delete query
   const handleDeleteQuery = async (queryId: string, queryTitle: string) => {
     try {
       const result = await deleteWorkQuery(queryId);
@@ -637,20 +990,17 @@ const WorkQueryPage = () => {
     }
   };
 
-  // Handle view query details
   const handleViewQuery = (query: WorkQuery) => {
     setSelectedQueryForView(query);
     setIsViewDialogOpen(true);
   };
 
-  // Refresh data
   const handleRefresh = () => {
     fetchWorkQueries();
     fetchStatistics();
     toast.success("Data refreshed successfully");
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), "MMM dd, yyyy HH:mm");
@@ -659,7 +1009,6 @@ const WorkQueryPage = () => {
     }
   };
 
-  // Show loading state
   if (authLoading || loadingSupervisor) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -671,7 +1020,6 @@ const WorkQueryPage = () => {
     );
   }
 
-  // Show access denied if not a supervisor
   if (!isAuthenticated || role !== 'supervisor') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -844,17 +1192,16 @@ const WorkQueryPage = () => {
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
                     <DialogHeader>
-                      <DialogTitle className="text-lg">Create New Work Query</DialogTitle>
-                      <DialogDescription className="text-sm">
+                      <DialogTitle>Create New Work Query</DialogTitle>
+                      <DialogDescription>
                         Report an issue with a facility service
                       </DialogDescription>
                     </DialogHeader>
                     
                     <form onSubmit={handleSubmitQuery} className="space-y-4 md:space-y-6">
-                      {/* Basic Information */}
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="title" className="text-sm">Query Title *</Label>
+                          <Label htmlFor="title">Query Title *</Label>
                           <Input
                             id="title"
                             value={newQuery.title}
@@ -862,12 +1209,11 @@ const WorkQueryPage = () => {
                             placeholder="Brief description of the issue"
                             required
                             disabled={workQueryLoading.creating}
-                            className="text-sm"
                           />
                         </div>
                         
                         <div className="space-y-2">
-                          <Label htmlFor="description" className="text-sm">Detailed Description *</Label>
+                          <Label htmlFor="description">Detailed Description *</Label>
                           <Textarea
                             id="description"
                             value={newQuery.description}
@@ -876,14 +1222,12 @@ const WorkQueryPage = () => {
                             rows={4}
                             required
                             disabled={workQueryLoading.creating}
-                            className="text-sm"
                           />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* SERVICE INPUT FIELD */}
                           <div className="space-y-2">
-                            <Label htmlFor="serviceId" className="text-sm">Service ID/Name *</Label>
+                            <Label htmlFor="serviceId">Service ID/Name *</Label>
                             <Input
                               id="serviceId"
                               value={newQuery.serviceId}
@@ -891,7 +1235,6 @@ const WorkQueryPage = () => {
                               placeholder="Enter Service ID or Name"
                               required
                               disabled={workQueryLoading.creating}
-                              className="text-sm"
                             />
                             <div className="text-xs text-muted-foreground flex items-start gap-1">
                               <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
@@ -900,16 +1243,14 @@ const WorkQueryPage = () => {
                           </div>
                           
                           <div className="space-y-2">
-                            <Label htmlFor="category" className="text-sm">Category *</Label>
+                            <Label htmlFor="category">Category *</Label>
                             <Select 
                               value={newQuery.category} 
                               onValueChange={(value) => setNewQuery(prev => ({ ...prev, category: value }))}
                               disabled={workQueryLoading.creating}
                             >
-                              <SelectTrigger className="text-sm">
-                                <SelectValue placeholder="Select category">
-                                  {categories.find(c => c.value === newQuery.category)?.label || "Select category"}
-                                </SelectValue>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                               <SelectContent>
                                 {categories.map(category => (
@@ -927,9 +1268,8 @@ const WorkQueryPage = () => {
                           </div>
                         </div>
 
-                        {/* Service Type Selection */}
                         <div className="space-y-2">
-                          <Label className="text-sm">Service Type (Optional)</Label>
+                          <Label>Service Type (Optional)</Label>
                           <p className="text-xs text-muted-foreground mb-2">
                             Select the type of service you're reporting an issue for
                           </p>
@@ -939,7 +1279,7 @@ const WorkQueryPage = () => {
                                 key={serviceType.value}
                                 type="button"
                                 variant={selectedServiceType === serviceType.value ? "default" : "outline"}
-                                className="justify-start h-auto py-2 text-xs md:text-sm"
+                                className="justify-start h-auto py-2"
                                 onClick={() => setSelectedServiceType(serviceType.value)}
                               >
                                 <div className="flex items-center gap-2">
@@ -952,28 +1292,26 @@ const WorkQueryPage = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="priority" className="text-sm">Priority Level *</Label>
+                          <Label htmlFor="priority">Priority Level *</Label>
                           <Select 
                             value={newQuery.priority} 
                             onValueChange={(value) => setNewQuery(prev => ({ ...prev, priority: value as any }))}
                             disabled={workQueryLoading.creating}
                           >
-                            <SelectTrigger className="text-sm">
-                              <SelectValue placeholder="Select priority">
-                                {priorities.find(p => p.value === newQuery.priority)?.label || "Select priority"}
-                              </SelectValue>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select priority" />
                             </SelectTrigger>
                             <SelectContent>
                               {priorities.map(priority => (
                                 <SelectItem key={priority.value} value={priority.value}>
                                   <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${
+                                    <div className={`w-2 h-2 rounded-full ${
                                       priority.value === 'low' ? 'bg-green-500' :
                                       priority.value === 'medium' ? 'bg-yellow-500' :
                                       priority.value === 'high' ? 'bg-orange-500' : 'bg-red-500'
                                     }`} />
                                     <div className="flex flex-col">
-                                      <span className="text-sm">{priority.label}</span>
+                                      <span>{priority.label}</span>
                                       <span className="text-xs text-muted-foreground">
                                         {priority.description}
                                       </span>
@@ -986,11 +1324,17 @@ const WorkQueryPage = () => {
                         </div>
                       </div>
 
-                      {/* Service Examples (for guidance) */}
+                      <PhotoUpload 
+                        images={queryImages}
+                        onImagesChange={setQueryImages}
+                        maxImages={5}
+                        disabled={workQueryLoading.creating}
+                      />
+
                       <div className="p-3 md:p-4 bg-gray-50 rounded-lg border">
                         <div className="flex items-center gap-2 mb-2">
                           <Info className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                          <Label className="font-medium text-gray-900 text-sm">Service Examples</Label>
+                          <Label className="font-medium text-gray-900">Service Examples</Label>
                         </div>
                         <p className="text-xs text-gray-600 mb-3">
                           Here are some examples of service IDs/Names you can use:
@@ -1023,11 +1367,10 @@ const WorkQueryPage = () => {
                         </p>
                       </div>
 
-                      {/* Supervisor Info Display */}
                       <div className="p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="flex items-center gap-2 mb-2">
                           <User className="h-4 w-4 text-blue-600" />
-                          <Label className="font-semibold text-blue-900 text-sm">Supervisor Information</Label>
+                          <Label className="font-semibold text-blue-900">Supervisor Information</Label>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 text-xs md:text-sm">
                           <div>
@@ -1059,21 +1402,20 @@ const WorkQueryPage = () => {
                         )}
                       </div>
 
-                      {/* Submit Button */}
                       <DialogFooter className="gap-2 flex-col sm:flex-row">
                         <Button 
                           type="button" 
                           variant="outline" 
-                          onClick={() => setIsCreateDialogOpen(false)}
+                          onClick={handleDialogClose}
                           disabled={workQueryLoading.creating}
-                          className="w-full sm:w-auto text-sm"
+                          className="w-full sm:w-auto"
                         >
                           Cancel
                         </Button>
                         <Button 
                           type="submit" 
                           disabled={workQueryLoading.creating}
-                          className="w-full sm:w-auto text-sm"
+                          className="w-full sm:w-auto"
                         >
                           {workQueryLoading.creating ? (
                             <>
@@ -1101,7 +1443,7 @@ const WorkQueryPage = () => {
                     placeholder="Search queries..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 text-sm"
+                    className="pl-10"
                   />
                 </div>
               </div>
@@ -1109,22 +1451,20 @@ const WorkQueryPage = () => {
               <div className="space-y-1 md:space-y-2">
                 <Label className="text-xs md:text-sm">Status</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="All Status">
-                      {statusFilter === "all" ? "All Status" : statuses.find(s => s.value === statusFilter)?.label || statusFilter}
-                    </SelectValue>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     {statuses.map(status => (
                       <SelectItem key={status.value} value={status.value}>
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${
+                          <div className={`w-2 h-2 rounded-full ${
                             status.value === 'pending' ? 'bg-yellow-500' :
                             status.value === 'in-progress' ? 'bg-blue-500' :
                             status.value === 'resolved' ? 'bg-green-500' : 'bg-red-500'
                           }`} />
-                          <span className="text-sm">{status.label}</span>
+                          <span>{status.label}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1135,22 +1475,20 @@ const WorkQueryPage = () => {
               <div className="space-y-1 md:space-y-2">
                 <Label className="text-xs md:text-sm">Priority</Label>
                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="All Priorities">
-                      {priorityFilter === "all" ? "All Priorities" : priorities.find(p => p.value === priorityFilter)?.label || priorityFilter}
-                    </SelectValue>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Priorities" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Priorities</SelectItem>
                     {priorities.map(priority => (
                       <SelectItem key={priority.value} value={priority.value}>
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${
+                          <div className={`w-2 h-2 rounded-full ${
                             priority.value === 'low' ? 'bg-green-500' :
                             priority.value === 'medium' ? 'bg-yellow-500' :
                             priority.value === 'high' ? 'bg-orange-500' : 'bg-red-500'
                           }`} />
-                          <span className="text-sm">{priority.label}</span>
+                          <span>{priority.label}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1163,7 +1501,7 @@ const WorkQueryPage = () => {
             {workQueryLoading.queries ? (
               <div className="text-center py-8 md:py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-4 text-sm md:text-base text-muted-foreground">Loading work queries...</p>
+                <p className="mt-4 text-muted-foreground">Loading work queries...</p>
               </div>
             ) : filteredQueries.length === 0 ? (
               <div className="text-center py-8 md:py-12 border rounded-lg">
@@ -1177,7 +1515,6 @@ const WorkQueryPage = () => {
               </div>
             ) : (
               <>
-                {/* Mobile View - Card Grid */}
                 {isMobileView ? (
                   <div className="space-y-3">
                     {filteredQueries.map((query) => (
@@ -1206,6 +1543,14 @@ const WorkQueryPage = () => {
                               <span className="text-xs text-gray-500">{formatDate(query.createdAt)}</span>
                             </div>
 
+                            {/* Display photos count */}
+                            {query.images && query.images.length > 0 && (
+                              <div className="flex items-center gap-1 text-xs text-blue-600">
+                                <ImageIcon className="h-3 w-3" />
+                                <span>{query.images.length} photo(s)</span>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-2 pt-2">
                               <Button 
                                 size="sm" 
@@ -1232,17 +1577,17 @@ const WorkQueryPage = () => {
                                     Delete
                                   </Button>
                                 </AlertDialogTrigger>
-                                <AlertDialogContent className="w-[90%] max-w-md">
+                                <AlertDialogContent>
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Delete Work Query</AlertDialogTitle>
                                     <AlertDialogDescription>
                                       Are you sure you want to delete this work query? This action cannot be undone.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
-                                  <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                    <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
-                                      className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                      className="bg-red-600 hover:bg-red-700"
                                       onClick={() => handleDeleteQuery(query._id, query.title)}
                                     >
                                       Delete
@@ -1257,24 +1602,24 @@ const WorkQueryPage = () => {
                     ))}
                   </div>
                 ) : (
-                  /* Desktop View - Table */
                   <div className="rounded-md border overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="whitespace-nowrap">Query ID</TableHead>
-                          <TableHead className="whitespace-nowrap">Title</TableHead>
-                          <TableHead className="whitespace-nowrap">Service</TableHead>
-                          <TableHead className="whitespace-nowrap">Priority</TableHead>
-                          <TableHead className="whitespace-nowrap">Status</TableHead>
-                          <TableHead className="whitespace-nowrap">Created</TableHead>
-                          <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+                          <TableHead>Query ID</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Service</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Photos</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredQueries.map((query) => (
                           <TableRow key={query._id}>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">
+                            <TableCell className="font-mono text-sm">
                               {query.queryId}
                             </TableCell>
                             <TableCell>
@@ -1295,6 +1640,16 @@ const WorkQueryPage = () => {
                             </TableCell>
                             <TableCell>
                               <StatusBadge status={query.status} />
+                            </TableCell>
+                            <TableCell>
+                              {query.images && query.images.length > 0 ? (
+                                <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleViewQuery(query)}>
+                                  <ImageIcon className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm">{query.images.length}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">No photos</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="text-sm whitespace-nowrap">
@@ -1353,56 +1708,55 @@ const WorkQueryPage = () => {
                   </div>
                 )}
 
-                {/* View Query Details Dialog */}
+                {/* View Query Details Dialog with Images */}
                 <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     {selectedQueryForView && (
                       <>
                         <DialogHeader>
-                          <DialogTitle className="text-lg">Query Details - {selectedQueryForView.queryId}</DialogTitle>
+                          <DialogTitle>Query Details - {selectedQueryForView.queryId}</DialogTitle>
+                          <DialogDescription>
+                            View complete information about this work query
+                          </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4 md:space-y-6">
-                          {/* Query Information */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <Label className="font-semibold text-sm">Title</Label>
+                              <Label className="font-semibold">Title</Label>
                               <p className="mt-1 text-sm">{selectedQueryForView.title}</p>
                             </div>
                             <div>
-                              <Label className="font-semibold text-sm">Service</Label>
-                              <div className="mt-1">
-                                <div className="font-medium text-sm">{selectedQueryForView.serviceId}</div>
-                              </div>
+                              <Label className="font-semibold">Service</Label>
+                              <p className="mt-1 text-sm">{selectedQueryForView.serviceId}</p>
                             </div>
                             <div>
-                              <Label className="font-semibold text-sm">Priority</Label>
+                              <Label className="font-semibold">Priority</Label>
                               <div className="mt-1">
                                 <PriorityBadge priority={selectedQueryForView.priority} />
                               </div>
                             </div>
                             <div>
-                              <Label className="font-semibold text-sm">Status</Label>
+                              <Label className="font-semibold">Status</Label>
                               <div className="mt-1">
                                 <StatusBadge status={selectedQueryForView.status} />
                               </div>
                             </div>
                             <div>
-                              <Label className="font-semibold text-sm">Category</Label>
+                              <Label className="font-semibold">Category</Label>
                               <p className="mt-1 text-sm">
                                 {categories.find(c => c.value === selectedQueryForView.category)?.label || selectedQueryForView.category}
                               </p>
                             </div>
                             <div>
-                              <Label className="font-semibold text-sm">Created</Label>
+                              <Label className="font-semibold">Created</Label>
                               <p className="mt-1 text-sm">{formatDate(selectedQueryForView.createdAt)}</p>
                             </div>
                           </div>
 
-                          {/* Supervisor Information */}
-                          <div className="p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="flex items-center gap-2 mb-2">
-                              <User className="h-5 w-5 text-blue-600" />
-                              <Label className="font-semibold text-blue-900 text-sm">Reported By</Label>
+                              <User className="h-4 w-4 text-blue-600" />
+                              <Label className="font-semibold text-blue-900">Reported By</Label>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               <div>
@@ -1416,18 +1770,41 @@ const WorkQueryPage = () => {
                             </div>
                           </div>
 
-                          {/* Description */}
                           <div>
-                            <Label className="font-semibold text-sm">Description</Label>
+                            <Label className="font-semibold">Description</Label>
                             <p className="mt-1 text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">
                               {selectedQueryForView.description}
                             </p>
                           </div>
 
-                          {/* Superadmin Response */}
+                          {/* Display Images in View Dialog */}
+                          {selectedQueryForView.images && selectedQueryForView.images.length > 0 && (
+                            <div>
+                              <Label className="font-semibold mb-2 block">Photos ({selectedQueryForView.images.length})</Label>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {selectedQueryForView.images.map((image, index) => (
+                                  <div
+                                    key={index}
+                                    className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer group"
+                                    onClick={() => setSelectedImageForView(image.url)}
+                                  >
+                                    <img
+                                      src={image.url}
+                                      alt={`Query photo ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <ZoomIn className="h-6 w-6 text-white" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {selectedQueryForView.superadminResponse && (
-                            <div className="p-3 md:p-4 bg-green-50 rounded-lg border border-green-200">
-                              <Label className="font-semibold text-green-900 text-sm">Superadmin Response</Label>
+                            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                              <Label className="font-semibold text-green-900">Superadmin Response</Label>
                               <p className="mt-1 text-sm text-green-800 whitespace-pre-wrap">
                                 {selectedQueryForView.superadminResponse}
                               </p>
@@ -1444,19 +1821,41 @@ const WorkQueryPage = () => {
                   </DialogContent>
                 </Dialog>
 
+                {/* Full Screen Image Viewer */}
+                <Dialog open={!!selectedImageForView} onOpenChange={() => setSelectedImageForView(null)}>
+                  <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden">
+                    <div className="relative w-full h-full min-h-[300px] flex items-center justify-center bg-black">
+                      {selectedImageForView && (
+                        <img 
+                          src={selectedImageForView} 
+                          alt="Full size" 
+                          className="max-w-full max-h-[85vh] object-contain"
+                        />
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 text-white bg-black/50 hover:bg-black/70"
+                        onClick={() => setSelectedImageForView(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Pagination */}
                 {pagination.totalPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
-                    <div className="text-xs md:text-sm text-muted-foreground order-2 sm:order-1">
+                    <div className="text-sm text-muted-foreground order-2 sm:order-1">
                       Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
                     </div>
-                    <div className="flex items-center gap-2 order-1 sm:order-2 w-full sm:w-auto justify-center">
+                    <div className="flex items-center gap-2 order-1 sm:order-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => changePage(pagination.page - 1)}
                         disabled={pagination.page === 1}
-                        className="text-sm"
                       >
                         Previous
                       </Button>
@@ -1478,7 +1877,7 @@ const WorkQueryPage = () => {
                               variant={pagination.page === pageNum ? "default" : "outline"}
                               size="sm"
                               onClick={() => changePage(pageNum)}
-                              className="w-8 h-8 p-0 text-sm"
+                              className="w-8 h-8 p-0"
                             >
                               {pageNum}
                             </Button>
@@ -1490,7 +1889,6 @@ const WorkQueryPage = () => {
                         size="sm"
                         onClick={() => changePage(pagination.page + 1)}
                         disabled={pagination.page === pagination.totalPages}
-                        className="text-sm"
                       >
                         Next
                       </Button>

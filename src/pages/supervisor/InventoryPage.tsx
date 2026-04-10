@@ -101,7 +101,7 @@ interface MachineUpdate {
   site: string;
   description: string;
   status: 'operational' | 'maintenance' | 'out-of-service';
-  photoUrls: string[];  // Changed from photoUrl to photoUrls array
+  photoUrls: string[];
   updatedBy: string;
   updatedAt: string;
 }
@@ -305,10 +305,8 @@ const CameraComponent = ({ onCapture, onClose }: { onCapture: (imageData: string
 };
 
 // Machine View Dialog Component
-// Machine View Dialog Component (Updated - No Dummy Images)
 const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null; open: boolean; onClose: () => void }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  // Use actual machine images if available, otherwise empty array
   const machineImages = machine?.photoUrls || [];
 
   if (!machine) return null;
@@ -324,7 +322,6 @@ const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null
         </DialogHeader>
         
         <div className="space-y-6">
-          {/* Machine Images Gallery - Only show if images exist */}
           {machineImages.length > 0 && (
             <div className="space-y-3">
               <Label className="text-sm font-medium">Images</Label>
@@ -377,7 +374,6 @@ const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null
             </div>
           )}
 
-          {/* Machine Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <div className="text-xs text-gray-500">Machine Name</div>
@@ -439,7 +435,6 @@ const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null
             </div>
           </div>
 
-          {/* Maintenance History */}
           {machine.maintenanceHistory && machine.maintenanceHistory.length > 0 && (
             <div className="space-y-3">
               <Label className="text-sm font-medium">Maintenance History</Label>
@@ -459,6 +454,11 @@ const MachineViewDialog = ({ machine, open, onClose }: { machine: Machine | null
                       </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-2">Performed by: {record.performedBy}</div>
+                    {record.status && (
+                      <Badge className="mt-1 text-xs" variant={record.status === 'pending' ? 'outline' : record.status === 'approved' ? 'default' : 'destructive'}>
+                        {record.status}
+                      </Badge>
+                    )}
                   </div>
                 ))}
               </div>
@@ -549,7 +549,6 @@ const MultipleImageUpload = ({
         </p>
       </div>
 
-      {/* Image Preview Grid */}
       {images.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-3">
           {images.map((img, idx) => (
@@ -584,6 +583,7 @@ const InventoryPage = () => {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machineUpdates, setMachineUpdates] = useState<MachineUpdate[]>([]);
   const [assignedSites, setAssignedSites] = useState<Site[]>([]);
+  const [allSites, setAllSites] = useState<Site[]>([]); // Added to store all sites
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -693,13 +693,7 @@ const InventoryPage = () => {
     { value: "canteen", label: "Canteen", icon: Coffee },
   ];
 
-  const sites: Site[] = [
-    { _id: "1", name: "Main Site", clientName: "Client A", location: "Mumbai", status: "active" } as Site,
-    { _id: "2", name: "Branch Office", clientName: "Client B", location: "Delhi", status: "active" } as Site,
-    { _id: "3", name: "Warehouse A", clientName: "Client C", location: "Bangalore", status: "active" } as Site,
-    { _id: "4", name: "Construction Site B", clientName: "Client D", location: "Chennai", status: "active" } as Site,
-  ];
-
+  // Remove hardcoded sites - will fetch from database
   const managers = ["John Doe", "Jane Smith", "Robert Johnson", "Sarah Wilson", "Michael Brown"];
   
   const categories = {
@@ -726,7 +720,6 @@ const InventoryPage = () => {
     const storedUpdates = localStorage.getItem('machineUpdates');
     if (storedUpdates) {
       const updates = JSON.parse(storedUpdates);
-      // Ensure updates have photoUrls array (migration from old format)
       const migratedUpdates = updates.map((update: any) => ({
         ...update,
         photoUrls: update.photoUrls || (update.photoUrl ? [update.photoUrl] : [])
@@ -742,6 +735,20 @@ const InventoryPage = () => {
       fetchAssignedSites();
     }
   }, [role, user]);
+
+  // Fetch all sites for machine location dropdown
+  React.useEffect(() => {
+    fetchAllSites();
+  }, []);
+
+  const fetchAllSites = async () => {
+    try {
+      const sitesData = await siteService.getAllSites();
+      setAllSites(sitesData || []);
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+    }
+  };
 
   const fetchAssignedSites = async () => {
     try {
@@ -910,6 +917,7 @@ const InventoryPage = () => {
     try {
       setRefreshing(true);
       await fetchData();
+      await fetchAllSites();
       if (role === 'supervisor') {
         await fetchAssignedSites();
       }
@@ -1051,7 +1059,7 @@ const InventoryPage = () => {
         quantity: newMachine.quantity || 1,
         description: newMachine.description,
         status: newMachine.status || 'operational',
-        location: newMachine.location,
+        location: newMachine.location, // This will store the site NAME, not city
         model: newMachine.model,
         department: newMachine.department,
         assignedTo: assignedTo,
@@ -1107,20 +1115,18 @@ const InventoryPage = () => {
     setMachineDialogOpen(true);
   };
 
-const handleViewMachine = async (machineId: string) => {
-  try {
-    console.log('Fetching machine details for ID:', machineId);
-    const machine = await machineService.getMachineById(machineId);
-    console.log('Machine details fetched:', machine);
-    
-    // Remove dummy images - just set the machine as is
-    setViewMachine(machine);
-    setViewMachineDialogOpen(true);
-  } catch (error) {
-    console.error('Failed to fetch machine details:', error);
-    toast.error("Failed to fetch machine details");
-  }
-};
+  const handleViewMachine = async (machineId: string) => {
+    try {
+      console.log('Fetching machine details for ID:', machineId);
+      const machine = await machineService.getMachineById(machineId);
+      console.log('Machine details fetched:', machine);
+      setViewMachine(machine);
+      setViewMachineDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch machine details:', error);
+      toast.error("Failed to fetch machine details");
+    }
+  };
 
   const handleDeleteMachine = async (machineId: string) => {
     try {
@@ -1259,7 +1265,6 @@ const handleViewMachine = async (machineId: string) => {
 
   const addCapturedPhoto = () => {
     if (tempImageForUpload) {
-      // Convert base64 to file
       fetch(tempImageForUpload)
         .then(res => res.blob())
         .then(blob => {
@@ -1318,7 +1323,6 @@ const handleViewMachine = async (machineId: string) => {
 
     setUpdateLoading(true);
     try {
-      // Upload all photos
       const uploadedUrls = await uploadMultiplePhotos(updateFormData.photoFiles, 'machine-update');
 
       const newUpdate: MachineUpdate = {
@@ -1337,7 +1341,6 @@ const handleViewMachine = async (machineId: string) => {
       const updatedUpdates = [newUpdate, ...machineUpdates];
       saveMachineUpdates(updatedUpdates);
 
-      // Update machine location and status
       if (selectedMachineForUpdate.location !== updateFormData.site) {
         await machineService.updateMachine(selectedMachineForUpdate.id, {
           ...selectedMachineForUpdate,
@@ -1531,7 +1534,7 @@ const handleViewMachine = async (machineId: string) => {
       }
 
       const csvContent = [
-        ["Name", "Cost", "Purchase Date", "Quantity", "Status", "Location", "Model", "Department", "Assigned To"],
+        ["Name", "Cost", "Purchase Date", "Quantity", "Status", "Location/Site", "Model", "Department", "Assigned To"],
         ...machines.map(machine => [
           machine.name,
           machine.cost.toString(),
@@ -1866,7 +1869,7 @@ const handleViewMachine = async (machineId: string) => {
             </Card>
           </TabsContent>
 
-          {/* MACHINES TAB - Fixed View Functionality */}
+          {/* MACHINES TAB */}
           <TabsContent value="machines">
             <Card>
               <CardHeader>
@@ -1874,7 +1877,6 @@ const handleViewMachine = async (machineId: string) => {
                 <CardDescription>Add, manage, and track machinery equipment</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Search */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -1886,7 +1888,6 @@ const handleViewMachine = async (machineId: string) => {
                   </Button>
                 </div>
 
-                {/* Table */}
                 <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -1897,7 +1898,7 @@ const handleViewMachine = async (machineId: string) => {
                         <TableHead>Cost</TableHead>
                         <TableHead>Purchase Date</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Location</TableHead>
+                        <TableHead>Location/Site</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1941,7 +1942,12 @@ const handleViewMachine = async (machineId: string) => {
                                 </Badge>
                                 {machine.nextMaintenanceDate && <div className="text-xs text-muted-foreground mt-1">Next: {formatDate(machine.nextMaintenanceDate)}</div>}
                               </TableCell>
-                              <TableCell><div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-muted-foreground" />{machine.location || 'Not assigned'}</div></TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 text-muted-foreground" />
+                                  {machine.location || 'Not assigned'}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <Button variant="ghost" size="icon" onClick={() => handleViewMachine(machine.id)}>
@@ -1963,7 +1969,7 @@ const handleViewMachine = async (machineId: string) => {
             </Card>
           </TabsContent>
 
-          {/* UPDATES TAB - With multiple image upload */}
+          {/* UPDATES TAB */}
           <TabsContent value="updates">
             <Card>
               <CardHeader>
@@ -1983,7 +1989,6 @@ const handleViewMachine = async (machineId: string) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Updates Table */}
                 <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -2094,7 +2099,7 @@ const handleViewMachine = async (machineId: string) => {
           </DialogContent>
         </Dialog>
 
-        {/* ADD/EDIT MACHINE DIALOG */}
+        {/* ADD/EDIT MACHINE DIALOG - Updated with Site Dropdown from Database */}
         <Dialog open={machineDialogOpen} onOpenChange={(open) => { setMachineDialogOpen(open); if (!open) { setEditMachine(null); resetNewMachineForm(); } }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editMachine ? 'Edit Machine' : 'Add New Machine'}</DialogTitle></DialogHeader>
@@ -2106,7 +2111,31 @@ const handleViewMachine = async (machineId: string) => {
               <div className="space-y-2"><Label>Quantity *</Label><Input type="number" min="1" value={newMachine.quantity} onChange={(e) => setNewMachine({...newMachine, quantity: parseInt(e.target.value) || 1})} placeholder="Enter quantity" required /></div>
               <div className="space-y-2"><Label>Status *</Label><Select value={newMachine.status} onValueChange={(value: 'operational' | 'maintenance' | 'out-of-service') => setNewMachine({...newMachine, status: value})}><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent>{machineStatusOptions.map(status => (<SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>))}</SelectContent></Select></div>
               <div className="space-y-2"><Label>Department</Label><Input value={newMachine.department} onChange={(e) => setNewMachine({...newMachine, department: e.target.value})} placeholder="Enter department" /></div>
-              <div className="space-y-2"><Label>Location/Site</Label><Input value={newMachine.location} onChange={(e) => setNewMachine({...newMachine, location: e.target.value})} placeholder="Enter location/site" /></div>
+              {/* Location/Site dropdown - Now fetches from database */}
+              <div className="space-y-2">
+                <Label>Location/Site *</Label>
+                <Select value={newMachine.location} onValueChange={(value) => setNewMachine({...newMachine, location: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allSites.length > 0 ? (
+                      allSites.map(site => (
+                        <SelectItem key={site._id} value={site.name}>
+                          <div className="flex items-center gap-2">
+                            <Building className="h-4 w-4" />
+                            {site.name}
+                            <span className="text-xs text-muted-foreground">({site.location})</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-sites" disabled>No sites available. Please add sites first.</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Select the site where this machine is located/working</p>
+              </div>
               <div className="space-y-2"><Label>Assigned To</Label>{role === 'supervisor' && user ? (<div className="p-2 border rounded-md bg-gray-50"><div className="flex items-center gap-2"><UserCheck className="h-4 w-4" /><span>{user.name}</span><Badge variant="secondary" className="h-5 text-xs ml-1">You</Badge></div></div>) : (<Input value={newMachine.assignedTo} onChange={(e) => setNewMachine({...newMachine, assignedTo: e.target.value})} placeholder="Enter assigned person" />)}</div>
               <div className="space-y-2"><Label>Last Maintenance Date</Label><Input type="date" value={newMachine.lastMaintenanceDate} onChange={(e) => setNewMachine({...newMachine, lastMaintenanceDate: e.target.value})} /></div>
               <div className="space-y-2"><Label>Next Maintenance Date</Label><Input type="date" value={newMachine.nextMaintenanceDate} onChange={(e) => setNewMachine({...newMachine, nextMaintenanceDate: e.target.value})} /></div>
@@ -2116,7 +2145,7 @@ const handleViewMachine = async (machineId: string) => {
           </DialogContent>
         </Dialog>
 
-        {/* ADD/EDIT UPDATE DIALOG - With multiple image upload */}
+        {/* ADD/EDIT UPDATE DIALOG */}
         <Dialog open={updateDialogOpen} onOpenChange={(open) => { setUpdateDialogOpen(open); if (!open) { setSelectedMachineForUpdate(null); setUpdateFormData({ site: '', description: '', status: 'operational', photoFiles: [], photoPreviews: [] }); setFetchMachineQuery({ name: '', model: '' }); setTempImageForUpload(null); } }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{selectedMachineForUpdate ? 'Record Site Update' : 'Find Machine for Update'}</DialogTitle></DialogHeader>
@@ -2137,7 +2166,6 @@ const handleViewMachine = async (machineId: string) => {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Selected Machine Info */}
                 <div className="p-3 bg-muted rounded-lg">
                   <div className="flex items-center gap-2">
                     <Cpu className="h-5 w-5 text-primary" />
@@ -2145,7 +2173,6 @@ const handleViewMachine = async (machineId: string) => {
                   </div>
                 </div>
 
-                {/* Update Form */}
                 <div className="space-y-2">
                   <Label>Select Site *</Label>
                   <Select value={updateFormData.site} onValueChange={(value) => setUpdateFormData({...updateFormData, site: value})}>
@@ -2158,7 +2185,7 @@ const handleViewMachine = async (machineId: string) => {
                               ))
                             : <SelectItem value="no-sites" disabled>No sites assigned. Please contact admin.</SelectItem>
                           )
-                        : sites.map(site => (
+                        : allSites.map(site => (
                             <SelectItem key={site._id} value={site.name}>{site.name}</SelectItem>
                           ))
                       }
@@ -2186,15 +2213,11 @@ const handleViewMachine = async (machineId: string) => {
                   <Textarea value={updateFormData.description} onChange={(e) => setUpdateFormData({...updateFormData, description: e.target.value})} placeholder="Enter any additional notes about the site update..." rows={3} />
                 </div>
 
-                {/* Multiple Image Upload Section */}
                 <div className="space-y-3">
                   <Label>Upload Photos (Multiple)</Label>
                   <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
                     <div className="flex flex-wrap gap-2 justify-center mb-3">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setShowCameraDialog(true)}
-                      >
+                      <Button variant="outline" onClick={() => setShowCameraDialog(true)}>
                         <Camera className="h-4 w-4 mr-2" />
                         Take Photo
                       </Button>
@@ -2219,7 +2242,6 @@ const handleViewMachine = async (machineId: string) => {
                     </p>
                   </div>
 
-                  {/* Image Preview Grid */}
                   {updateFormData.photoPreviews.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-3">
                       {updateFormData.photoPreviews.map((preview, idx) => (
@@ -2289,7 +2311,7 @@ const handleViewMachine = async (machineId: string) => {
           <DialogContent>
             <DialogHeader><DialogTitle>Add Maintenance Record</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2"><Label>Select Machine *</Label><Select value={selectedMachineForMaintenance || ""} onValueChange={setSelectedMachineForMaintenance}><SelectTrigger><SelectValue placeholder="Select machine" /></SelectTrigger><SelectContent>{machines.map(machine => (<SelectItem key={machine.id} value={machine.id}>{machine.name} {machine.model ? `(${machine.model})` : ''}</SelectItem>))}</SelectContent></Select></div>
+              <div className="space-y-2"><Label>Select Machine *</Label><Select value={selectedMachineForMaintenance || ""} onValueChange={setSelectedMachineForMaintenance}><SelectTrigger><SelectValue placeholder="Select machine" /></SelectTrigger><SelectContent>{machines.map(machine => (<SelectItem key={machine.id} value={machine.id}>{machine.name} {machine.model ? `(${machine.model})` : ''} - Site: {machine.location || 'Not assigned'}</SelectItem>))}</SelectContent></Select></div>
               {selectedMachineForMaintenance && (<><div className="space-y-2"><Label>Maintenance Type *</Label><Select value={maintenanceRecord.type} onValueChange={(value) => setMaintenanceRecord({...maintenanceRecord, type: value})}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{maintenanceTypes.map(type => (<SelectItem key={type} value={type}>{type}</SelectItem>))}</SelectContent></Select></div>
               <div className="space-y-2"><Label>Description *</Label><Textarea value={maintenanceRecord.description} onChange={(e) => setMaintenanceRecord({...maintenanceRecord, description: e.target.value})} placeholder="Describe the maintenance performed" rows={3} /></div>
               <div className="space-y-2"><Label>Cost</Label><Input type="number" step="0.01" min="0" value={maintenanceRecord.cost} onChange={(e) => setMaintenanceRecord({...maintenanceRecord, cost: parseFloat(e.target.value) || 0})} placeholder="Enter maintenance cost" /></div>

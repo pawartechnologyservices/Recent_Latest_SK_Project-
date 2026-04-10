@@ -139,7 +139,7 @@ const App = () => (
               <Route path="crm" element={<CRM />} />
               <Route path="erp" element={<ERP />} />
                <Route path="site-visits" element={<SuperAdminReports />} />
-              <Route path="billing" element={<Billing />} />
+   <Route path="billing" element={<Billing />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
               <Route path="attendaceview" element={<AttendanceTab />} />

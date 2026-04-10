@@ -27,15 +27,14 @@ export class MachineController {
       
       const machines = await Machine.find(query).sort({ createdAt: -1 });
       
-      // Transform response to include 'model' field for frontend compatibility
       const transformedMachines = machines.map(machine => {
         const obj = machine.toJSON();
         return {
           ...obj,
           id: obj._id,
           model: obj.modelNumber,
-          // Ensure serialNumber is properly handled
-          serialNumber: obj.serialNumber || ''
+          serialNumber: obj.serialNumber || '',
+          location: obj.location || ''
         };
       });
       
@@ -54,13 +53,13 @@ export class MachineController {
         return res.status(404).json({ error: 'Machine not found' });
       }
       
-      // Transform response to include 'model' field
       const obj = machine.toJSON();
       const transformedMachine = {
         ...obj,
         id: obj._id,
         model: obj.modelNumber,
-        serialNumber: obj.serialNumber || ''
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
       };
       
       res.json(transformedMachine);
@@ -75,13 +74,11 @@ export class MachineController {
     try {
       const data = req.body;
       
-      // Handle serialNumber - if empty string, set to undefined
       let serialNumber = data.serialNumber;
       if (serialNumber === '' || serialNumber === null || serialNumber === undefined) {
         serialNumber = undefined;
       }
       
-      // Map frontend 'model' field to backend 'modelNumber'
       const machineData = {
         name: data.name,
         cost: Number(data.cost),
@@ -92,7 +89,7 @@ export class MachineController {
         location: data.location || '',
         manufacturer: data.manufacturer || '',
         modelNumber: data.model || data.modelNumber || '',
-        serialNumber: serialNumber,  // Will be undefined if empty
+        serialNumber: serialNumber,
         department: data.department || '',
         assignedTo: data.assignedTo || '',
         lastMaintenanceDate: data.lastMaintenanceDate || undefined,
@@ -104,13 +101,13 @@ export class MachineController {
       
       const machine = await Machine.create(machineData);
       
-      // Transform response to include 'model' field for frontend compatibility
       const obj = machine.toJSON();
       const responseMachine = {
         ...obj,
         id: obj._id,
         model: obj.modelNumber,
-        serialNumber: obj.serialNumber || ''
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
       };
       
       console.log('Machine created successfully:', responseMachine);
@@ -119,7 +116,6 @@ export class MachineController {
     } catch (error: any) {
       console.error('Error creating machine:', error);
       
-      // Handle duplicate key error specifically
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern)[0];
         if (field === 'serialNumber') {
@@ -142,13 +138,11 @@ export class MachineController {
     try {
       const data = req.body;
       
-      // Handle serialNumber - if empty string, set to undefined
       let serialNumber = data.serialNumber;
       if (serialNumber === '' || serialNumber === null || serialNumber === undefined) {
         serialNumber = undefined;
       }
       
-      // Map frontend 'model' field to backend 'modelNumber'
       const updateData: any = { ...data };
       if (data.model !== undefined) {
         updateData.modelNumber = data.model;
@@ -160,7 +154,6 @@ export class MachineController {
         updateData.serialNumber = undefined;
       }
       
-      // Remove any undefined fields from update
       Object.keys(updateData).forEach(key => {
         if (updateData[key] === undefined) {
           delete updateData[key];
@@ -179,20 +172,19 @@ export class MachineController {
         return res.status(404).json({ error: 'Machine not found' });
       }
       
-      // Transform response to include 'model' field
       const obj = machine.toJSON();
       const responseMachine = {
         ...obj,
         id: obj._id,
         model: obj.modelNumber,
-        serialNumber: obj.serialNumber || ''
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
       };
       
       res.json(responseMachine);
     } catch (error: any) {
       console.error('Error updating machine:', error);
       
-      // Handle duplicate key error specifically
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern)[0];
         if (field === 'serialNumber') {
@@ -235,24 +227,20 @@ export class MachineController {
       const maintenanceMachines = machines.filter(m => m.status === 'maintenance').length;
       const outOfServiceMachines = machines.filter(m => m.status === 'out-of-service').length;
       
-      // Calculate average cost
       const averageMachineCost = totalMachines > 0 ? totalMachineValue / totalMachines : 0;
       
-      // Group by department
       const machinesByDepartment = machines.reduce((acc, m) => {
         const dept = m.department || 'Unassigned';
         acc[dept] = (acc[dept] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       
-      // Group by location
       const machinesByLocation = machines.reduce((acc, m) => {
         const loc = m.location || 'Unassigned';
         acc[loc] = (acc[loc] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       
-      // Upcoming maintenance (next 30 days)
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const today = new Date();
@@ -293,7 +281,8 @@ export class MachineController {
             ...obj,
             id: obj._id,
             model: obj.modelNumber,
-            serialNumber: obj.serialNumber || ''
+            serialNumber: obj.serialNumber || '',
+            location: obj.location || ''
           };
         });
         return res.json(transformedMachines);
@@ -314,7 +303,8 @@ export class MachineController {
           ...obj,
           id: obj._id,
           model: obj.modelNumber,
-          serialNumber: obj.serialNumber || ''
+          serialNumber: obj.serialNumber || '',
+          location: obj.location || ''
         };
       });
       
@@ -325,7 +315,7 @@ export class MachineController {
     }
   }
 
-  // Add maintenance record
+  // Add maintenance record - WITH STATUS FIELD
   async addMaintenanceRecord(req: Request, res: Response) {
     try {
       const machine = await Machine.findById(req.params.id);
@@ -333,36 +323,175 @@ export class MachineController {
         return res.status(404).json({ error: 'Machine not found' });
       }
 
-      const record = {
-        ...req.body,
-        date: new Date()
+      // Create maintenance record with status 'pending'
+      const record: IMaintenanceRecord = {
+        type: req.body.type,
+        description: req.body.description,
+        cost: Number(req.body.cost),
+        performedBy: req.body.performedBy,
+        date: req.body.date ? new Date(req.body.date) : new Date(),
+        status: 'pending', // Always set to pending for new records
+        expenseId: req.body.expenseId || undefined
       };
+      
+      console.log('📝 Adding maintenance record:', {
+        machineName: machine.name,
+        machineLocation: machine.location,
+        type: record.type,
+        description: record.description,
+        cost: record.cost,
+        performedBy: record.performedBy,
+        status: record.status
+      });
       
       machine.maintenanceHistory = machine.maintenanceHistory || [];
       machine.maintenanceHistory.push(record);
       
-      // Update last maintenance date
       machine.lastMaintenanceDate = new Date();
       
-      // Update status if needed
       if (record.type === 'Emergency' || record.type === 'Corrective') {
         machine.status = 'maintenance';
       }
       
       await machine.save();
       
-      // Transform response to include 'model' field
+      console.log('✅ Maintenance record saved with status: pending');
+      
       const obj = machine.toJSON();
       const responseMachine = {
         ...obj,
         id: obj._id,
         model: obj.modelNumber,
-        serialNumber: obj.serialNumber || ''
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
       };
 
       res.json(responseMachine);
     } catch (error: any) {
-      console.error('Error adding maintenance record:', error);
+      console.error('❌ Error adding maintenance record:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Approve maintenance record
+  async approveMaintenanceRecord(req: Request, res: Response) {
+    try {
+      const { id, maintenanceIndex } = req.params;
+      const { expenseId } = req.body;
+      
+      const machine = await Machine.findById(id);
+      if (!machine) {
+        return res.status(404).json({ error: 'Machine not found' });
+      }
+      
+      const index = parseInt(maintenanceIndex);
+      if (isNaN(index) || !machine.maintenanceHistory[index]) {
+        return res.status(404).json({ error: 'Maintenance record not found' });
+      }
+      
+      machine.maintenanceHistory[index].status = 'approved';
+      if (expenseId) {
+        machine.maintenanceHistory[index].expenseId = expenseId;
+      }
+      
+      await machine.save();
+      
+      console.log(`✅ Maintenance record approved for machine: ${machine.name} at site: ${machine.location}`);
+      
+      const obj = machine.toJSON();
+      const responseMachine = {
+        ...obj,
+        id: obj._id,
+        model: obj.modelNumber,
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
+      };
+      
+      res.json(responseMachine);
+    } catch (error: any) {
+      console.error('❌ Error approving maintenance record:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Reject maintenance record
+  async rejectMaintenanceRecord(req: Request, res: Response) {
+    try {
+      const { id, maintenanceIndex } = req.params;
+      const { reason } = req.body;
+      
+      const machine = await Machine.findById(id);
+      if (!machine) {
+        return res.status(404).json({ error: 'Machine not found' });
+      }
+      
+      const index = parseInt(maintenanceIndex);
+      if (isNaN(index) || !machine.maintenanceHistory[index]) {
+        return res.status(404).json({ error: 'Maintenance record not found' });
+      }
+      
+      machine.maintenanceHistory[index].status = 'rejected';
+      
+      await machine.save();
+      
+      console.log(`❌ Maintenance record rejected for machine: ${machine.name} at site: ${machine.location}`);
+      
+      const obj = machine.toJSON();
+      const responseMachine = {
+        ...obj,
+        id: obj._id,
+        model: obj.modelNumber,
+        serialNumber: obj.serialNumber || '',
+        location: obj.location || ''
+      };
+      
+      res.json(responseMachine);
+    } catch (error: any) {
+      console.error('❌ Error rejecting maintenance record:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Get pending maintenance records
+  async getPendingMaintenanceRecords(req: Request, res: Response) {
+    try {
+      const machines = await Machine.find({});
+      const pendingRecords: any[] = [];
+      
+      machines.forEach(machine => {
+        if (machine.maintenanceHistory && machine.maintenanceHistory.length > 0) {
+          machine.maintenanceHistory.forEach((record, index) => {
+            // Check for pending status
+            if (record.status === 'pending') {
+              pendingRecords.push({
+                machineId: machine._id,
+                machineName: machine.name,
+                machineLocation: machine.location || 'No site assigned',
+                maintenanceIndex: index,
+                record: {
+                  type: record.type,
+                  description: record.description,
+                  cost: record.cost,
+                  performedBy: record.performedBy,
+                  date: record.date,
+                  status: record.status
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      console.log(`📋 Found ${pendingRecords.length} pending maintenance records`);
+      if (pendingRecords.length > 0) {
+        pendingRecords.forEach(record => {
+          console.log(`   - ${record.machineName} at site: ${record.machineLocation}`);
+        });
+      }
+      
+      res.json(pendingRecords);
+    } catch (error: any) {
+      console.error('❌ Error fetching pending maintenance records:', error);
       res.status(500).json({ error: error.message });
     }
   }

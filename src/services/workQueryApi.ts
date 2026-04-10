@@ -1,3 +1,4 @@
+// services/workQueryApi.ts
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 
 /* =========================
@@ -39,6 +40,11 @@ export interface WorkQuery {
     name: string;
     comment: string;
     timestamp: string;
+  }>;
+  images?: Array<{
+    url: string;
+    publicId: string;
+    uploadedAt: string;
   }>;
   createdAt: string;
   updatedAt: string;
@@ -117,6 +123,29 @@ export interface Statistics {
   };
 }
 
+export interface SuperadminStatistics {
+  total: number;
+  statusCounts: {
+    pending: number;
+    'in-progress': number;
+    resolved: number;
+    rejected: number;
+  };
+  priorityCounts: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+  supervisorStats: Array<{
+    supervisorId: string;
+    supervisorName: string;
+    total: number;
+    pending: number;
+    resolved: number;
+  }>;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -145,10 +174,15 @@ api.interceptors.request.use((config) => {
     }
   }
 
+  // Don't set Content-Type for FormData (browser will set it with boundary)
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   console.log('🌐 API Request:', {
     method: config.method,
     url: config.url,
-    data: config.data,
+    data: config.data instanceof FormData ? 'FormData' : config.data,
     headers: config.headers
   });
 
@@ -191,7 +225,7 @@ api.interceptors.response.use(
 ========================= */
 
 export const workQueryApi = {
-  /* GET all work queries */
+  /* GET all work queries for supervisor */
   getAllWorkQueries: async (params: {
     supervisorId?: string;
     search?: string;
@@ -208,7 +242,24 @@ export const workQueryApi = {
     return response.data;
   },
 
-  /* CREATE work query - Simple JSON payload without files */
+  /* GET all work queries for superadmin (all supervisors) */
+  getAllWorkQueriesForSuperadmin: async (params: {
+    search?: string;
+    status?: string;
+    priority?: string;
+    serviceType?: string;
+    supervisorId?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  }): Promise<ApiResponse<WorkQuery[]>> => {
+    const response: AxiosResponse<ApiResponse<WorkQuery[]>> =
+      await api.get('/work-queries/superadmin/all', { params });
+    return response.data;
+  },
+
+  /* CREATE work query - Supports file upload */
   createWorkQuery: async (
     workQueryData: {
       title: string;
@@ -220,9 +271,29 @@ export const workQueryApi = {
       supervisorName: string;
       serviceTitle?: string;
       serviceType?: string;
-    }
+    },
+    files?: File[]
   ): Promise<ApiResponse<WorkQuery>> => {
-    const response = await api.post('/work-queries', workQueryData);
+    let response;
+    
+    if (files && files.length > 0) {
+      // Use FormData for file upload
+      const formData = new FormData();
+      
+      // Append the data as JSON string
+      formData.append('data', JSON.stringify(workQueryData));
+      
+      // Append all files
+      files.forEach((file) => {
+        formData.append('images', file);
+      });
+      
+      response = await api.post('/work-queries', formData);
+    } else {
+      // Regular JSON request
+      response = await api.post('/work-queries', workQueryData);
+    }
+    
     return response.data;
   },
 
@@ -238,7 +309,7 @@ export const workQueryApi = {
     return response.data;
   },
 
-  /* UPDATE work query status */
+  /* UPDATE work query status (for supervisor) */
   updateWorkQueryStatus: async (
     queryId: string,
     status: WorkQuery['status'],
@@ -246,6 +317,19 @@ export const workQueryApi = {
   ): Promise<ApiResponse<WorkQuery>> => {
     const response = await api.patch(
       `/work-queries/${queryId}/status`,
+      { status, superadminResponse }
+    );
+    return response.data;
+  },
+
+  /* UPDATE work query response (for superadmin) */
+  updateWorkQueryResponse: async (
+    queryId: string,
+    status: WorkQuery['status'],
+    superadminResponse: string
+  ): Promise<ApiResponse<WorkQuery>> => {
+    const response = await api.patch(
+      `/work-queries/${queryId}/superadmin-response`,
       { status, superadminResponse }
     );
     return response.data;
@@ -279,13 +363,19 @@ export const workQueryApi = {
     return response.data;
   },
 
-  /* GET statistics */
+  /* GET statistics for supervisor */
   getStatistics: async (
     supervisorId: string
   ): Promise<ApiResponse<Statistics>> => {
     const response = await api.get('/work-queries/statistics', {
       params: { supervisorId }
     });
+    return response.data;
+  },
+
+  /* GET statistics for superadmin */
+  getSuperadminStatistics: async (): Promise<ApiResponse<SuperadminStatistics>> => {
+    const response = await api.get('/work-queries/superadmin/statistics');
     return response.data;
   },
 

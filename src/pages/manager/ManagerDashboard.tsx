@@ -502,7 +502,7 @@ const fetchAllLeaveRequests = async (date?: string): Promise<LeaveRequest[]> => 
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`https error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -575,7 +575,7 @@ const fetchEmployees = async (): Promise<Employee[]> => {
     const response = await fetch(`${API_URL}/employees?limit=1000`);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`https error! status: ${response.status}`);
     }
     
     const data = await response.json();

@@ -1,6 +1,6 @@
 // src/services/SiteVisitService.ts
-const API_BASE_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
 
+const API_URL = `https://${window.location.hostname}:5001/api`;
 export interface Site {
   _id: string;
   name: string;
@@ -71,7 +71,7 @@ class SiteVisitService {
   async getManagerSites(managerId: string): Promise<Site[]> {
     try {
       console.log(`Fetching sites for manager: ${managerId}`);
-      const response = await fetch(`${API_BASE_URL}/site-visits/manager/${managerId}/sites`, {
+      const response = await fetch(`${API_URL}/site-visits/manager/${managerId}/sites`, {
         headers: this.getHeaders()
       });
       
@@ -95,7 +95,7 @@ class SiteVisitService {
     endDate?: Date;
   }): Promise<SiteVisitReport[]> {
     try {
-      let url = `${API_BASE_URL}/site-visits/manager/${managerId}/reports`;
+      let url = `${API_URL}/site-visits/manager/${managerId}/reports`;
       
       const params = new URLSearchParams();
       if (filters?.siteId) params.append('siteId', filters.siteId);
@@ -136,7 +136,7 @@ class SiteVisitService {
         formData.append('photos', photo);
       });
       
-      const url = `${API_BASE_URL}/site-visits/reports`;
+      const url = `${API_URL}/site-visits/reports`;
       const response = await fetch(url, {
         method: 'POST',
         body: formData
@@ -170,7 +170,7 @@ class SiteVisitService {
         ...(filters?.status && { status: filters.status })
       });
       
-      const response = await fetch(`${API_BASE_URL}/site-visits/reports/monthly?${params}`, {
+      const response = await fetch(`${API_URL}/site-visits/reports/monthly?${params}`, {
         headers: this.getHeaders()
       });
       
@@ -215,7 +215,7 @@ class SiteVisitService {
       if (month !== undefined) params.append('month', month.toString());
       if (managerId) params.append('managerId', managerId);
       
-      const response = await fetch(`${API_BASE_URL}/site-visits/statistics?${params}`, {
+      const response = await fetch(`${API_URL}/site-visits/statistics?${params}`, {
         headers: this.getHeaders()
       });
       
@@ -250,7 +250,7 @@ class SiteVisitService {
       if (year) params.append('year', year.toString());
       if (month !== undefined) params.append('month', month.toString());
       
-      const response = await fetch(`${API_BASE_URL}/site-visits/managers/visits?${params}`, {
+      const response = await fetch(`${API_URL}/site-visits/managers/visits?${params}`, {
         headers: this.getHeaders()
       });
       
@@ -269,7 +269,7 @@ class SiteVisitService {
   // Approve report (SuperAdmin)
   async approveReport(reportId: string, approvedBy: string): Promise<SiteVisitReport> {
     try {
-      const response = await fetch(`${API_BASE_URL}/site-visits/reports/${reportId}/approve`, {
+      const response = await fetch(`${API_URL}/site-visits/reports/${reportId}/approve`, {
         method: 'PATCH',
         headers: this.getHeaders(),
         body: JSON.stringify({ approvedBy })
@@ -290,7 +290,7 @@ class SiteVisitService {
   // Reject report (SuperAdmin)
   async rejectReport(reportId: string, rejectionReason: string): Promise<SiteVisitReport> {
     try {
-      const response = await fetch(`${API_BASE_URL}/site-visits/reports/${reportId}/reject`, {
+      const response = await fetch(`${API_URL}/site-visits/reports/${reportId}/reject`, {
         method: 'PATCH',
         headers: this.getHeaders(),
         body: JSON.stringify({ rejectionReason })

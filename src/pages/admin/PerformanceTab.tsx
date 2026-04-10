@@ -264,7 +264,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       console.log(`Response status: ${response.status}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
+        throw new Error(`https Error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -330,7 +330,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
         toast.error("Connection Error", {
           description: "Unable to connect to the server. Please ensure:\n1. Backend is running on port 5001\n2. CORS is properly configured\n3. Network connection is stable",
         });
-      } else if (error.message.includes('HTTP Error')) {
+      } else if (error.message.includes('https Error')) {
         toast.error("Server Error", {
           description: `Server returned error: ${error.message}`,
         });

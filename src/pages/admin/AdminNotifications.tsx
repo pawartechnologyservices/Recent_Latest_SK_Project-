@@ -558,7 +558,7 @@ const fetchSites = async (): Promise<Site[]> => {
         console.warn('Unauthorized to fetch sites');
         return [];
       }
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`https error! status: ${response.status}`);
     }
     
     const data = await response.json();
