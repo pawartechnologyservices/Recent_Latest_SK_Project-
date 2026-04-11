@@ -43,7 +43,7 @@ import trainingRoutes from './routes/trainingRoutes';
 import briefingRoutes from './routes/briefingRoutes';
 import settingsRoutes from './routes/settings';
 import managerAttendanceRoutes from './routes/managerAttendanceRoutes';
-
+import documentRoutes from './routes/documentRoutes';
 import assignTaskRoutes from './routes/assignTaskRoutes';
 import siteVisitRoutes from './routes/siteVisitRoutes';
 
@@ -237,7 +237,7 @@ app.use('/api/trainings', trainingRoutes);
 app.use('/api/briefings', briefingRoutes);
 app.use('/api/assigntasks', assignTaskRoutes);  // Make sure this line is here
 app.use('/api/site-visits', siteVisitRoutes);
-
+app.use('/api/documents', documentRoutes);
 app.use('/api/manager-attendance', managerAttendanceRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 console.log('📁 Static files being served from:', path.join(__dirname, '../uploads'));
