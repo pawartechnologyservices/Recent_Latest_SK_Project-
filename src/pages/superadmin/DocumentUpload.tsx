@@ -10,8 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-
-const API_URL = `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const DOCUMENT_TYPES = [
   { value: 'aadhar', label: 'Aadhaar Card', icon: '🆔', required: true, pattern: '^[0-9]{12}$', patternMessage: 'Enter 12-digit Aadhar number' },
@@ -84,7 +83,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         if (response.status === 404) {
           return;
         }
-        throw new Error(`https error! status: ${response.status}`);
+        throw new Error(`http error! status: ${response.status}`);
       }
       const data = await response.json();
       if (data.success) {
@@ -189,7 +188,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
           throw new Error('Document upload route not found. Please check if the backend server has the document routes configured.');
         }
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `https error! status: ${response.status}`);
+        throw new Error(errorData.message || `http error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -229,7 +228,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     try {
       const response = await fetch(`${API_URL}/employees/${employeeId}/documents`);
       if (!response.ok) {
-        throw new Error(`https error! status: ${response.status}`);
+        throw new Error(`http error! status: ${response.status}`);
       }
       const data = await response.json();
       if (data.success) {
@@ -256,7 +255,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || `https error! status: ${response.status}`);
+        throw new Error(data.message || `http error! status: ${response.status}`);
       }
 
       toast.success('Document deleted successfully');
@@ -282,7 +281,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || `https error! status: ${response.status}`);
+        throw new Error(data.message || `http error! status: ${response.status}`);
       }
 
       toast.success('Document verified successfully');
@@ -655,7 +654,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
                         if (selectedDocument.fileType?.includes('word') || 
                             selectedDocument.fileType?.includes('excel') ||
                             selectedDocument.fileType?.includes('presentation')) {
-                          const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(selectedDocument.fileUrl)}&embedded=true`;
+                          const viewerUrl = `http://docs.google.com/gview?url=${encodeURIComponent(selectedDocument.fileUrl)}&embedded=true`;
                           window.open(viewerUrl, '_blank');
                         } else {
                           window.open(selectedDocument.fileUrl, '_blank');

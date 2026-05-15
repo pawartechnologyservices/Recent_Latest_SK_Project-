@@ -29,7 +29,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const API_URL = `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Interface for real API response
 interface ApiNotification {
@@ -558,7 +558,7 @@ const fetchSites = async (): Promise<Site[]> => {
         console.warn('Unauthorized to fetch sites');
         return [];
       }
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();

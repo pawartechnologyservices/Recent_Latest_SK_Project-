@@ -2,8 +2,8 @@
 import axios, { AxiosError } from 'axios';
 
 // Use absolute URL - make sure this matches your backend
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL || 
+  `http://${window.location.hostname}:5001/api`;
 export interface DocumentUploadResponse {
   success: boolean;
   message: string;
@@ -65,7 +65,8 @@ class DocumentService {
   async testConnection(): Promise<boolean> {
     try {
       console.log('🧪 Testing backend connection...');
-      const response = await axios.get(`https://${window.location.hostname}:5001/health`, { 
+      const response = await axios.get(
+      API_URL.replace('/api', '') + '/health', { 
         timeout: 5000,
         headers: {
           'Accept': 'application/json'

@@ -163,8 +163,9 @@ interface LeaveNotificationItem {
   rejectionReason?: string;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.DEV
+  ? `http://localhost:5001/api`
+  : '/api';
 // Animation variants
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },

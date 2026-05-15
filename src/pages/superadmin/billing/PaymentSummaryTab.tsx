@@ -239,8 +239,10 @@ const PaymentSummaryTab: React.FC<PaymentSummaryTabProps> = () => {
         data = await invoiceService.getAllInvoices();
       } catch (serviceError) {
         console.log('InvoiceService failed, trying direct API call...', serviceError);
-        const response = await fetch(`https://${window.location.hostname}:5001/api/invoices`);
-        if (!response.ok) throw new Error('Failed to fetch invoices');
+       const response = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/invoices`
+);
+  if (!response.ok) throw new Error('Failed to fetch invoices');
         const result = await response.json();
         data = result.data || result;
       }
@@ -304,7 +306,9 @@ const PaymentSummaryTab: React.FC<PaymentSummaryTabProps> = () => {
         console.log('Expenses from service (all):', data);
       } catch (serviceError) {
         console.log('ExpenseService failed, trying direct API call...', serviceError);
-        const response = await fetch(`https://${window.location.hostname}:5001/api/expenses`);
+        const response = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/expenses`
+);
         if (!response.ok) throw new Error('Failed to fetch expenses');
         const result = await response.json();
         data = result.data || result;

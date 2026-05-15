@@ -35,8 +35,7 @@ interface ManagerAssignTaskPopupProps {
 interface SiteStaff {
   supervisors: StaffWithTaskCount[];
 }
-
-const API_URL = `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL;
 
 const ManagerAssignTaskPopup: React.FC<ManagerAssignTaskPopupProps> = ({
   open,

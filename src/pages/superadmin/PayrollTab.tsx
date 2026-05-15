@@ -372,40 +372,43 @@ const PayrollTab = ({ selectedMonth, setSelectedMonth }: PayrollTabProps) => {
       console.log("Fetching data for month:", selectedMonth);
 
       // Fetch all data with simple fetch calls
-      const [employeesRes, payrollRes, structuresRes] = await Promise.all([
-        // Employees
-        fetch(`https://${window.location.hostname}:5001/api/employees?status=active`)
-          .then(res => {
-            if (!res.ok) throw new Error(`Employees API error: ${res.status}`);
-            return res.json();
-          })
-          .catch(error => {
-            console.error('Error fetching employees:', error);
-            return { success: false, data: [], message: error.message };
-          }),
-        
-        // Payroll for selected month
-        fetch(`https://${window.location.hostname}:5001/api/payroll?month=${selectedMonth}`)
-          .then(res => {
-            if (!res.ok) throw new Error(`Payroll API error: ${res.status}`);
-            return res.json();
-          })
-          .catch(error => {
-            console.error('Error fetching payroll:', error);
-            return { success: false, data: [], message: error.message };
-          }),
-        
-        // Salary structures
-        fetch(`https://${window.location.hostname}:5001/api/salary-structures?isActive=true`)
-          .then(res => {
-            if (!res.ok) throw new Error(`Structures API error: ${res.status}`);
-            return res.json();
-          })
-          .catch(error => {
-            console.error('Error fetching structures:', error);
-            return { success: false, data: [], message: error.message };
-          }),
-      ]);
+   const API_URL = import.meta.env.VITE_API_URL;
+
+const [employeesRes, payrollRes, structuresRes] = await Promise.all([
+  
+  // Employees
+  fetch(`${API_URL}/api/employees?status=active`)
+    .then(res => {
+      if (!res.ok) throw new Error(`Employees API error: ${res.status}`);
+      return res.json();
+    })
+    .catch(error => {
+      console.error('Error fetching employees:', error);
+      return { success: false, data: [], message: error.message };
+    }),
+
+  // Payroll for selected month
+  fetch(`${API_URL}/api/payroll?month=${selectedMonth}`)
+    .then(res => {
+      if (!res.ok) throw new Error(`Payroll API error: ${res.status}`);
+      return res.json();
+    })
+    .catch(error => {
+      console.error('Error fetching payroll:', error);
+      return { success: false, data: [], message: error.message };
+    }),
+
+  // Salary structures
+  fetch(`${API_URL}/api/salary-structures?isActive=true`)
+    .then(res => {
+      if (!res.ok) throw new Error(`Structures API error: ${res.status}`);
+      return res.json();
+    })
+    .catch(error => {
+      console.error('Error fetching structures:', error);
+      return { success: false, data: [], message: error.message };
+    }),
+]);
 
       console.log('API Responses:', {
         employeesRes,

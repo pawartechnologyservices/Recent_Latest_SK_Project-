@@ -89,8 +89,9 @@ const ExcelImportDialog = ({
   const downloadTemplate = async () => {
     try {
       // Try to download from backend first
-      const response = await fetch(`https://${window.location.hostname}:5001/api/employees/template`);
-      
+     const response = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/employees/template`
+);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);

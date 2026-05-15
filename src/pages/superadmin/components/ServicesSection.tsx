@@ -38,8 +38,7 @@ const ServicesSection = () => {
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [viewServiceDialog, setViewServiceDialog] = useState<string | null>(null);
 
-  const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
   // Fetch all services
   const fetchServices = async () => {
     try {

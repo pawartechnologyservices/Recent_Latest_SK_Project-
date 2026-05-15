@@ -91,8 +91,7 @@ class ApiError extends Error {
   }
 }
 
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Default stats
 const defaultStats: SiteStats = {
   totalSites: 0,
@@ -150,7 +149,7 @@ class SiteService {
       if (!response.ok) {
         console.error(`❌ API Error [${response.status}]:`, data);
         throw new ApiError(
-          data.message || data.error || `https error! status: ${response.status}`,
+          data.message || data.error || `http error! status: ${response.status}`,
           response.status,
           data
         );

@@ -1,8 +1,7 @@
 import { toast } from "sonner";
 
 // Base URL for your backend
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Interfaces
 export interface Client {
   _id: string;
@@ -83,7 +82,7 @@ const fetchApi = async <T>(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `https error! status: ${response.status}`);
+      throw new Error(errorData.message || `http error! status: ${response.status}`);
     }
 
     return await response.json();

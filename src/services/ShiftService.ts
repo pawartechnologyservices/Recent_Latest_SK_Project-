@@ -1,7 +1,6 @@
 // import { Shift, Employee, ApiResponse, AssignEmployeeRequest } from '../types/apiTypes';
 
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Define interfaces if not already in a separate file
 export interface Shift {
   _id: string;
@@ -97,7 +96,7 @@ class ShiftService {
 
       if (!response.ok) {
         throw new ApiError(
-          data.message || `https error! status: ${response.status}`,
+          data.message || `http error! status: ${response.status}`,
           response.status,
           data
         );

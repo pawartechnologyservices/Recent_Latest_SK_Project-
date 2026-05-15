@@ -139,7 +139,7 @@ export const useWorkQuery = ({ supervisorId, autoFetch = true, initialFilters = 
         });
         
         // Make custom fetch request
-        const API_URL = `https://${window.location.hostname}:5001/api`;
+        const API_URL = import.meta.env.VITE_API_URL;
         const token = localStorage.getItem('access_token') || localStorage.getItem('token');
         
         const fetchResponse = await fetch(`${API_URL}/work-queries`, {

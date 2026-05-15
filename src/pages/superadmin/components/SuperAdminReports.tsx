@@ -1015,7 +1015,7 @@ const SuperAdminReports = () => {
                           className="w-full h-24 md:h-32 object-cover rounded-lg cursor-pointer hover:opacity-90"
                           onError={(e) => {
                             console.error('Failed to load image:', photo.url);
-                            (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Image+Not+Found';
+                            (e.target as HTMLImageElement).src = 'http://placehold.co/400x300?text=Image+Not+Found';
                           }}
                           onClick={() => window.open(photo.url, '_blank')}
                         />

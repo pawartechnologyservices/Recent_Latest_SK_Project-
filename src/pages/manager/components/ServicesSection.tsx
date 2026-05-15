@@ -21,8 +21,8 @@ const ServicesSection = () => {
   const [loading, setLoading] = useState(true);
 
   // API Base URL
-  const API_URL = `https://${window.location.hostname}:5001/api`;
-  // Fetch services from backend
+  const API_URL = import.meta.env.VITE_API_URL;
+    // Fetch services from backend
   const fetchServices = async () => {
     try {
       setLoading(true);

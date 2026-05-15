@@ -24,8 +24,7 @@ import { rosterService, RosterEntryData, GetRosterParams } from "@/services/rost
 import { useRole } from "@/context/RoleContext";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Define interfaces
 interface RosterEntry {
   id: string;

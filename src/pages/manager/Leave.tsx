@@ -83,7 +83,7 @@ import {
 import { format } from "date-fns";
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Interface for Leave Request (Employee & Supervisor)
 interface LeaveRequest {
@@ -296,7 +296,7 @@ const fetchAllLeaveRequests = async (date?: string): Promise<LeaveRequest[]> => 
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -386,7 +386,7 @@ const fetchMyManagerLeaves = async (managerId: string): Promise<ManagerLeaveRequ
         toast.warning('Manager leaves API not available. Some features may be limited.');
         return [];
       }
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -419,7 +419,7 @@ const fetchEmployees = async (): Promise<Employee[]> => {
     const response = await fetch(`${API_URL}/employees?limit=1000`);
     
     if (!response.ok) {
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -469,7 +469,7 @@ const fetchManagerSites = async (managerId: string): Promise<Site[]> => {
     const response = await fetch(`${API_URL}/sites?limit=100`);
     
     if (!response.ok) {
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -2251,7 +2251,7 @@ const ManagerLeaves = () => {
           throw new Error('Manager leave endpoint not found. Please check if backend server is running and routes are configured.');
         }
         
-        throw new Error(errorData.message || `https error! status: ${response.status}`);
+        throw new Error(errorData.message || `http error! status: ${response.status}`);
       }
 
       const result = await response.json();

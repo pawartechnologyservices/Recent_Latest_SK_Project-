@@ -22,10 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 const getApiUrl = () => {
-  if (typeof window === 'undefined') {
-    return 'https://localhost:5001/api';
-  }
-  return `https://${window.location.hostname}:5001/api`;
+  return `${import.meta.env.VITE_API_URL}/api`;
 };
 
 const API_BASE = getApiUrl();

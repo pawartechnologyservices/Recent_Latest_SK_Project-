@@ -51,7 +51,7 @@ const app: Application = express();
 
 // ==================== CORS CONFIGURATION ====================
 app.use(cors({
-  origin: ['https://localhost:8080','https://localhost:5001'],
+  origin: ['http://localhost:8080','http://localhost:5001'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With','cache-control','Cache-control'],
@@ -813,9 +813,9 @@ const startServer = async () => {
     app.listen(PORT, async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'}`);
-      console.log(`🌐 Base URL: https://localhost:${PORT}`);
-      console.log(`👤 Users endpoint: https://localhost:${PORT}/api/users`);
-      console.log(`🔐 Password health: https://localhost:${PORT}/api/password-health`);
+      console.log(`🌐 Base URL: http://localhost:${PORT}`);
+      console.log(`👤 Users endpoint: http://localhost:${PORT}/api/users`);
+      console.log(`🔐 Password health: http://localhost:${PORT}/api/password-health`);
       console.log(`☁️ Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Not Configured'}`);
       
       // Run password fixer after server starts

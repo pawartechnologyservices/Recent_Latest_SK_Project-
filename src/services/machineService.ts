@@ -1,7 +1,6 @@
 // src/services/machineService.ts
 import axios from 'axios';
-
-const API_URL = `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL;
 
 export interface FrontendMachine {
   id: string;

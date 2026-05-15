@@ -81,8 +81,8 @@ import ExcelImportDialog from '../superadmin/ExcelImportDialog';
 import SupervisorOnboardingTab from "./SupervisorOnboardingTab";
 
 // API URL
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? `https://${window.location.hostname}:5001/api` 
+const API_URL = import.meta.env.DEV
+  ? `http://localhost:5001/api`
   : '/api';
 
 // Types
@@ -336,7 +336,7 @@ interface SiteDeploymentStatus {
 }
 
 // Default avatar SVG
-const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='https://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
 // Schema for employee form
 const employeeSchema = z.object({
@@ -393,7 +393,7 @@ const MobileEmployeeCard = ({
     if (!emp.photo) return "";
     if (emp.photo.startsWith('data:image')) return emp.photo;
     if (emp.photo.includes('cloudinary.com')) return emp.photo;
-    if (emp.photo.startsWith('https')) return emp.photo;
+    if (emp.photo.startsWith('http')) return emp.photo;
     return emp.photo;
   };
 
@@ -1075,7 +1075,7 @@ const SupervisorEmployees = () => {
       }
       return employee.photo;
     }
-    if (employee.photo.startsWith('https')) return employee.photo;
+    if (employee.photo.startsWith('http')) return employee.photo;
     return employee.photo;
   };
 

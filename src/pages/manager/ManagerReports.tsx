@@ -200,7 +200,7 @@ const ManagerReports = () => {
   const { user: authUser, isAuthenticated } = useRole();
   
   // API Base URL
-  const API_URL = `https://${window.location.hostname}:5001/api`;
+  const API_URL = import.meta.env.VITE_API_URL;
   
   // Manager ID and Name
   const [managerId, setManagerId] = useState<string>('');

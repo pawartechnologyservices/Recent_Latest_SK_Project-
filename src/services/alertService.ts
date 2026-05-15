@@ -3,7 +3,8 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { Alert } from '@/types/alert';
 
 // Your working backend URL
-const API_URL = `https://${window.location.hostname}:5001/api`;
+const API_URL = import.meta.env.VITE_API_URL || 
+  `http://${window.location.hostname}:5001/api`;
 
 console.log('🔧 Using alerts backend at:', API_URL);
 
@@ -49,8 +50,8 @@ export const alertService = {
     try {
       console.log('🔍 Testing API connection...');
       // Test the root endpoint of your backend
-      const response = await axios.get(`https://${window.location.hostname}:5001/api`);
-      console.log('✅ Backend is running:', response.data.message);
+     const response = await axios.get(API_URL);
+       console.log('✅ Backend is running:', response.data.message);
       
       // Also test alerts endpoint
       try {

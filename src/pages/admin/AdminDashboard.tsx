@@ -68,8 +68,8 @@ import axios from 'axios';
 import { siteService, Site } from "@/services/SiteService";
 
 // API URL
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? `https://${window.location.hostname}:5001/api` 
+const API_URL = import.meta.env.DEV
+  ? `http://localhost:5001/api`
   : '/api';
 
 // Chart color constants

@@ -58,8 +58,7 @@ import { siteService, Site } from "@/services/SiteService";
 import CameraCapture from "../supervisor/CameraCapture";
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Interface for Attendance Record (My Attendance)
 interface MyAttendanceRecord {
   id: string;

@@ -65,6 +65,10 @@ import deductionService, {
   type PaginatedResponse,
 } from "../../services/DeductionService";
 
+const API_URL = import.meta.env.DEV
+  ? "http://localhost:5001/api"
+  : "/api";
+
 interface DeductionListTabProps {
   // Optional props if you need to manage deductions from parent component
 }
@@ -179,7 +183,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
 
         // Direct API call with correct endpoint
         const response = await fetch(
-          `https://${window.location.hostname}:5001/api/deductions/deductions?${new URLSearchParams(
+          `${API_URL}/deductions/deductions?${new URLSearchParams(
             params
           ).toString()}`
         );
@@ -256,7 +260,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       console.log("Fetching employees from API...");
       
       // Try just one reliable endpoint first
-      const endpoint = `https://${window.location.hostname}:5001/api/employees`;
+      const endpoint = `${API_URL}/employees`;
       console.log(`Using endpoint: ${endpoint}`);
       
       const response = await fetch(endpoint);
@@ -351,7 +355,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
   const fetchDeductionStats = useCallback(async () => {
     try {
       // Try to get stats from a dedicated API endpoint
-      const response = await fetch(`https://${window.location.hostname}:5001/api/deductions/stats`);
+      const response = await fetch(`${API_URL}/deductions/stats`);
       
       if (response.ok) {
         const data = await response.json();
@@ -365,7 +369,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Fallback: If no dedicated stats endpoint, fetch ALL deductions for stats
       console.log("Fetching all deductions for stats calculation...");
       const allDeductionsResponse = await fetch(
-        `https://${window.location.hostname}:5001/api/deductions/deductions?limit=1000`
+        `${API_URL}/deductions/deductions?limit=1000`
       );
       
       if (allDeductionsResponse.ok) {
@@ -433,7 +437,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
             if (deduction.status === "pending") acc.pendingCount += 1;
             if (deduction.status === "approved") acc.approvedCount += 1;
             if (deduction.status === "rejected") acc.rejectedCount += 1;
-            if (deduction.status === "completed") acc.completedCount += 1;
+            if (duplicate.status === "completed") acc.completedCount += 1;
             return acc;
           },
           {
@@ -561,7 +565,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
 
       // Direct API call to create deduction
       const response = await fetch(
-        `https://${window.location.hostname}:5001/api/deductions/deductions`,
+        `${API_URL}/deductions/deductions`,
         {
           method: "POST",
           headers: {
@@ -674,7 +678,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Check what endpoint your backend uses for updating
       // Try both possibilities
       const response = await fetch(
-        `https://${window.location.hostname}:5001/api/deductions/deductions/${editingDeduction.id}`,
+        `${API_URL}/deductions/deductions/${editingDeduction.id}`,
         {
           method: "PUT",
           headers: {
@@ -687,7 +691,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       if (!response.ok) {
         // Try alternative endpoint
         const altResponse = await fetch(
-          `https://${window.location.hostname}:5001/api/deductions/${editingDeduction.id}`,
+          `${API_URL}/deductions/${editingDeduction.id}`,
           {
             method: "PUT",
             headers: {
@@ -801,7 +805,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       // Check what endpoint your backend uses for deleting
       // Try both possibilities
       const response = await fetch(
-        `https://${window.location.hostname}:5001/api/deductions/deductions/${id}`,
+        `${API_URL}/deductions/deductions/${id}`,
         {
           method: "DELETE",
         }
@@ -810,7 +814,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       if (!response.ok) {
         // Try alternative endpoint
         const altResponse = await fetch(
-          `https://${window.location.hostname}:5001/api/deductions/${id}`,
+          `${API_URL}/deductions/${id}`,
           {
             method: "DELETE",
           }

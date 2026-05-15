@@ -1,6 +1,5 @@
 // services/PaymentService.ts
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 export interface Payment {
   _id: string;
   paymentId: string;
@@ -28,7 +27,7 @@ class PaymentService {
       });
       
       if (!response.ok) {
-        throw new Error(`https error! status: ${response.status}`);
+        throw new Error(`http error! status: ${response.status}`);
       }
       
       return await response.json();

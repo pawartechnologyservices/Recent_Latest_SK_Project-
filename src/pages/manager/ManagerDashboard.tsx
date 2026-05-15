@@ -100,8 +100,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Chart color constants
 const CHART_COLORS = {
   present: '#10b981',
@@ -502,7 +501,7 @@ const fetchAllLeaveRequests = async (date?: string): Promise<LeaveRequest[]> => 
     const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -575,7 +574,7 @@ const fetchEmployees = async (): Promise<Employee[]> => {
     const response = await fetch(`${API_URL}/employees?limit=1000`);
     
     if (!response.ok) {
-      throw new Error(`https error! status: ${response.status}`);
+      throw new Error(`http error! status: ${response.status}`);
     }
     
     const data = await response.json();
@@ -1466,7 +1465,7 @@ const SiteEmployeeDetails: React.FC<SiteEmployeeDetailsProps> = ({ siteData, onB
                 className="max-w-full h-auto rounded-lg shadow-lg"
                 onError={(e) => {
                   console.error('Failed to load image:', selectedPhoto);
-                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="https://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"%3E%3Crect x="2" y="2" width="20" height="20" rx="2.18"%3E%3C/rect%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"%3E%3C/path%3E%3C/svg%3E';
+                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"%3E%3Crect x="2" y="2" width="20" height="20" rx="2.18"%3E%3C/rect%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"%3E%3C/path%3E%3C/svg%3E';
                   toast.error('Failed to load photo');
                 }}
               />
@@ -4363,7 +4362,7 @@ const ManagerDashboard = () => {
                 className="max-w-full h-auto rounded-lg shadow-lg"
                 onError={(e) => {
                   console.error('Failed to load image:', selectedPhotoUrl);
-                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="https://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"%3E%3Crect x="2" y="2" width="20" height="20" rx="2.18"%3E%3C/rect%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"%3E%3C/path%3E%3C/svg%3E';
+                  e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"%3E%3Crect x="2" y="2" width="20" height="20" rx="2.18"%3E%3C/rect%3E%3Cpath d="M8 2v20M16 2v20M2 8h20M2 16h20"%3E%3C/path%3E%3C/svg%3E';
                   toast.error('Failed to load photo');
                 }}
               />

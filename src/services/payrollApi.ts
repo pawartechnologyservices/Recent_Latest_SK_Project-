@@ -1,7 +1,6 @@
 import axios from "axios";
 
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Create axios instance with minimal headers for CORS compatibility
 const api = axios.create({
   baseURL: API_URL,

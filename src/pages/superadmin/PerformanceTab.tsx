@@ -78,8 +78,8 @@ import deductionService, {
 import { siteService, type Site } from "@/services/SiteService";
 
 // API URL
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? `https://${window.location.hostname}:5001/api` 
+const API_URL = import.meta.env.DEV
+  ? `http://localhost:5001/api`
   : '/api';
 
 interface DeductionListTabProps {
@@ -642,7 +642,7 @@ const DeductionListTab = ({}: DeductionListTabProps) => {
       console.log(`Response status: ${response.status}`);
       
       if (!response.ok) {
-        throw new Error(`https Error: ${response.status}`);
+        throw new Error(`http Error: ${response.status}`);
       }
 
       const data = await response.json();

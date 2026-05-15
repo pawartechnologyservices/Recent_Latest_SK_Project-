@@ -50,8 +50,7 @@ export interface MonthlyExpense {
   expenses?: Expense[];
 }
 
-const API_URL = `https://${window.location.hostname}:5001/api`;
-
+const API_URL = import.meta.env.VITE_API_URL;
 // Error handling utility
 class ApiError extends Error {
   constructor(
@@ -105,7 +104,7 @@ export class ExpenseService {
 
     if (!response.ok) {
       throw new ApiError(
-        data.message || data.error || `https error! status: ${response.status}`,
+        data.message || data.error || `http error! status: ${response.status}`,
         response.status,
         data
       );
